@@ -1,0 +1,28 @@
+# Build outputs
+target/
+dist/
+build/
+node_modules/
+coverage/
+
+# Runtime state (created by the app / demo scripts)
+workspace/
+data/
+var/
+
+# IDE metadata
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Logs and local env
+*.log
+.env
+.env.local

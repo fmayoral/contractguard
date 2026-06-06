@@ -1,0 +1,37 @@
+server:
+  # Local-first: bind to loopback only by default.
+  address: 127.0.0.1
+  port: 8080
+
+spring:
+  application:
+    name: contractguard
+  datasource:
+    url: jdbc:h2:file:./../data/contractguard;MODE=PostgreSQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+
+contractguard:
+  # Repositories must live directly under one of these roots.
+  workspace:
+    roots:
+      - ../workspace
+  storage:
+    # Embedded database and run artifacts live here.
+    directory: ../data
+  llm:
+    # mock = deterministic scripted gateway (no network, no key).
+    # openai = OpenAI-compatible endpoint configured below.
+    provider: mock
+    base-url: ${CONTRACTGUARD_LLM_BASE_URL:https://api.openai.com/v1}
+    api-key: ${CONTRACTGUARD_LLM_API_KEY:}
+    model: ${CONTRACTGUARD_LLM_MODEL:gpt-4o-mini}
+    timeout: 60s
+    max-tokens: 4096
+    temperature: 0.0
+    max-workflow-steps: 20
+  validation:
+    command-key: maven-verify
+    timeout: 15m
+    max-output-bytes: 1000000

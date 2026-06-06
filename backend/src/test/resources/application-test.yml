@@ -1,0 +1,13 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:contractguard-test;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+
+contractguard:
+  workspace:
+    roots:
+      - target/test-workspace
+  storage:
+    directory: target/test-data

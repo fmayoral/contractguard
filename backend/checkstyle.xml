@@ -1,0 +1,65 @@
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC
+    "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+    "https://checkstyle.org/dtds/configuration_1_3.dtd">
+<!--
+  Lean, meaningful ruleset: correctness and readability hazards only.
+  Formatting minutiae are intentionally not policed.
+-->
+<module name="Checker">
+  <property name="charset" value="UTF-8"/>
+  <property name="severity" value="warning"/>
+
+  <module name="LineLength">
+    <property name="max" value="140"/>
+    <property name="ignorePattern" value="^ *\* *[^ ]+$|href|http://|https://"/>
+  </module>
+  <module name="FileTabCharacter"/>
+
+  <module name="TreeWalker">
+    <module name="OuterTypeFilename"/>
+    <module name="OneTopLevelClass"/>
+    <module name="AvoidStarImport"/>
+    <module name="UnusedImports"/>
+    <module name="RedundantImport"/>
+    <module name="IllegalImport"/>
+    <module name="NeedBraces"/>
+    <module name="EmptyBlock">
+      <property name="option" value="TEXT"/>
+    </module>
+    <module name="EmptyCatchBlock">
+      <property name="exceptionVariableName" value="ignored"/>
+    </module>
+    <module name="EqualsHashCode"/>
+    <module name="StringLiteralEquality"/>
+    <module name="SimplifyBooleanExpression"/>
+    <module name="SimplifyBooleanReturn"/>
+    <module name="FallThrough"/>
+    <module name="MissingSwitchDefault"/>
+    <module name="DefaultComesLast"/>
+    <module name="ModifiedControlVariable"/>
+    <module name="OneStatementPerLine"/>
+    <module name="MultipleVariableDeclarations"/>
+    <module name="UpperEll"/>
+    <module name="ArrayTypeStyle"/>
+    <module name="PackageName">
+      <property name="format" value="^[a-z]+(\.[a-z][a-z0-9]*)*$"/>
+    </module>
+    <module name="TypeName"/>
+    <module name="MemberName"/>
+    <module name="MethodName"/>
+    <module name="ParameterName"/>
+    <module name="LocalVariableName"/>
+    <module name="ConstantName">
+      <!-- Allow camelCase for ArchUnit @ArchTest rule fields. -->
+      <property name="format" value="^[A-Z][A-Z0-9]*(_[A-Z0-9]+)*$|^[a-z][a-zA-Z0-9]*$"/>
+    </module>
+    <module name="InterfaceIsType"/>
+    <module name="MutableException"/>
+    <module name="CovariantEquals"/>
+    <module name="IllegalCatch">
+      <!-- Broad catches allowed only at named process boundaries. -->
+      <property name="illegalClassNames" value="java.lang.Throwable, java.lang.Error"/>
+    </module>
+  </module>
+</module>

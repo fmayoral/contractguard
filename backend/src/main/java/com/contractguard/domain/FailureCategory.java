@@ -1,0 +1,22 @@
+package com.contractguard.domain;
+
+/** Typed failure categories (§19). Every failed run carries exactly one. */
+public enum FailureCategory {
+    INVALID_OPENAPI,
+    UNSUPPORTED_FEATURE,
+    REPOSITORY_OUTSIDE_WORKSPACE,
+    REPOSITORY_BUSY,
+    DIRTY_REPOSITORY,
+    DIFF_FAILURE,
+    SEARCH_FAILURE,
+    LLM_UNAVAILABLE,
+    INVALID_LLM_RESPONSE,
+    APPROVAL_MISMATCH,
+    PATCH_REJECTED,
+    PATCH_APPLICATION_FAILED,
+    BUILD_TIMEOUT,
+    VALIDATION_FAILURE,
+    POLICY_VIOLATION,
+    ILLEGAL_STATE,
+    INTERNAL_ERROR
+}

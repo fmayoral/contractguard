@@ -1,0 +1,44 @@
+openapi: 3.0.3
+info:
+  title: Customer API
+  version: 1.0.0
+  description: Customer master data API (old contract).
+paths:
+  /customers/{id}:
+    get:
+      operationId: getCustomerById
+      summary: Fetch a customer by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Customer found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        '404':
+          description: Customer not found
+components:
+  schemas:
+    Customer:
+      type: object
+      required:
+        - id
+        - fullName
+        - status
+      properties:
+        id:
+          type: string
+        fullName:
+          type: string
+        status:
+          type: string
+          enum:
+            - ACTIVE
+            - SUSPENDED
+            - CLOSED

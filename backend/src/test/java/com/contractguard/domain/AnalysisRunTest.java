@@ -117,7 +117,7 @@ class AnalysisRunTest {
             // Simulate a re-planned run: same aggregate back in PLANNING with the old approval attached.
             AnalysisRun replanned = AnalysisRun.rehydrate(approved.id(), approved.name(),
                     approved.repositoryId(), approved.traceId(), approved.createdAt(), approved.updatedAt(),
-                    RunState.PLANNING, null, null, null, null, null,
+                    RunState.PLANNING, null, null, null, null, null, null, null,
                     approved.changes(), approved.evidence(), approved.assessments(),
                     approved.plan().orElseThrow(), approved.approval().orElseThrow(), List.of(), List.of());
 
@@ -220,7 +220,7 @@ class AnalysisRunTest {
             AnalysisRun original = Fixtures.runAwaitingApproval();
             AnalysisRun restored = AnalysisRun.rehydrate(original.id(), original.name(),
                     original.repositoryId(), original.traceId(), original.createdAt(), original.updatedAt(),
-                    original.state(), "old-hash", "new-hash", null, null, null,
+                    original.state(), "old.yaml", "new.yaml", "old-hash", "new-hash", null, null, null,
                     original.changes(), original.evidence(), original.assessments(),
                     original.plan().orElseThrow(), null, List.of(), List.of());
             assertThat(restored.state()).isEqualTo(RunState.AWAITING_APPROVAL);

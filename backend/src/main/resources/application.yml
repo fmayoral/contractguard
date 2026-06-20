@@ -20,6 +20,9 @@ contractguard:
   storage:
     # Embedded database and run artifacts live here.
     directory: ../data
+  specs:
+    # Directory the run setup offers OpenAPI specifications from.
+    directory: ../samples/openapi
   llm:
     # mock = deterministic scripted gateway (no network, no key).
     # openai = OpenAI-compatible endpoint configured below.

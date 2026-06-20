@@ -8,4 +8,14 @@
   <Match>
     <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
   </Match>
+
+  <!--
+    False positive: the PreparedStatement created inside a Spring
+    PreparedStatementCreator lambda is closed by JdbcTemplate, not by the
+    lambda. SpotBugs cannot see across that ownership transfer.
+  -->
+  <Match>
+    <Class name="com.contractguard.adapter.persistence.JdbcRunEventLog"/>
+    <Bug pattern="OBL_UNSATISFIED_OBLIGATION_EXCEPTION_EDGE,OBL_UNSATISFIED_OBLIGATION"/>
+  </Match>
 </FindBugsFilter>

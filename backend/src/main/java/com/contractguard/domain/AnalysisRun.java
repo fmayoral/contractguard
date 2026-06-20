@@ -24,6 +24,8 @@ public final class AnalysisRun {
     private final Instant createdAt;
     private Instant updatedAt;
     private RunState state;
+    private String oldSpecName;
+    private String newSpecName;
     private String oldSpecHash;
     private String newSpecHash;
     private String originalBranch;
@@ -50,13 +52,16 @@ public final class AnalysisRun {
 
     /** Rehydration constructor for persistence; performs no transition checks. */
     public static AnalysisRun rehydrate(String id, String name, String repositoryId, String traceId,
-            Instant createdAt, Instant updatedAt, RunState state, String oldSpecHash, String newSpecHash,
+            Instant createdAt, Instant updatedAt, RunState state, String oldSpecName, String newSpecName,
+            String oldSpecHash, String newSpecHash,
             String originalBranch, String workingBranch, RunFailure failure, List<ApiChange> changes,
             List<ImpactEvidence> evidence, List<ImpactAssessment> assessments, MigrationPlan plan,
             Approval approval, List<PatchArtifact> patches, List<ValidationResult> validations) {
         AnalysisRun run = new AnalysisRun(id, name, repositoryId, traceId, createdAt);
         run.updatedAt = Objects.requireNonNull(updatedAt, "updatedAt");
         run.state = Objects.requireNonNull(state, "state");
+        run.oldSpecName = oldSpecName;
+        run.newSpecName = newSpecName;
         run.oldSpecHash = oldSpecHash;
         run.newSpecHash = newSpecHash;
         run.originalBranch = originalBranch;
@@ -82,7 +87,9 @@ public final class AnalysisRun {
         touch(now);
     }
 
-    public void recordSpecHashes(String oldHash, String newHash, Instant now) {
+    public void recordSpecs(String oldName, String newName, String oldHash, String newHash, Instant now) {
+        this.oldSpecName = Objects.requireNonNull(oldName, "oldName");
+        this.newSpecName = Objects.requireNonNull(newName, "newName");
         this.oldSpecHash = Objects.requireNonNull(oldHash, "oldHash");
         this.newSpecHash = Objects.requireNonNull(newHash, "newHash");
         touch(now);
@@ -267,6 +274,14 @@ public final class AnalysisRun {
 
     public RunState state() {
         return state;
+    }
+
+    public String oldSpecName() {
+        return oldSpecName;
+    }
+
+    public String newSpecName() {
+        return newSpecName;
     }
 
     public String oldSpecHash() {

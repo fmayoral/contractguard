@@ -5,56 +5,56 @@ import java.time.Instant;
 import java.util.List;
 
 /** Shared builders for domain tests. */
-final class Fixtures {
+public final class Fixtures {
 
-    static final Instant T0 = Instant.parse("2026-07-17T10:00:00Z");
+    public static final Instant T0 = Instant.parse("2026-07-17T10:00:00Z");
 
     private Fixtures() {
     }
 
-    static AnalysisRun newRun() {
+    public static AnalysisRun newRun() {
         return new AnalysisRun("run-1", "demo", "customer-consumer", "trace-1", T0);
     }
 
-    static ApiChange change(String id) {
+    public static ApiChange change(String id) {
         return new ApiChange(id, ChangeType.PROPERTY_RENAMED, Classification.BREAKING,
                 null, null, "Customer", "fullName", "fullName", "displayName",
                 "PROPERTY_RENAMED_BREAKING", "{\"paired\":true}", null);
     }
 
-    static ImpactEvidence evidence(String id, String changeId) {
+    public static ImpactEvidence evidence(String id, String changeId) {
         return new ImpactEvidence(id, changeId, "src/main/java/App.java", 10, 12,
                 "String fullName;", "fullName", "READS_RENAMED_PROPERTY", "abc123");
     }
 
-    static ImpactAssessment assessment(String id, String changeId, List<String> evidenceIds) {
+    public static ImpactAssessment assessment(String id, String changeId, List<String> evidenceIds) {
         return new ImpactAssessment(id, changeId, "CustomerDto", Severity.HIGH, Confidence.HIGH,
                 "Deserialisation returns null fullName", "Rename field to displayName",
                 List.of("Jackson maps by exact name"), evidenceIds);
     }
 
-    static PlanItem planItem(String id) {
+    public static PlanItem planItem(String id) {
         return new PlanItem(id, "Rename DTO field", List.of("src/main/java/App.java"),
                 "Rename fullName to displayName", List.of("src/test/java/AppTest.java"),
                 "maven-verify", "low", "Revert branch", List.of("ev-1"));
     }
 
-    static MigrationPlan plan(List<PlanItem> items) {
+    public static MigrationPlan plan(List<PlanItem> items) {
         return new MigrationPlan("plan-1", 1, PlanHasher.hash(items), items, T0);
     }
 
-    static ValidationResult validation(int attempt, boolean successful) {
+    public static ValidationResult validation(int attempt, boolean successful) {
         return new ValidationResult(attempt, "maven-verify", successful ? 0 : 1, T0,
                 Duration.ofSeconds(30), successful ? "BUILD SUCCESS" : "BUILD FAILURE", "log-1", successful);
     }
 
-    static PatchArtifact patch(String id, int attempt) {
+    public static PatchArtifact patch(String id, int attempt) {
         return new PatchArtifact(id, "run-1", attempt, "--- a/x\n+++ b/x\n",
                 List.of("src/main/java/App.java"), PatchArtifact.CheckStatus.VALID, null);
     }
 
     /** Drives a fresh run to AWAITING_APPROVAL with one change, one evidence, one assessment and a plan. */
-    static AnalysisRun runAwaitingApproval() {
+    public static AnalysisRun runAwaitingApproval() {
         AnalysisRun run = newRun();
         run.transitionTo(RunState.VALIDATING_INPUT, T0);
         run.transitionTo(RunState.DIFFING, T0);

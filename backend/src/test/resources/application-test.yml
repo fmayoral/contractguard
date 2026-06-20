@@ -11,3 +11,5 @@ contractguard:
       - target/test-workspace
   storage:
     directory: target/test-data
+  specs:
+    directory: ../samples/openapi

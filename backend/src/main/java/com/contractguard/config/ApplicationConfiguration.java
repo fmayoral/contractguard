@@ -2,6 +2,9 @@ package com.contractguard.config;
 
 import com.contractguard.adapter.artifacts.FilesystemArtifactStore;
 import com.contractguard.adapter.diff.SwaggerOpenApiDiffAdapter;
+import com.contractguard.adapter.git.GitCliAdapter;
+import com.contractguard.adapter.process.MavenBuildValidationAdapter;
+import com.contractguard.adapter.process.ProcessRunner;
 import com.contractguard.adapter.json.JacksonJsonCodec;
 import com.contractguard.adapter.llm.LlmSettings;
 import com.contractguard.adapter.llm.OpenAiCompatibleLlmGateway;
@@ -12,12 +15,16 @@ import com.contractguard.adapter.search.BoundedSourceReaderAdapter;
 import com.contractguard.adapter.search.FilesystemRepositorySearchAdapter;
 import com.contractguard.application.agent.ChangeExplainer;
 import com.contractguard.application.agent.ImpactInvestigator;
+import com.contractguard.application.agent.ImplementationAgent;
 import com.contractguard.application.agent.MigrationPlanner;
 import com.contractguard.application.llm.LlmJsonClient;
 import com.contractguard.application.llm.PromptLibrary;
 import com.contractguard.application.policy.WorkspacePolicy;
 import com.contractguard.application.port.ArtifactStore;
+import com.contractguard.application.port.BuildValidationPort;
+import com.contractguard.application.port.GitWorkspacePort;
 import com.contractguard.application.port.JsonCodec;
+import com.contractguard.application.port.PatchPort;
 import com.contractguard.application.port.LlmGateway;
 import com.contractguard.application.port.OpenApiDiffPort;
 import com.contractguard.application.port.RepositorySearchPort;
@@ -27,6 +34,7 @@ import com.contractguard.application.port.SourceReaderPort;
 import com.contractguard.application.service.AnalysisPipeline;
 import com.contractguard.application.service.ApprovalService;
 import com.contractguard.application.service.EvidenceCollector;
+import com.contractguard.application.service.ExecutionService;
 import com.contractguard.application.service.RunQueryService;
 import com.contractguard.application.service.RunService;
 import org.slf4j.Logger;
@@ -172,6 +180,40 @@ public class ApplicationConfiguration {
     @Bean
     public RunQueryService runQueryService(RunRepository runs, RunEventLog events, ArtifactStore artifacts) {
         return new RunQueryService(runs, events, artifacts);
+    }
+
+    @Bean
+    public ProcessRunner processRunner() {
+        return new ProcessRunner();
+    }
+
+    @Bean
+    public GitCliAdapter gitCliAdapter(WorkspacePolicy policy, ProcessRunner processRunner,
+            ContractGuardProperties properties) {
+        return new GitCliAdapter(policy, processRunner,
+                Path.of(properties.storage().directory()).resolve("scratch"));
+    }
+
+    @Bean
+    public BuildValidationPort buildValidationPort(WorkspacePolicy policy, ProcessRunner processRunner,
+            ContractGuardProperties properties) {
+        return new MavenBuildValidationAdapter(policy, processRunner,
+                properties.validation().timeout(), properties.validation().maxOutputBytes());
+    }
+
+    @Bean
+    public ImplementationAgent implementationAgent(LlmJsonClient client, PromptLibrary prompts,
+            JsonCodec codec) {
+        return new ImplementationAgent(client, prompts, codec);
+    }
+
+    @Bean
+    public ExecutionService executionService(RunRepository runs, RunEventLog events,
+            GitWorkspacePort git, PatchPort patches, BuildValidationPort builds,
+            SourceReaderPort sourceReader, ImplementationAgent agent, ArtifactStore artifacts,
+            ContractGuardProperties properties, Clock clock) {
+        return new ExecutionService(runs, events, git, patches, builds, sourceReader, agent,
+                artifacts, properties.validation().commandKey(), clock);
     }
 
     @Bean

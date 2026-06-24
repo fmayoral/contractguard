@@ -1,0 +1,137 @@
+package com.contractguard.adapter.web;
+
+import com.contractguard.adapter.web.dto.DtoMapper;
+import com.contractguard.adapter.web.dto.RunDtos;
+import com.contractguard.application.service.ApprovalService;
+import com.contractguard.application.service.ExecutionService;
+import com.contractguard.application.service.ReportService;
+import com.contractguard.application.service.RunQueryService;
+import com.contractguard.application.service.RunService;
+import com.contractguard.domain.AnalysisRun;
+import com.contractguard.domain.Approval;
+import com.contractguard.domain.ContractGuardException;
+import com.contractguard.domain.FailureCategory;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+
+/** REST surface (§13). Thin by design: every decision lives in application services. */
+@RestController
+@RequestMapping("/api")
+public class RunController {
+
+    private final RunService runService;
+    private final RunQueryService queries;
+    private final ApprovalService approvals;
+    private final ExecutionService executions;
+    private final ReportService reports;
+    private final ExecutorService executor;
+
+    public RunController(RunService runService, RunQueryService queries, ApprovalService approvals,
+            ExecutionService executions, ReportService reports, ExecutorService executor) {
+        this.runService = runService;
+        this.queries = queries;
+        this.approvals = approvals;
+        this.executions = executions;
+        this.reports = reports;
+        this.executor = executor;
+    }
+
+    @GetMapping("/setup")
+    public RunDtos.SetupOptions setup() {
+        return new RunDtos.SetupOptions(runService.listRepositories(),
+                runService.listSpecificationFiles());
+    }
+
+    @PostMapping("/runs")
+    public ResponseEntity<RunDtos.RunSummary> createRun(@Valid @RequestBody RunDtos.CreateRunRequest request) {
+        AnalysisRun run = runService.createRun(request.name(), request.repositoryId(),
+                request.oldSpec(), request.newSpec());
+        return ResponseEntity.status(HttpStatus.CREATED).body(DtoMapper.toSummary(run));
+    }
+
+    @GetMapping("/runs")
+    public List<RunDtos.RunSummary> listRuns() {
+        return queries.listRuns().stream().map(DtoMapper::toSummary).toList();
+    }
+
+    @GetMapping("/runs/{runId}")
+    public RunDtos.RunDetail getRun(@PathVariable String runId) {
+        return DtoMapper.toDetail(queries.getRun(runId));
+    }
+
+    @GetMapping("/runs/{runId}/changes")
+    public List<RunDtos.Change> getChanges(@PathVariable String runId) {
+        return DtoMapper.toChanges(queries.getRun(runId));
+    }
+
+    @GetMapping("/runs/{runId}/impacts")
+    public RunDtos.RunDetail getImpacts(@PathVariable String runId) {
+        // Impacts = assessments plus their evidence; served via the detail shape.
+        return DtoMapper.toDetail(queries.getRun(runId));
+    }
+
+    @GetMapping("/runs/{runId}/plan")
+    public RunDtos.Plan getPlan(@PathVariable String runId) {
+        RunDtos.Plan plan = DtoMapper.toPlan(queries.getRun(runId));
+        if (plan == null) {
+            throw ContractGuardException.of(FailureCategory.NOT_FOUND,
+                    "run %s has no migration plan yet".formatted(runId),
+                    "Wait for the analysis to reach AWAITING_APPROVAL.");
+        }
+        return plan;
+    }
+
+    @PostMapping("/runs/{runId}/approval")
+    public RunDtos.RunDetail decide(@PathVariable String runId,
+            @Valid @RequestBody RunDtos.ApprovalRequest request) {
+        Approval.Decision decision = parseDecision(request.decision());
+        return DtoMapper.toDetail(approvals.decide(runId, decision, request.planHash()));
+    }
+
+    @PostMapping("/runs/{runId}/execute")
+    public ResponseEntity<RunDtos.RunSummary> execute(@PathVariable String runId) {
+        AnalysisRun run = executions.beginExecution(runId);
+        executor.execute(() -> executions.execute(runId));
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(DtoMapper.toSummary(run));
+    }
+
+    @GetMapping(value = "/runs/{runId}/artifacts/report.md", produces = "text/markdown;charset=UTF-8")
+    public String markdownReport(@PathVariable String runId) {
+        return reports.markdownReport(runId);
+    }
+
+    @GetMapping(value = "/runs/{runId}/artifacts/report.json", produces = MediaType.APPLICATION_JSON_VALUE)
+    public String jsonReport(@PathVariable String runId) {
+        return reports.jsonReport(runId);
+    }
+
+    @GetMapping(value = "/runs/{runId}/artifacts/{artifactId}", produces = MediaType.TEXT_PLAIN_VALUE)
+    public String artifact(@PathVariable String runId, @PathVariable String artifactId) {
+        return queries.readArtifact(runId, artifactId).orElseThrow(
+                () -> ContractGuardException.of(FailureCategory.NOT_FOUND,
+                        "artifact %s not found for run %s".formatted(artifactId, runId),
+                        "List the run's validations and patches for valid artifact IDs."));
+    }
+
+    private static Approval.Decision parseDecision(String raw) {
+        try {
+            return Approval.Decision.valueOf(raw.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw ContractGuardException.of(FailureCategory.ILLEGAL_STATE,
+                    "invalid decision '%s'; expected APPROVED or REJECTED".formatted(raw),
+                    "Send decision APPROVED or REJECTED.");
+        }
+    }
+}

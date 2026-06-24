@@ -18,5 +18,6 @@ public enum FailureCategory {
     VALIDATION_FAILURE,
     POLICY_VIOLATION,
     ILLEGAL_STATE,
+    NOT_FOUND,
     INTERNAL_ERROR
 }

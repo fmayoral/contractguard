@@ -35,6 +35,7 @@ import com.contractguard.application.service.AnalysisPipeline;
 import com.contractguard.application.service.ApprovalService;
 import com.contractguard.application.service.EvidenceCollector;
 import com.contractguard.application.service.ExecutionService;
+import com.contractguard.application.service.ReportService;
 import com.contractguard.application.service.RunQueryService;
 import com.contractguard.application.service.RunService;
 import org.slf4j.Logger;
@@ -180,6 +181,12 @@ public class ApplicationConfiguration {
     @Bean
     public RunQueryService runQueryService(RunRepository runs, RunEventLog events, ArtifactStore artifacts) {
         return new RunQueryService(runs, events, artifacts);
+    }
+
+    @Bean
+    public ReportService reportService(RunRepository runs, RunEventLog events,
+            ArtifactStore artifacts, JsonCodec codec) {
+        return new ReportService(runs, events, artifacts, codec);
     }
 
     @Bean

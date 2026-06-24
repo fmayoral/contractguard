@@ -108,7 +108,8 @@ public class GitCliAdapter implements GitWorkspacePort, PatchPort {
         Path patchFile = writeScratch(unifiedDiff);
         try {
             ProcessRunner.ProcessResult result = runGit(repo,
-                    List.of("git", "apply", "--check", "--verbose", patchFile.toAbsolutePath().toString()));
+                    List.of("git", "-c", "core.autocrlf=false", "apply", "--check", "--verbose",
+                            patchFile.toAbsolutePath().toString()));
             if (result.exitCode() != 0) {
                 rejections.add("git apply --check failed: " + result.output().strip());
             }
@@ -125,8 +126,11 @@ public class GitCliAdapter implements GitWorkspacePort, PatchPort {
         Path repo = policy.resolveRepository(repositoryId);
         Path patchFile = writeScratch(unifiedDiff);
         try {
+            // autocrlf off: the patch was computed from exact on-disk bytes and
+            // must be applied byte-faithfully regardless of user git settings.
             ProcessRunner.ProcessResult result = runGit(repo,
-                    List.of("git", "apply", patchFile.toAbsolutePath().toString()));
+                    List.of("git", "-c", "core.autocrlf=false", "apply",
+                            patchFile.toAbsolutePath().toString()));
             if (result.exitCode() != 0) {
                 throw ContractGuardException.of(FailureCategory.PATCH_APPLICATION_FAILED,
                         "git apply failed: " + result.output().strip(),

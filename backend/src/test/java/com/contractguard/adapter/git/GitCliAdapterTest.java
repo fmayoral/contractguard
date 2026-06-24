@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Integration test against a real Git repository created in a temp workspace. */
-class GitCliAdapterIT {
+class GitCliAdapterTest {
 
     @TempDir
     Path workspace;

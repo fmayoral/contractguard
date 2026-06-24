@@ -5,15 +5,26 @@ import com.contractguard.application.port.RunEventLog;
 import com.contractguard.application.port.RunRepository;
 import com.contractguard.domain.AnalysisRun;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
 
 /**
  * Read access for the API layer (FR-021). Controllers call this service; they
- * never touch ports or adapters directly (architecture rule).
+ * never touch ports or adapters directly (architecture rule), so events are
+ * exposed through the service-owned {@link EventView} rather than port types.
  */
 public class RunQueryService {
+
+    public record EventView(String runId, long seq, Instant occurredAt, String step, String status,
+            String message, String metadataJson) {
+
+        static EventView of(RunEventLog.RunEvent event) {
+            return new EventView(event.runId(), event.seq(), event.occurredAt(), event.step(),
+                    event.status(), event.message(), event.metadataJson());
+        }
+    }
 
     private final RunRepository runs;
     private final RunEventLog events;
@@ -37,12 +48,12 @@ public class RunQueryService {
         return runs.findAll();
     }
 
-    public List<RunEventLog.RunEvent> eventsAfter(String runId, long afterSeq) {
-        return events.eventsAfter(runId, afterSeq);
+    public List<EventView> eventsAfter(String runId, long afterSeq) {
+        return events.eventsAfter(runId, afterSeq).stream().map(EventView::of).toList();
     }
 
-    public AutoCloseable subscribe(String runId, Consumer<RunEventLog.RunEvent> listener) {
-        return events.subscribe(runId, listener);
+    public AutoCloseable subscribe(String runId, Consumer<EventView> listener) {
+        return events.subscribe(runId, event -> listener.accept(EventView.of(event)));
     }
 
     public Optional<String> readArtifact(String runId, String artifactId) {

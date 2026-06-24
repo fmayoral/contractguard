@@ -1,7 +1,6 @@
 package com.contractguard.application.service;
 
 import com.contractguard.application.port.ArtifactStore;
-import com.contractguard.application.port.RunEventLog;
 import com.contractguard.domain.AnalysisRun;
 import com.contractguard.domain.ContractGuardException;
 import com.contractguard.domain.Fixtures;
@@ -65,7 +64,7 @@ class RunQueryServiceTest {
     @Test
     void exposesEventsReplayAndSubscription() throws Exception {
         events.append("run-1", "diff", "STARTED", "msg", null);
-        List<RunEventLog.RunEvent> received = new ArrayList<>();
+        List<RunQueryService.EventView> received = new ArrayList<>();
         AutoCloseable handle = service.subscribe("run-1", received::add);
         events.append("run-1", "diff", "COMPLETED", "done", null);
         handle.close();

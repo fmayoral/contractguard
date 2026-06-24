@@ -47,7 +47,7 @@ public class ApprovalService {
     }
 
     static ContractGuardException notFound(String runId) {
-        return ContractGuardException.of(FailureCategory.ILLEGAL_STATE,
+        return ContractGuardException.of(FailureCategory.NOT_FOUND,
                 "run not found: " + runId, "Check the run ID.");
     }
 }

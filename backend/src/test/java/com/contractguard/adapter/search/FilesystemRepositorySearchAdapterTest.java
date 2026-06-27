@@ -78,4 +78,20 @@ class FilesystemRepositorySearchAdapterTest {
     void blankQueryReturnsNothing() {
         assertThat(adapter.search("demo", " ", null, 10)).isEmpty();
     }
+
+    @Test
+    void vendoredBuildToolingAndOutputsAreNeverEvidence() throws IOException {
+        Path repo = workspace.resolve("demo");
+        // The real Maven wrapper contains $_.FullName in its PowerShell block.
+        Files.writeString(repo.resolve("mvnw.cmd"), "$testPath = Join-Path $_.FullName \"bin\"");
+        Files.createDirectories(repo.resolve(".mvn/wrapper"));
+        Files.writeString(repo.resolve(".mvn/wrapper/notes.txt"), "fullName mention");
+        Files.createDirectories(repo.resolve("target/classes"));
+        Files.writeString(repo.resolve("target/classes/generated.txt"), "fullName in build output");
+
+        assertThat(adapter.search("demo", "FullName", null, 50)).isEmpty();
+        assertThat(adapter.search("demo", "fullName", "**", 50))
+                .allSatisfy(match -> assertThat(match.relativePath())
+                        .doesNotStartWith(".mvn").doesNotStartWith("target"));
+    }
 }

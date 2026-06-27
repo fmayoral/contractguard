@@ -54,15 +54,17 @@ public class MavenBuildValidationAdapter implements BuildValidationPort {
                     "Only 'maven-verify' is supported in the MVP.");
         }
         if (WINDOWS) {
-            if (!Files.exists(repo.resolve("mvnw.cmd"))) {
+            Path wrapper = repo.resolve("mvnw.cmd");
+            if (!Files.exists(wrapper)) {
                 throw missingWrapper(repo);
             }
-            return List.of("cmd.exe", "/c", "mvnw.cmd", "-B", "-ntp", "verify");
+            return List.of("cmd.exe", "/c", wrapper.toAbsolutePath().toString(), "-B", "-ntp", "verify");
         }
-        if (!Files.exists(repo.resolve("mvnw"))) {
+        Path wrapper = repo.resolve("mvnw");
+        if (!Files.exists(wrapper)) {
             throw missingWrapper(repo);
         }
-        return List.of("./mvnw", "-B", "-ntp", "verify");
+        return List.of(wrapper.toAbsolutePath().toString(), "-B", "-ntp", "verify");
     }
 
     private static ContractGuardException missingWrapper(Path repo) {

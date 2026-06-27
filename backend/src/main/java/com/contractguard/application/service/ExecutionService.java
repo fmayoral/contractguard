@@ -161,14 +161,16 @@ public class ExecutionService {
                 currentFiles, failureOutput);
 
         String unifiedDiff = patches.buildUnifiedDiff(run.repositoryId(), rewrites);
-        if (SecretRedactor.redact(unifiedDiff).length() != unifiedDiff.length()) {
-            throw ContractGuardException.of(FailureCategory.PATCH_REJECTED,
-                    "generated patch contains likely secrets and was rejected",
-                    "Inspect the agent output; secrets must never enter patches.");
-        }
-        PatchPort.PatchCheck check = patches.check(run.repositoryId(), unifiedDiff);
+        // Stored before any verdict so a rejected patch remains inspectable.
         String patchArtifactId = artifacts.save(run.id(), "patch-attempt-%d.diff".formatted(attempt),
                 unifiedDiff);
+        if (!SecretRedactor.redact(unifiedDiff).equals(unifiedDiff)) {
+            throw new ContractGuardException(new RunFailure(FailureCategory.PATCH_REJECTED,
+                    "generated patch contains likely secrets and was rejected",
+                    false, patchArtifactId,
+                    "Inspect the stored patch artifact; secrets must never enter patches."));
+        }
+        PatchPort.PatchCheck check = patches.check(run.repositoryId(), unifiedDiff);
         for (String path : check.changedPaths()) {
             if (!approvedFiles.contains(path)) {
                 throw ContractGuardException.of(FailureCategory.PATCH_REJECTED,

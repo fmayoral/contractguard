@@ -26,6 +26,15 @@ public class FilesystemRepositorySearchAdapter implements RepositorySearchPort {
     private static final long MAX_FILE_SIZE_BYTES = 1_000_000;
     private static final int MAX_LINE_LENGTH = 500;
 
+    /**
+     * Vendored build tooling and build outputs are not consumer source: they
+     * must never become impact evidence (and thus never enter a plan or a
+     * patch). The Maven wrapper notoriously contains {@code $_.FullName}.
+     */
+    private static final List<String> EXCLUDED_FILES = List.of("mvnw", "mvnw.cmd", "gradlew", "gradlew.bat");
+    private static final List<String> EXCLUDED_DIRS =
+            List.of(".mvn/", "gradle/", "node_modules/", "target/", "build/", "dist/", ".idea/");
+
     private final WorkspacePolicy policy;
 
     public FilesystemRepositorySearchAdapter(WorkspacePolicy policy) {
@@ -46,6 +55,7 @@ public class FilesystemRepositorySearchAdapter implements RepositorySearchPort {
                     .filter(Files::isRegularFile)
                     .map(repoRoot::relativize)
                     .filter(rel -> !policy.isBlockedFile(rel.toString()))
+                    .filter(FilesystemRepositorySearchAdapter::isSearchableSource)
                     .filter(rel -> matcher == null || matcher.matches(rel))
                     .sorted()
                     .toList();
@@ -81,6 +91,19 @@ public class FilesystemRepositorySearchAdapter implements RepositorySearchPort {
                 matches.add(new SearchMatch(relativeUnixPath, i + 1, snippet));
             }
         }
+    }
+
+    private static boolean isSearchableSource(Path relative) {
+        String unixPath = relative.toString().replace('\\', '/');
+        if (EXCLUDED_FILES.contains(unixPath)) {
+            return false;
+        }
+        for (String dir : EXCLUDED_DIRS) {
+            if (unixPath.startsWith(dir) || unixPath.contains("/" + dir)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** NUL byte in the first 4KB marks the file as binary. */

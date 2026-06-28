@@ -11,6 +11,10 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password: ""
+  sql:
+    init:
+      # File-based H2 does not count as "embedded"; run schema.sql regardless.
+      mode: always
 
 contractguard:
   # Repositories must live directly under one of these roots.

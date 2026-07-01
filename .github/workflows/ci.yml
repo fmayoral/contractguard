@@ -51,8 +51,8 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - name: Reset demo workspace
-        run: scripts/reset-demo.sh
-      - name: Run end-to-end demo suite
+      - name: Run full suite including the end-to-end demo test
+        # DemoE2ETest materialises its own workspace copy of the sample
+        # consumer and runs the real git + mvnw verify flow.
         run: ./mvnw -B -ntp verify -Pe2e
         working-directory: backend

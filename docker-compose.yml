@@ -1,0 +1,30 @@
+# Containerised demo: `docker compose up --build`, then open http://localhost:5173.
+# The demo repository is materialised inside the backend container on startup;
+# state (runs, artifacts, Maven cache) persists in named volumes.
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    volumes:
+      - contractguard-data:/app/data
+      - maven-cache:/root/.m2
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/api/runs || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "127.0.0.1:5173:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  contractguard-data:
+  maven-cache:

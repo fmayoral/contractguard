@@ -27,7 +27,7 @@ scripts/run-demo.sh              # PowerShell: scripts/run-demo.ps1
 ```
 
 That resets the demo repository, builds and starts the backend
-(http://127.0.0.1:8091) and the dashboard (http://localhost:5173).
+(http://127.0.0.1:7080) and the dashboard (http://localhost:5173).
 Or run the steps manually:
 
 ```bash

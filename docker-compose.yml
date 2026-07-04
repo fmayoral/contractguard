@@ -10,7 +10,7 @@ services:
       - contractguard-data:/app/data
       - maven-cache:/root/.m2
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8091/api/runs || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:7080/api/runs || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 12

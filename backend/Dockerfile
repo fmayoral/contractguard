@@ -16,7 +16,7 @@ COPY --from=build /build/target/contractguard-backend-*-SNAPSHOT.jar app.jar
 COPY samples ./samples
 COPY scripts/reset-demo.sh ./scripts/reset-demo.sh
 RUN chmod +x scripts/reset-demo.sh
-EXPOSE 8091
+EXPOSE 7080
 # Materialise the demo repository, then start bound to all interfaces so the
 # frontend container can reach the API (the compose network stays internal).
 CMD ["/bin/bash", "-c", "./scripts/reset-demo.sh && java -jar app.jar \

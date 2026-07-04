@@ -1,8 +1,9 @@
 server:
-  # Local-first: bind to loopback only by default. 8091 rather than 8080
-  # because common desktop software (e.g. NVIDIA Broadcast) squats on 8080.
+  # Local-first: bind to loopback only by default. 7080 rather than 8080
+  # because desktop software (e.g. NVIDIA Broadcast) squats on 8080, and
+  # Windows Hyper-V/WinNAT port-exclusion ranges often swallow 8081-9231.
   address: 127.0.0.1
-  port: 8091
+  port: 7080
 
 spring:
   application:

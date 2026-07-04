@@ -30,7 +30,7 @@ cd backend
 ./mvnw spring-boot:run           # Windows: mvnw.cmd spring-boot:run
 ```
 
-The API listens on `http://127.0.0.1:8091` (loopback only). The default LLM
+The API listens on `http://127.0.0.1:7080` (loopback only). The default LLM
 provider is the deterministic mock — no API key needed. To use a real
 OpenAI-compatible endpoint instead:
 
@@ -102,7 +102,7 @@ Open <http://localhost:5173>.
 | Symptom | Fix |
 |---|---|
 | `No repositories found` in the UI | Run `scripts/reset-demo.sh` |
-| Port 8091 already in use | Start with `--server.port=<free port>` and set the Vite proxy target in `frontend/vite.config.ts` accordingly (8080 is avoided by default: NVIDIA Broadcast and similar tools squat on it) |
+| Port 7080 already in use | Start with `--server.port=<free port>` and set the Vite proxy target in `frontend/vite.config.ts` accordingly. 8080 is avoided by default (NVIDIA Broadcast and similar tools squat on it); on Windows also check `netsh interface ipv4 show excludedportrange protocol=tcp` — Hyper-V reserves ranges that fail binds with "port in use" while nothing is listening |
 | Validation timeout on first run | The consumer's first `mvnw verify` downloads dependencies; re-run, or raise `contractguard.validation.timeout` |
 | Run failed with `REPOSITORY_BUSY` | Another run is active on the repository; wait or restart the backend |
 | Stale demo state | Re-run `scripts/reset-demo.sh` |

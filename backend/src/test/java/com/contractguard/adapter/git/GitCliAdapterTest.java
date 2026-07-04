@@ -110,6 +110,25 @@ class GitCliAdapterTest {
     }
 
     @Test
+    void crlfFilesArePatchedByteFaithfully() throws IOException {
+        // Windows checkouts materialise CRLF; the emitted hunks must match.
+        Files.writeString(repo.resolve("Crlf.java"),
+                "class Crlf {\r\n    String fullName;\r\n}\r\n");
+        git("add", "-A");
+        git("-c", "user.name=Test", "-c", "user.email=test@example.com",
+                "commit", "-q", "-m", "crlf file");
+
+        String diff = adapter.buildUnifiedDiff("demo",
+                Map.of("Crlf.java", "class Crlf {\n    String displayName;\n}\n"));
+
+        PatchPort.PatchCheck check = adapter.check("demo", diff);
+        assertThat(check.valid()).as(String.join("; ", check.rejections())).isTrue();
+        adapter.apply("demo", diff);
+        assertThat(Files.readString(repo.resolve("Crlf.java")))
+                .isEqualTo("class Crlf {\r\n    String displayName;\r\n}\r\n");
+    }
+
+    @Test
     void staleOrCorruptPatchFailsTheCheck() {
         String bogus = """
                 --- a/App.java

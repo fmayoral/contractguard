@@ -73,8 +73,15 @@ public class GitCliAdapter implements GitWorkspacePort, PatchPort {
             String path = entry.getKey();
             policy.requireReadableFile(path);
             Path file = policy.resolveFile(repo, path);
-            List<String> oldLines = readLines(file, path);
-            List<String> newLines = withTrailingNewline(entry.getValue()).lines().toList();
+            String rawContent = readContent(file, path);
+            // Diff on normalised lines but emit hunks matching the file's own
+            // line endings byte-for-byte: on Windows checkouts files are CRLF
+            // and `git apply` compares exact bytes.
+            boolean crlf = rawContent.contains("\r\n");
+            List<String> oldLines = withTrailingNewline(rawContent.replace("\r\n", "\n"))
+                    .lines().toList();
+            List<String> newLines = withTrailingNewline(entry.getValue().replace("\r\n", "\n"))
+                    .lines().toList();
             Patch<String> patch = DiffUtils.diff(oldLines, newLines);
             if (patch.getDeltas().isEmpty()) {
                 continue;
@@ -82,10 +89,22 @@ public class GitCliAdapter implements GitWorkspacePort, PatchPort {
             List<String> hunk = UnifiedDiffUtils.generateUnifiedDiff(
                     "a/" + path, "b/" + path, oldLines, patch, CONTEXT_LINES);
             for (String line : hunk) {
-                diff.append(line).append('\n');
+                diff.append(line);
+                if (crlf && isContentLine(line)) {
+                    diff.append('\r');
+                }
+                diff.append('\n');
             }
         }
         return diff.toString();
+    }
+
+    /** Hunk content lines (context/added/removed) as opposed to headers. */
+    private static boolean isContentLine(String line) {
+        if (line.startsWith("--- ") || line.startsWith("+++ ") || line.startsWith("@@")) {
+            return false;
+        }
+        return line.isEmpty() || line.charAt(0) == ' ' || line.charAt(0) == '+' || line.charAt(0) == '-';
     }
 
     @Override
@@ -174,14 +193,14 @@ public class GitCliAdapter implements GitWorkspacePort, PatchPort {
         return processRunner.run(command, repo, Map.of(), GIT_TIMEOUT, MAX_OUTPUT);
     }
 
-    private static List<String> readLines(Path file, String relativePath) {
+    private static String readContent(Path file, String relativePath) {
         if (!Files.isRegularFile(file)) {
             throw ContractGuardException.of(FailureCategory.PATCH_REJECTED,
                     "patched file does not exist: " + relativePath,
                     "The MVP patches existing files only.");
         }
         try {
-            return Files.readAllLines(file, StandardCharsets.UTF_8);
+            return Files.readString(file, StandardCharsets.UTF_8);
         } catch (IOException e) {
             throw new UncheckedIOException("cannot read " + relativePath, e);
         }

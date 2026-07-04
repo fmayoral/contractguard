@@ -10,7 +10,7 @@ Write-Host "Building backend..."
 Push-Location (Join-Path $Root "backend")
 & .\mvnw.cmd -q -B -ntp package -DskipTests "-Dcheckstyle.skip" "-Dspotbugs.skip" "-Djacoco.skip"
 
-Write-Host "Starting backend on http://127.0.0.1:8080 ..."
+Write-Host "Starting backend on http://127.0.0.1:8091 ..."
 $Jar = Get-ChildItem target\contractguard-backend-*-SNAPSHOT.jar | Select-Object -First 1
 $Backend = Start-Process java -ArgumentList "-jar", $Jar.FullName -PassThru -NoNewWindow
 Pop-Location

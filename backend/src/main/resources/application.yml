@@ -1,7 +1,8 @@
 server:
-  # Local-first: bind to loopback only by default.
+  # Local-first: bind to loopback only by default. 8091 rather than 8080
+  # because common desktop software (e.g. NVIDIA Broadcast) squats on 8080.
   address: 127.0.0.1
-  port: 8080
+  port: 8091
 
 spring:
   application:

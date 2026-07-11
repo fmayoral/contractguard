@@ -62,7 +62,7 @@ public class ExecutionService {
 
     /** Precondition check + state move; called synchronously by the API before async execution. */
     public AnalysisRun beginExecution(String runId) {
-        AnalysisRun run = runs.findById(runId).orElseThrow(() -> ApprovalService.notFound(runId));
+        AnalysisRun run = RunLookup.require(runs, runId);
         if (!run.isApproved()) {
             throw ContractGuardException.of(FailureCategory.ILLEGAL_STATE,
                     "run %s has no recorded approval; execution is impossible".formatted(runId),
@@ -74,7 +74,7 @@ public class ExecutionService {
     }
 
     public void execute(String runId) {
-        AnalysisRun run = runs.findById(runId).orElseThrow(() -> ApprovalService.notFound(runId));
+        AnalysisRun run = RunLookup.require(runs, runId);
         try {
             prepareBranch(run);
             patchAndValidate(run);
@@ -144,16 +144,7 @@ public class ExecutionService {
     private void applyPatch(AnalysisRun run, MigrationPlan plan, String promptName,
             String failureOutput, int attempt) {
         Set<String> approvedFiles = plan.approvedFiles();
-        Map<String, String> currentFiles = new LinkedHashMap<>();
-        for (String path : approvedFiles) {
-            SourceReaderPort.FileContent content = sourceReader.read(run.repositoryId(), path, null, null);
-            if (content.truncated()) {
-                throw ContractGuardException.of(FailureCategory.POLICY_VIOLATION,
-                        "approved file %s exceeds the remediation size limit".formatted(path),
-                        "The MVP remediates bounded text files only.");
-            }
-            currentFiles.put(path, content.content());
-        }
+        Map<String, String> currentFiles = readApprovedFiles(run, approvedFiles);
         events.append(run.id(), "patch", "STARTED",
                 "Attempt %d: generating file changes for %d approved file(s)"
                         .formatted(attempt, approvedFiles.size()), "{\"kind\":\"llm\"}");
@@ -164,6 +155,40 @@ public class ExecutionService {
         // Stored before any verdict so a rejected patch remains inspectable.
         String patchArtifactId = artifacts.save(run.id(), "patch-attempt-%d.diff".formatted(attempt),
                 unifiedDiff);
+        PatchPort.PatchCheck check = requireSafePatch(run, approvedFiles, unifiedDiff, patchArtifactId);
+        PatchArtifact artifact = new PatchArtifact(Ids.newId(), run.id(), attempt, unifiedDiff,
+                check.changedPaths(), PatchArtifact.CheckStatus.VALID, null);
+        run.recordPatch(artifact, clock.instant());
+        runs.save(run);
+        events.append(run.id(), "patch", "CHECKED",
+                "Patch verified with git apply --check (+%d/-%d lines across %d file(s))"
+                        .formatted(check.addedLines(), check.removedLines(), check.changedPaths().size()),
+                "{\"kind\":\"tool\"}");
+
+        patches.apply(run.repositoryId(), unifiedDiff);
+        run.markPatchApplied(artifact.id(), clock.instant());
+        runs.save(run);
+        events.append(run.id(), "patch", "APPLIED",
+                "Patch applied to %s".formatted(run.workingBranch()), "{\"kind\":\"tool\"}");
+    }
+
+    private Map<String, String> readApprovedFiles(AnalysisRun run, Set<String> approvedFiles) {
+        Map<String, String> currentFiles = new LinkedHashMap<>();
+        for (String path : approvedFiles) {
+            SourceReaderPort.FileContent content = sourceReader.read(run.repositoryId(), path, null, null);
+            if (content.truncated()) {
+                throw ContractGuardException.of(FailureCategory.POLICY_VIOLATION,
+                        "approved file %s exceeds the remediation size limit".formatted(path),
+                        "The MVP remediates bounded text files only.");
+            }
+            currentFiles.put(path, content.content());
+        }
+        return currentFiles;
+    }
+
+    /** Rejects the patch unless it is secret-free, touches only approved files and passes git's check. */
+    private PatchPort.PatchCheck requireSafePatch(AnalysisRun run, Set<String> approvedFiles,
+            String unifiedDiff, String patchArtifactId) {
         if (!SecretRedactor.redact(unifiedDiff).equals(unifiedDiff)) {
             throw new ContractGuardException(new RunFailure(FailureCategory.PATCH_REJECTED,
                     "generated patch contains likely secrets and was rejected",
@@ -184,20 +209,7 @@ public class ExecutionService {
                     false, patchArtifactId,
                     "Inspect the stored patch artifact; the repository was not modified."));
         }
-        PatchArtifact artifact = new PatchArtifact(Ids.newId(), run.id(), attempt, unifiedDiff,
-                check.changedPaths(), PatchArtifact.CheckStatus.VALID, null);
-        run.recordPatch(artifact, clock.instant());
-        runs.save(run);
-        events.append(run.id(), "patch", "CHECKED",
-                "Patch verified with git apply --check (+%d/-%d lines across %d file(s))"
-                        .formatted(check.addedLines(), check.removedLines(), check.changedPaths().size()),
-                "{\"kind\":\"tool\"}");
-
-        patches.apply(run.repositoryId(), unifiedDiff);
-        run.markPatchApplied(artifact.id(), clock.instant());
-        runs.save(run);
-        events.append(run.id(), "patch", "APPLIED",
-                "Patch applied to %s".formatted(run.workingBranch()), "{\"kind\":\"tool\"}");
+        return check;
     }
 
     private ValidationResult validate(AnalysisRun run, int attempt) {

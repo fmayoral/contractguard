@@ -37,7 +37,7 @@ public class RunQueryService {
     }
 
     public AnalysisRun getRun(String runId) {
-        return runs.findById(runId).orElseThrow(() -> ApprovalService.notFound(runId));
+        return RunLookup.require(runs, runId);
     }
 
     public Optional<AnalysisRun> findRun(String runId) {

@@ -4,8 +4,6 @@ import com.contractguard.application.port.RunEventLog;
 import com.contractguard.application.port.RunRepository;
 import com.contractguard.domain.AnalysisRun;
 import com.contractguard.domain.Approval;
-import com.contractguard.domain.ContractGuardException;
-import com.contractguard.domain.FailureCategory;
 import com.contractguard.domain.RunState;
 
 import java.time.Clock;
@@ -28,7 +26,7 @@ public class ApprovalService {
     }
 
     public AnalysisRun decide(String runId, Approval.Decision decision, String planHash) {
-        AnalysisRun run = runs.findById(runId).orElseThrow(() -> notFound(runId));
+        AnalysisRun run = RunLookup.require(runs, runId);
         run.recordApproval(new Approval(runId, planHash, decision, clock.instant()), clock.instant());
         if (decision == Approval.Decision.REJECTED) {
             run.transitionTo(RunState.REJECTED, clock.instant());
@@ -44,10 +42,5 @@ public class ApprovalService {
 
     private static String shortHash(String hash) {
         return hash.length() > 12 ? hash.substring(0, 12) : hash;
-    }
-
-    static ContractGuardException notFound(String runId) {
-        return ContractGuardException.of(FailureCategory.NOT_FOUND,
-                "run not found: " + runId, "Check the run ID.");
     }
 }

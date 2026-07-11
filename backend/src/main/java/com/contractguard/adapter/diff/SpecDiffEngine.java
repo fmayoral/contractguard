@@ -48,33 +48,8 @@ public class SpecDiffEngine {
 
         Set<String> pairedAdded = new LinkedHashSet<>();
         for (String removedKey : removedKeys) {
-            SpecModel.Endpoint removed = oldSpec.endpoints().get(removedKey);
-            List<SpecModel.Endpoint> candidates = addedKeys.stream()
-                    .filter(k -> !pairedAdded.contains(k))
-                    .map(k -> newSpec.endpoints().get(k))
-                    .filter(added -> added.method().equals(removed.method())
-                            && Objects.equals(added.responseSchema(), removed.responseSchema())
-                            && removed.responseSchema() != null)
-                    .toList();
-            if (candidates.size() == 1) {
-                SpecModel.Endpoint added = candidates.get(0);
-                pairedAdded.add(SpecModel.endpointKey(added.method(), added.path()));
-                changes.add(endpointChange(ChangeType.ENDPOINT_RENAMED, removed.method(),
-                        removed.path(), added.path(), removed.responseSchema(),
-                        evidence(e -> {
-                            e.put("pairedBy", "method and response schema");
-                            e.put("responseSchema", removed.responseSchema());
-                            e.put("oldPath", removed.path());
-                            e.put("newPath", added.path());
-                        })));
-            } else {
-                changes.add(endpointChange(ChangeType.ENDPOINT_REMOVED, removed.method(),
-                        removed.path(), null, removed.responseSchema(),
-                        evidence(e -> {
-                            e.put("path", removed.path());
-                            e.put("renameCandidates", candidates.size());
-                        })));
-            }
+            classifyRemovedEndpoint(oldSpec.endpoints().get(removedKey), newSpec,
+                    addedKeys, pairedAdded, changes);
         }
         for (String addedKey : addedKeys) {
             if (pairedAdded.contains(addedKey)) {
@@ -85,7 +60,42 @@ public class SpecDiffEngine {
                     null, added.path(), added.responseSchema(),
                     evidence(e -> e.put("path", added.path()))));
         }
+        diffSharedEndpoints(oldSpec, newSpec, changes, warnings);
+    }
 
+    /** Pairs a removed endpoint with a uniquely matching added one (rename) or reports removal. */
+    private void classifyRemovedEndpoint(SpecModel.Endpoint removed, SpecModel newSpec,
+            Set<String> addedKeys, Set<String> pairedAdded, List<ApiChange> changes) {
+        List<SpecModel.Endpoint> candidates = addedKeys.stream()
+                .filter(k -> !pairedAdded.contains(k))
+                .map(k -> newSpec.endpoints().get(k))
+                .filter(added -> added.method().equals(removed.method())
+                        && Objects.equals(added.responseSchema(), removed.responseSchema())
+                        && removed.responseSchema() != null)
+                .toList();
+        if (candidates.size() == 1) {
+            SpecModel.Endpoint added = candidates.get(0);
+            pairedAdded.add(SpecModel.endpointKey(added.method(), added.path()));
+            changes.add(endpointChange(ChangeType.ENDPOINT_RENAMED, removed.method(),
+                    removed.path(), added.path(), removed.responseSchema(),
+                    evidence(e -> {
+                        e.put("pairedBy", "method and response schema");
+                        e.put("responseSchema", removed.responseSchema());
+                        e.put("oldPath", removed.path());
+                        e.put("newPath", added.path());
+                    })));
+        } else {
+            changes.add(endpointChange(ChangeType.ENDPOINT_REMOVED, removed.method(),
+                    removed.path(), null, removed.responseSchema(),
+                    evidence(e -> {
+                        e.put("path", removed.path());
+                        e.put("renameCandidates", candidates.size());
+                    })));
+        }
+    }
+
+    private void diffSharedEndpoints(SpecModel oldSpec, SpecModel newSpec,
+            List<ApiChange> changes, List<String> warnings) {
         for (String sharedKey : oldSpec.endpoints().keySet()) {
             SpecModel.Endpoint before = oldSpec.endpoints().get(sharedKey);
             SpecModel.Endpoint after = newSpec.endpoints().get(sharedKey);
@@ -135,31 +145,8 @@ public class SpecDiffEngine {
 
         Set<String> pairedAdded = new LinkedHashSet<>();
         for (String removedName : removedProps) {
-            SpecModel.PropertyShape removed = before.properties().get(removedName);
-            boolean removedWasRequired = before.required().contains(removedName);
-            List<String> candidates = addedProps.stream()
-                    .filter(name -> !pairedAdded.contains(name))
-                    .filter(name -> after.properties().get(name).sameTypeAs(removed))
-                    .filter(name -> after.required().contains(name) == removedWasRequired)
-                    .toList();
-            if (candidates.size() == 1) {
-                String addedName = candidates.get(0);
-                pairedAdded.add(addedName);
-                changes.add(schemaChange(ChangeType.PROPERTY_RENAMED, schemaName, removedName,
-                        removedName, addedName,
-                        evidence(e -> {
-                            e.put("pairedBy", "identical type and required status");
-                            e.put("type", String.valueOf(removed.type()));
-                            e.put("required", removedWasRequired);
-                        })));
-            } else {
-                changes.add(schemaChange(ChangeType.PROPERTY_REMOVED, schemaName, removedName,
-                        removedName, null,
-                        evidence(e -> {
-                            e.put("renameCandidates", candidates.size());
-                            e.put("required", removedWasRequired);
-                        })));
-            }
+            classifyRemovedProperty(schemaName, removedName, before, after,
+                    addedProps, pairedAdded, changes);
         }
         for (String addedName : addedProps) {
             if (pairedAdded.contains(addedName)) {
@@ -172,7 +159,42 @@ public class SpecDiffEngine {
                         e.put("required", required);
                     })));
         }
+        diffSharedProperties(schemaName, before, after, changes);
+    }
 
+    /** Pairs a removed property with a uniquely matching added one (rename) or reports removal. */
+    private void classifyRemovedProperty(String schemaName, String removedName,
+            SpecModel.SchemaShape before, SpecModel.SchemaShape after,
+            Set<String> addedProps, Set<String> pairedAdded, List<ApiChange> changes) {
+        SpecModel.PropertyShape removed = before.properties().get(removedName);
+        boolean removedWasRequired = before.required().contains(removedName);
+        List<String> candidates = addedProps.stream()
+                .filter(name -> !pairedAdded.contains(name))
+                .filter(name -> after.properties().get(name).sameTypeAs(removed))
+                .filter(name -> after.required().contains(name) == removedWasRequired)
+                .toList();
+        if (candidates.size() == 1) {
+            String addedName = candidates.get(0);
+            pairedAdded.add(addedName);
+            changes.add(schemaChange(ChangeType.PROPERTY_RENAMED, schemaName, removedName,
+                    removedName, addedName,
+                    evidence(e -> {
+                        e.put("pairedBy", "identical type and required status");
+                        e.put("type", String.valueOf(removed.type()));
+                        e.put("required", removedWasRequired);
+                    })));
+        } else {
+            changes.add(schemaChange(ChangeType.PROPERTY_REMOVED, schemaName, removedName,
+                    removedName, null,
+                    evidence(e -> {
+                        e.put("renameCandidates", candidates.size());
+                        e.put("required", removedWasRequired);
+                    })));
+        }
+    }
+
+    private void diffSharedProperties(String schemaName, SpecModel.SchemaShape before,
+            SpecModel.SchemaShape after, List<ApiChange> changes) {
         for (String shared : new TreeSet<>(before.properties().keySet())) {
             SpecModel.PropertyShape oldProp = before.properties().get(shared);
             SpecModel.PropertyShape newProp = after.properties().get(shared);

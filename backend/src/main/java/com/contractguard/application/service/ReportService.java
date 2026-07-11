@@ -6,12 +6,14 @@ import com.contractguard.application.port.RunEventLog;
 import com.contractguard.application.port.RunRepository;
 import com.contractguard.domain.AnalysisRun;
 import com.contractguard.domain.ApiChange;
+import com.contractguard.domain.Approval;
 import com.contractguard.domain.Classification;
 import com.contractguard.domain.ImpactAssessment;
 import com.contractguard.domain.ImpactEvidence;
 import com.contractguard.domain.MigrationPlan;
 import com.contractguard.domain.PatchArtifact;
 import com.contractguard.domain.PlanItem;
+import com.contractguard.domain.RunFailure;
 import com.contractguard.domain.ValidationResult;
 
 import java.util.ArrayList;
@@ -39,14 +41,14 @@ public class ReportService {
     }
 
     public String markdownReport(String runId) {
-        AnalysisRun run = runs.findById(runId).orElseThrow(() -> ApprovalService.notFound(runId));
+        AnalysisRun run = RunLookup.require(runs, runId);
         String markdown = renderMarkdown(run);
         artifacts.save(runId, "report.md", markdown);
         return markdown;
     }
 
     public String jsonReport(String runId) {
-        AnalysisRun run = runs.findById(runId).orElseThrow(() -> ApprovalService.notFound(runId));
+        AnalysisRun run = RunLookup.require(runs, runId);
         String json = codec.encode(reportDocument(run));
         artifacts.save(runId, "report.json", json);
         return json;
@@ -55,7 +57,21 @@ public class ReportService {
     private String renderMarkdown(AnalysisRun run) {
         StringBuilder md = new StringBuilder();
         md.append("# ContractGuard Report — ").append(run.name()).append("\n\n");
+        renderRunSection(md, run);
+        renderChangesSection(md, run.changes());
+        renderEvidenceSection(md, run.evidence());
+        renderAssessmentsSection(md, run.assessments());
+        renderPlanSection(md, run);
+        renderApprovalSection(md, run);
+        renderPatchesSection(md, run.patches());
+        renderValidationSection(md, run.validations());
+        renderOutcomeSection(md, run);
+        renderLimitationsSection(md, run);
+        renderTraceSection(md, run);
+        return md.toString();
+    }
 
+    private void renderRunSection(StringBuilder md, AnalysisRun run) {
         md.append("## Run\n\n");
         md.append("| Field | Value |\n|---|---|\n");
         row(md, "Run ID", run.id());
@@ -71,63 +87,71 @@ public class ReportService {
         row(md, "Original branch", nullable(run.originalBranch()));
         row(md, "Working branch", nullable(run.workingBranch()));
         md.append('\n');
+    }
 
+    private void renderChangesSection(StringBuilder md, List<ApiChange> changes) {
         md.append("## Detected changes\n\n");
-        if (run.changes().isEmpty()) {
+        if (changes.isEmpty()) {
             md.append("_No changes recorded._\n\n");
-        } else {
-            md.append("| Classification | Type | Where | Old | New | Reason |\n|---|---|---|---|---|---|\n");
-            for (ApiChange change : run.changes()) {
-                md.append("| ").append(change.classification())
-                        .append(" | ").append(change.type())
-                        .append(" | ").append(where(change))
-                        .append(" | ").append(code(change.oldValue()))
-                        .append(" | ").append(code(change.newValue()))
-                        .append(" | ").append(change.reason()).append(" |\n");
-            }
-            md.append('\n');
-            for (ApiChange change : run.changes()) {
-                if (change.explanation() != null && !change.explanation().isBlank()) {
-                    md.append("- **").append(change.id()).append("**: ")
-                            .append(change.explanation()).append('\n');
-                }
-            }
-            md.append('\n');
+            return;
         }
+        md.append("| Classification | Type | Where | Old | New | Reason |\n|---|---|---|---|---|---|\n");
+        for (ApiChange change : changes) {
+            md.append("| ").append(change.classification())
+                    .append(" | ").append(change.type())
+                    .append(" | ").append(where(change))
+                    .append(" | ").append(code(change.oldValue()))
+                    .append(" | ").append(code(change.newValue()))
+                    .append(" | ").append(change.reason()).append(" |\n");
+        }
+        md.append('\n');
+        for (ApiChange change : changes) {
+            if (change.explanation() != null && !change.explanation().isBlank()) {
+                md.append("- **").append(change.id()).append("**: ")
+                        .append(change.explanation()).append('\n');
+            }
+        }
+        md.append('\n');
+    }
 
+    private void renderEvidenceSection(StringBuilder md, List<ImpactEvidence> evidence) {
         md.append("## Impact evidence\n\n");
-        if (run.evidence().isEmpty()) {
+        if (evidence.isEmpty()) {
             md.append("_No repository evidence collected._\n\n");
-        } else {
-            md.append("| ID | Change | File | Line | Relationship | Snippet |\n|---|---|---|---|---|---|\n");
-            for (ImpactEvidence evidence : run.evidence()) {
-                md.append("| ").append(evidence.id())
-                        .append(" | ").append(evidence.apiChangeId())
-                        .append(" | ").append(evidence.relativePath())
-                        .append(" | ").append(evidence.startLine())
-                        .append(" | ").append(evidence.relationship())
-                        .append(" | ").append(code(truncate(evidence.snippet(), 60))).append(" |\n");
-            }
-            md.append('\n');
+            return;
         }
+        md.append("| ID | Change | File | Line | Relationship | Snippet |\n|---|---|---|---|---|---|\n");
+        for (ImpactEvidence item : evidence) {
+            md.append("| ").append(item.id())
+                    .append(" | ").append(item.apiChangeId())
+                    .append(" | ").append(item.relativePath())
+                    .append(" | ").append(item.startLine())
+                    .append(" | ").append(item.relationship())
+                    .append(" | ").append(code(truncate(item.snippet(), 60))).append(" |\n");
+        }
+        md.append('\n');
+    }
 
+    private void renderAssessmentsSection(StringBuilder md, List<ImpactAssessment> assessments) {
         md.append("## Impact assessments\n\n");
-        if (run.assessments().isEmpty()) {
+        if (assessments.isEmpty()) {
             md.append("_No assessments produced._\n\n");
-        } else {
-            for (ImpactAssessment assessment : run.assessments()) {
-                md.append("- **").append(assessment.component()).append("** (change ")
-                        .append(assessment.apiChangeId()).append(", severity ")
-                        .append(assessment.severity()).append(", confidence ")
-                        .append(assessment.confidence()).append("): ")
-                        .append(assessment.failureMode())
-                        .append(" → ").append(assessment.recommendedAction())
-                        .append(" _[evidence: ").append(String.join(", ", assessment.evidenceIds()))
-                        .append("]_\n");
-            }
-            md.append('\n');
+            return;
         }
+        for (ImpactAssessment assessment : assessments) {
+            md.append("- **").append(assessment.component()).append("** (change ")
+                    .append(assessment.apiChangeId()).append(", severity ")
+                    .append(assessment.severity()).append(", confidence ")
+                    .append(assessment.confidence()).append("): ")
+                    .append(assessment.failureMode())
+                    .append(" → ").append(assessment.recommendedAction())
+                    .append(" _[evidence: ").append(String.join(", ", assessment.evidenceIds()))
+                    .append("]_\n");
+        }
+        md.append('\n');
+    }
 
+    private void renderPlanSection(StringBuilder md, AnalysisRun run) {
         md.append("## Migration plan\n\n");
         run.plan().ifPresentOrElse(plan -> {
             md.append("Version ").append(plan.version()).append(", hash `")
@@ -144,44 +168,52 @@ public class ReportService {
                         .append("- Evidence: ").append(String.join(", ", item.evidenceIds())).append("\n\n");
             }
         }, () -> md.append("_No plan generated._\n\n"));
+    }
 
+    private void renderApprovalSection(StringBuilder md, AnalysisRun run) {
         md.append("## Approval\n\n");
         run.approval().ifPresentOrElse(approval ->
                 md.append("- Decision: **").append(approval.decision()).append("**\n")
                         .append("- Plan hash: `").append(approval.planHash()).append("`\n")
                         .append("- Decided at: ").append(approval.decidedAt()).append("\n\n"),
                 () -> md.append("_No approval decision recorded._\n\n"));
+    }
 
+    private void renderPatchesSection(StringBuilder md, List<PatchArtifact> patches) {
         md.append("## Patches\n\n");
-        if (run.patches().isEmpty()) {
+        if (patches.isEmpty()) {
             md.append("_No patches generated._\n\n");
-        } else {
-            for (PatchArtifact patch : run.patches()) {
-                md.append("- Attempt ").append(patch.attempt()).append(": ")
-                        .append(patch.checkStatus()).append(", files: ")
-                        .append(String.join(", ", patch.changedPaths()));
-                if (patch.appliedAt() != null) {
-                    md.append(" (applied ").append(patch.appliedAt()).append(')');
-                }
-                md.append('\n');
+            return;
+        }
+        for (PatchArtifact patch : patches) {
+            md.append("- Attempt ").append(patch.attempt()).append(": ")
+                    .append(patch.checkStatus()).append(", files: ")
+                    .append(String.join(", ", patch.changedPaths()));
+            if (patch.appliedAt() != null) {
+                md.append(" (applied ").append(patch.appliedAt()).append(')');
             }
             md.append('\n');
         }
+        md.append('\n');
+    }
 
+    private void renderValidationSection(StringBuilder md, List<ValidationResult> validations) {
         md.append("## Validation\n\n");
-        if (run.validations().isEmpty()) {
+        if (validations.isEmpty()) {
             md.append("_No validation executed._\n\n");
-        } else {
-            for (ValidationResult validation : run.validations()) {
-                md.append("- Attempt ").append(validation.attempt()).append(": `")
-                        .append(validation.command()).append("` → exit ")
-                        .append(validation.exitCode()).append(" in ")
-                        .append(validation.duration().toSeconds()).append("s — ")
-                        .append(validation.summary()).append('\n');
-            }
-            md.append('\n');
+            return;
         }
+        for (ValidationResult validation : validations) {
+            md.append("- Attempt ").append(validation.attempt()).append(": `")
+                    .append(validation.command()).append("` → exit ")
+                    .append(validation.exitCode()).append(" in ")
+                    .append(validation.duration().toSeconds()).append("s — ")
+                    .append(validation.summary()).append('\n');
+        }
+        md.append('\n');
+    }
 
+    private void renderOutcomeSection(StringBuilder md, AnalysisRun run) {
         md.append("## Outcome\n\n");
         md.append("Final state: **").append(run.state()).append("**\n\n");
         run.failure().ifPresent(failure -> md.append("- Failure: ").append(failure.category())
@@ -189,13 +221,17 @@ public class ReportService {
                 .append("- Repository mutated: ").append(failure.mutationOccurred() ? "yes" : "no")
                 .append('\n')
                 .append("- Remediation: ").append(failure.remediation()).append("\n\n"));
+    }
 
+    private void renderLimitationsSection(StringBuilder md, AnalysisRun run) {
         md.append("## Limitations\n\n");
         for (String limitation : limitations(run)) {
             md.append("- ").append(limitation).append('\n');
         }
         md.append('\n');
+    }
 
+    private void renderTraceSection(StringBuilder md, AnalysisRun run) {
         md.append("## Trace\n\n");
         md.append("Timeline events for trace ").append(run.traceId()).append(":\n\n");
         for (RunEventLog.RunEvent event : events.eventsAfter(run.id(), 0)) {
@@ -203,7 +239,6 @@ public class ReportService {
                     .append('/').append(event.status()).append("] ").append(event.message()).append('\n');
         }
         md.append('\n');
-        return md.toString();
     }
 
     private Map<String, Object> reportDocument(AnalysisRun run) {
@@ -221,67 +256,14 @@ public class ReportService {
         document.put("branches", Map.of(
                 "original", nullable(run.originalBranch()),
                 "working", nullable(run.workingBranch())));
-        document.put("changes", run.changes().stream().map(change -> {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("id", change.id());
-            map.put("type", change.type().name());
-            map.put("classification", change.classification().name());
-            map.put("method", change.method());
-            map.put("path", change.path());
-            map.put("schema", change.schema());
-            map.put("property", change.property());
-            map.put("oldValue", change.oldValue());
-            map.put("newValue", change.newValue());
-            map.put("reason", change.reason());
-            map.put("rawEvidence", change.rawEvidence());
-            map.put("explanation", change.explanation());
-            return map;
-        }).toList());
-        document.put("evidence", run.evidence().stream().map(evidence -> Map.of(
-                "id", evidence.id(), "apiChangeId", evidence.apiChangeId(),
-                "relativePath", evidence.relativePath(), "startLine", evidence.startLine(),
-                "endLine", evidence.endLine(), "snippet", evidence.snippet(),
-                "searchTerm", evidence.searchTerm(), "relationship", evidence.relationship(),
-                "contentHash", evidence.contentHash())).toList());
-        document.put("assessments", run.assessments().stream().map(assessment -> Map.of(
-                "id", assessment.id(), "apiChangeId", assessment.apiChangeId(),
-                "component", assessment.component(), "severity", assessment.severity().name(),
-                "confidence", assessment.confidence().name(), "failureMode", assessment.failureMode(),
-                "recommendedAction", assessment.recommendedAction(),
-                "assumptions", assessment.assumptions(), "evidenceIds", assessment.evidenceIds())).toList());
-        document.put("plan", run.plan().map(this::planDocument).orElse(null));
-        document.put("approval", run.approval().map(approval -> Map.<String, Object>of(
-                "decision", approval.decision().name(), "planHash", approval.planHash(),
-                "decidedAt", String.valueOf(approval.decidedAt()))).orElse(null));
-        document.put("patches", run.patches().stream().map(patch -> {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("id", patch.id());
-            map.put("attempt", patch.attempt());
-            map.put("checkStatus", patch.checkStatus().name());
-            map.put("changedPaths", patch.changedPaths());
-            map.put("appliedAt", patch.appliedAt() == null ? null : String.valueOf(patch.appliedAt()));
-            return map;
-        }).toList());
-        document.put("validations", run.validations().stream().map(validation -> {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("attempt", validation.attempt());
-            map.put("command", validation.command());
-            map.put("exitCode", validation.exitCode());
-            map.put("durationMillis", validation.duration().toMillis());
-            map.put("summary", validation.summary());
-            map.put("successful", validation.successful());
-            map.put("outputArtifactId", validation.outputArtifactId());
-            return map;
-        }).toList());
-        document.put("failure", run.failure().map(failure -> {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("category", failure.category().name());
-            map.put("message", failure.message());
-            map.put("mutationOccurred", failure.mutationOccurred());
-            map.put("artifactId", failure.artifactId());
-            map.put("remediation", failure.remediation());
-            return map;
-        }).orElse(null));
+        document.put("changes", run.changes().stream().map(ReportService::changeDocument).toList());
+        document.put("evidence", run.evidence().stream().map(ReportService::evidenceDocument).toList());
+        document.put("assessments", run.assessments().stream().map(ReportService::assessmentDocument).toList());
+        document.put("plan", run.plan().map(ReportService::planDocument).orElse(null));
+        document.put("approval", run.approval().map(ReportService::approvalDocument).orElse(null));
+        document.put("patches", run.patches().stream().map(ReportService::patchDocument).toList());
+        document.put("validations", run.validations().stream().map(ReportService::validationDocument).toList());
+        document.put("failure", run.failure().map(ReportService::failureDocument).orElse(null));
         document.put("limitations", limitations(run));
         document.put("events", events.eventsAfter(run.id(), 0).stream().map(event -> Map.of(
                 "seq", event.seq(), "occurredAt", String.valueOf(event.occurredAt()),
@@ -289,7 +271,42 @@ public class ReportService {
         return document;
     }
 
-    private Map<String, Object> planDocument(MigrationPlan plan) {
+    private static Map<String, Object> changeDocument(ApiChange change) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", change.id());
+        map.put("type", change.type().name());
+        map.put("classification", change.classification().name());
+        map.put("method", change.method());
+        map.put("path", change.path());
+        map.put("schema", change.schema());
+        map.put("property", change.property());
+        map.put("oldValue", change.oldValue());
+        map.put("newValue", change.newValue());
+        map.put("reason", change.reason());
+        map.put("rawEvidence", change.rawEvidence());
+        map.put("explanation", change.explanation());
+        return map;
+    }
+
+    private static Map<String, Object> evidenceDocument(ImpactEvidence evidence) {
+        return Map.of(
+                "id", evidence.id(), "apiChangeId", evidence.apiChangeId(),
+                "relativePath", evidence.relativePath(), "startLine", evidence.startLine(),
+                "endLine", evidence.endLine(), "snippet", evidence.snippet(),
+                "searchTerm", evidence.searchTerm(), "relationship", evidence.relationship(),
+                "contentHash", evidence.contentHash());
+    }
+
+    private static Map<String, Object> assessmentDocument(ImpactAssessment assessment) {
+        return Map.of(
+                "id", assessment.id(), "apiChangeId", assessment.apiChangeId(),
+                "component", assessment.component(), "severity", assessment.severity().name(),
+                "confidence", assessment.confidence().name(), "failureMode", assessment.failureMode(),
+                "recommendedAction", assessment.recommendedAction(),
+                "assumptions", assessment.assumptions(), "evidenceIds", assessment.evidenceIds());
+    }
+
+    private static Map<String, Object> planDocument(MigrationPlan plan) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("id", plan.id());
         map.put("version", plan.version());
@@ -301,6 +318,44 @@ public class ReportService {
                 "testsToUpdate", item.testsToUpdate(), "validationCommand", item.validationCommand(),
                 "risk", item.risk(), "rollback", item.rollback(),
                 "evidenceIds", item.evidenceIds())).toList());
+        return map;
+    }
+
+    private static Map<String, Object> approvalDocument(Approval approval) {
+        return Map.of(
+                "decision", approval.decision().name(), "planHash", approval.planHash(),
+                "decidedAt", String.valueOf(approval.decidedAt()));
+    }
+
+    private static Map<String, Object> patchDocument(PatchArtifact patch) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", patch.id());
+        map.put("attempt", patch.attempt());
+        map.put("checkStatus", patch.checkStatus().name());
+        map.put("changedPaths", patch.changedPaths());
+        map.put("appliedAt", patch.appliedAt() == null ? null : String.valueOf(patch.appliedAt()));
+        return map;
+    }
+
+    private static Map<String, Object> validationDocument(ValidationResult validation) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("attempt", validation.attempt());
+        map.put("command", validation.command());
+        map.put("exitCode", validation.exitCode());
+        map.put("durationMillis", validation.duration().toMillis());
+        map.put("summary", validation.summary());
+        map.put("successful", validation.successful());
+        map.put("outputArtifactId", validation.outputArtifactId());
+        return map;
+    }
+
+    private static Map<String, Object> failureDocument(RunFailure failure) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("category", failure.category().name());
+        map.put("message", failure.message());
+        map.put("mutationOccurred", failure.mutationOccurred());
+        map.put("artifactId", failure.artifactId());
+        map.put("remediation", failure.remediation());
         return map;
     }
 

@@ -1,4 +1,5 @@
 import { Badge } from './Badge';
+import { DiffView } from './DiffView';
 import { formatDuration } from '../format';
 import type { Patch, Validation } from '../types';
 
@@ -30,7 +31,7 @@ export function ValidationView({ originalBranch, workingBranch, patches, validat
           <p className="muted">Files: {patch.changedPaths.join(', ')}</p>
           <details>
             <summary>Unified diff</summary>
-            <pre className="diff">{patch.unifiedDiff}</pre>
+            <DiffView diff={patch.unifiedDiff} />
           </details>
         </article>
       ))}

@@ -10,7 +10,33 @@
   --bad: #ff5d6c;
   --warn: #f5b83d;
   --busy: #6fa8ff;
+  --llm: #c792ea;
+  --diff-bg: #0b0f18;
+  --diff-add-bg: rgba(46, 204, 143, 0.12);
+  --diff-add-text: #7ee2b8;
+  --diff-del-bg: rgba(255, 93, 108, 0.12);
+  --diff-del-text: #ff9aa5;
   font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+:root[data-theme='light'] {
+  --bg: #f4f6fb;
+  --panel: #ffffff;
+  --panel-2: #e9edf5;
+  --border: #cdd6e4;
+  --text: #1d2433;
+  --muted: #5d6a82;
+  --accent: #2f6fe0;
+  --ok: #178a5c;
+  --bad: #c93a49;
+  --warn: #9a6d10;
+  --busy: #2f6fe0;
+  --llm: #8a3fc4;
+  --diff-bg: #f2f5fa;
+  --diff-add-bg: #dff5e9;
+  --diff-add-text: #136a45;
+  --diff-del-bg: #fbe4e7;
+  --diff-del-text: #a92f3d;
 }
 
 * {
@@ -40,10 +66,25 @@ code {
   margin: 0 auto;
 }
 
+.sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0.25rem 0 1rem;
+}
+
 .sidebar h1 {
   font-size: 1.3rem;
-  margin: 0.25rem 0 1rem;
+  margin: 0;
   letter-spacing: 0.03em;
+}
+
+.theme-toggle {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  font-size: 0.78rem;
+  padding: 0.3rem 0.6rem;
 }
 
 .card {
@@ -243,7 +284,7 @@ button.reject {
 }
 
 .timeline-kind.kind-tool { color: var(--busy); }
-.timeline-kind.kind-llm { color: #c792ea; }
+.timeline-kind.kind-llm { color: var(--llm); }
 .timeline-kind.kind-human { color: var(--ok); }
 .timeline-kind.kind-system { color: var(--muted); }
 
@@ -293,12 +334,37 @@ button.reject {
 }
 
 .diff {
-  background: #0b0f18;
+  background: var(--diff-bg);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0.75rem;
   overflow-x: auto;
   font-size: 0.8rem;
   max-height: 400px;
+}
+
+.diff-line {
+  display: inline;
+}
+
+.diff-add {
+  background: var(--diff-add-bg);
+  color: var(--diff-add-text);
+}
+
+.diff-del {
+  background: var(--diff-del-bg);
+  color: var(--diff-del-text);
+}
+
+.diff-hunk {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.diff-meta {
+  color: var(--muted);
+  font-weight: 600;
 }
 
 .report-actions {

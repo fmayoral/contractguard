@@ -9,6 +9,7 @@ import { PlanApproval } from './components/PlanApproval';
 import { ReportView } from './components/ReportView';
 import { RunList } from './components/RunList';
 import { RunSetup } from './components/RunSetup';
+import { ThemeToggle } from './components/ThemeToggle';
 import { Timeline } from './components/Timeline';
 import { ValidationView } from './components/ValidationView';
 import type { RunDetail, RunSummary } from './types';
@@ -51,7 +52,10 @@ export default function App() {
   return (
     <div className="layout">
       <aside className="sidebar">
-        <h1>ContractGuard AI</h1>
+        <div className="sidebar-header">
+          <h1>ContractGuard AI</h1>
+          <ThemeToggle />
+        </div>
         <RunSetup onCreated={onCreated} />
         <section className="card">
           <h2>Run history</h2>

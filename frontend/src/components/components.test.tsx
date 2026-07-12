@@ -5,6 +5,8 @@ import { Timeline } from './Timeline';
 import { ValidationView } from './ValidationView';
 import { ReportView } from './ReportView';
 import { RunList } from './RunList';
+import { DiffView, classifyDiffLine } from './DiffView';
+import { ThemeToggle } from './ThemeToggle';
 import type { Patch, RunEvent, Validation } from '../types';
 
 afterEach(() => {
@@ -125,6 +127,49 @@ describe('ReportView', () => {
 
     await user.click(screen.getByText('Load report'));
     expect(await screen.findByText('ContractGuard Report')).toBeInTheDocument();
+  });
+});
+
+describe('DiffView', () => {
+  it('classifies unified diff lines', () => {
+    expect(classifyDiffLine('--- a/src/A.java')).toBe('meta');
+    expect(classifyDiffLine('+++ b/src/A.java')).toBe('meta');
+    expect(classifyDiffLine('\\ No newline at end of file')).toBe('meta');
+    expect(classifyDiffLine('@@ -1,3 +1,3 @@')).toBe('hunk');
+    expect(classifyDiffLine('+added line')).toBe('add');
+    expect(classifyDiffLine('-removed line')).toBe('del');
+    expect(classifyDiffLine(' unchanged line')).toBe('context');
+  });
+
+  it('renders highlighted lines, normalising CRLF diffs', () => {
+    const { container } = render(
+      <DiffView diff={'--- a/f\r\n+++ b/f\r\n@@ -1 +1 @@\r\n-old\r\n+new\r\n'} />,
+    );
+    expect(container.querySelectorAll('.diff-line')).toHaveLength(5);
+    expect(container.querySelector('.diff-add')?.textContent).toContain('+new');
+    expect(container.querySelector('.diff-del')?.textContent).toContain('-old');
+    expect(container.querySelector('.diff-hunk')?.textContent).toContain('@@ -1 +1 @@');
+  });
+});
+
+describe('ThemeToggle', () => {
+  afterEach(() => {
+    localStorage.clear();
+    delete document.documentElement.dataset.theme;
+  });
+
+  it('applies the default dark theme and toggles to light, persisting the choice', async () => {
+    const user = userEvent.setup();
+    render(<ThemeToggle />);
+    expect(document.documentElement.dataset.theme).toBe('dark');
+
+    await user.click(screen.getByRole('button', { name: /switch to light theme/i }));
+    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(localStorage.getItem('contractguard-theme')).toBe('light');
+
+    await user.click(screen.getByRole('button', { name: /switch to dark theme/i }));
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(localStorage.getItem('contractguard-theme')).toBe('dark');
   });
 });
 

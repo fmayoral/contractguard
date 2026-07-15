@@ -5,7 +5,7 @@ import { Timeline } from './Timeline';
 import { ValidationView } from './ValidationView';
 import { ReportView } from './ReportView';
 import { RunList } from './RunList';
-import { DiffView, classifyDiffLine } from './DiffView';
+import { DiffView } from './DiffView';
 import { ThemeToggle } from './ThemeToggle';
 import type { Patch, RunEvent, Validation } from '../types';
 
@@ -131,24 +131,42 @@ describe('ReportView', () => {
 });
 
 describe('DiffView', () => {
-  it('classifies unified diff lines', () => {
-    expect(classifyDiffLine('--- a/src/A.java')).toBe('meta');
-    expect(classifyDiffLine('+++ b/src/A.java')).toBe('meta');
-    expect(classifyDiffLine('\\ No newline at end of file')).toBe('meta');
-    expect(classifyDiffLine('@@ -1,3 +1,3 @@')).toBe('hunk');
-    expect(classifyDiffLine('+added line')).toBe('add');
-    expect(classifyDiffLine('-removed line')).toBe('del');
-    expect(classifyDiffLine(' unchanged line')).toBe('context');
+  const javaDiff = [
+    '--- a/src/main/java/com/example/A.java',
+    '+++ b/src/main/java/com/example/A.java',
+    '@@ -3,2 +3,2 @@',
+    ' public class A {',
+    '-    private String fullName = "x";',
+    '+    private String displayName = "x";',
+    '',
+  ].join('\r\n');
+
+  it('renders one section per file with add/remove counts and line numbers', () => {
+    const { container } = render(<DiffView diff={javaDiff} />);
+    expect(screen.getByText('src/main/java/com/example/A.java')).toBeInTheDocument();
+    expect(container.querySelector('.diff-stat-add')?.textContent).toBe('+1');
+    expect(container.querySelector('.diff-stat-del')?.textContent).toBe('−1');
+    const added = container.querySelector('.diff-row.diff-add');
+    expect(added?.textContent).toContain('displayName');
+    expect(added?.querySelectorAll('.diff-gutter')[1]?.textContent).toBe('4');
   });
 
-  it('renders highlighted lines, normalising CRLF diffs', () => {
+  it('syntax-highlights code for known languages', () => {
+    const { container } = render(<DiffView diff={javaDiff} />);
+    const keywords = [...container.querySelectorAll('.token.keyword')].map((el) => el.textContent);
+    expect(keywords).toContain('private');
+    expect(container.querySelector('.token.string')?.textContent).toBe('"x"');
+  });
+
+  it('renders unknown file types without tokens and hints on an empty diff', () => {
     const { container } = render(
-      <DiffView diff={'--- a/f\r\n+++ b/f\r\n@@ -1 +1 @@\r\n-old\r\n+new\r\n'} />,
+      <DiffView diff={'--- a/notes.unknownext\n+++ b/notes.unknownext\n@@ -1 +1 @@\n-old\n+new\n'} />,
     );
-    expect(container.querySelectorAll('.diff-line')).toHaveLength(5);
-    expect(container.querySelector('.diff-add')?.textContent).toContain('+new');
-    expect(container.querySelector('.diff-del')?.textContent).toContain('-old');
-    expect(container.querySelector('.diff-hunk')?.textContent).toContain('@@ -1 +1 @@');
+    expect(container.querySelector('.token')).toBeNull();
+    expect(container.querySelector('.diff-row.diff-add')?.textContent).toContain('new');
+
+    render(<DiffView diff="" />);
+    expect(screen.getByText('Empty diff.')).toBeInTheDocument();
   });
 });
 

@@ -13,6 +13,66 @@ tool loop, plans and proposes code; everything it produces is schema-validated
 and enforced by backend state. The default **mock mode** uses a deterministic
 scripted gateway, so the whole demo runs without any API key or network.
 
+## How a run flows
+
+A run walks a strict state machine from `CREATED` to a terminal state; every
+step is streamed live to the dashboard timeline and persisted for the final
+report. The dashboard ships with dark and light themes (toggle in the
+sidebar).
+
+### 1 — Analyse: diff, classify, explain
+
+Pick the consumer repository and the old/new specifications, then start the
+analysis. The backend validates inputs, computes a deterministic diff of the
+two specs, classifies each change (`BREAKING` / `NON_BREAKING` /
+`POTENTIALLY_BREAKING` / `UNKNOWN`) by fixed policy, and has the LLM explain
+the consumer consequences of each fact it is given — it cannot add or remove
+changes. The timeline shows each step as it happens, tagged by who acted
+(tool, LLM, human, system).
+
+![Timeline and classified contract changes](docs/screenshots/1-timeline-and-contract-changes.png)
+
+### 2 — Investigate: evidence-backed consumer impact
+
+Deterministic text search collects file-and-line evidence for every breaking
+change, then the impact investigator (a bounded agent with exactly two tools:
+`search_repository` and `read_source_file`, limited by a step budget) assesses
+severity and failure mode per affected component. Every assessment must cite
+collected evidence IDs — uncited claims are rejected by the backend.
+
+![Consumer impact with file-and-line evidence](docs/screenshots/2-consumer-impact.png)
+
+### 3 — Plan and approve: the human gate
+
+The migration planner turns assessments into a versioned plan: objectives,
+exact files, tests to update, validation command, risk and rollback per item.
+Nothing has touched the repository yet. Approval is recorded against the exact
+plan hash — if the plan changes, the approval is void; a rejection ends the
+run with the repository untouched.
+
+![Migration plan awaiting approval](docs/screenshots/3-migration-plan-and-approval.png)
+
+### 4 — Remediate and validate: isolated branch, checked patch
+
+After approval, ContractGuard verifies the repository is clean, creates
+`contractguard/run-<id>` off the current branch, and applies a
+backend-computed patch restricted to the approved files (verified with
+`git apply --check`, secret-scanned, never touching the original branch). The
+consumer's own test suite then validates the result; one bounded repair
+attempt is allowed after a failed validation. The patch is browsable per file
+with git-style line numbers and syntax highlighting.
+
+![Applied patch with per-file diff and passing validation](docs/screenshots/4-remediation-and-validation.png)
+
+### 5 — Report: the audit trail
+
+Every run ends with deterministic Markdown and JSON reports rendered from
+persisted state — spec hashes, classified changes, evidence, assessments, the
+approved plan and decision, patches, validation output, honest limitations and
+the full event trace.
+
+![Auditable run report](docs/screenshots/5-report.png)
+
 ## Prerequisites
 
 - Java 21 (JDK)

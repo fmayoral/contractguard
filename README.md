@@ -103,6 +103,31 @@ Follow [docs/demo-script.md](docs/demo-script.md) for the guided walkthrough
 of the bundled scenario (endpoint rename, field rename, enum value removal,
 optional field addition).
 
+## CI gate (headless CLI)
+
+The same jar runs as an analysis-only gate for pull requests — no server, no
+remediation, mock LLM by default so it needs no key:
+
+```bash
+java -jar contractguard-backend.jar \
+  --spring.profiles.active=cli \
+  --contractguard.workspace.roots=/checkouts \
+  --contractguard.specs.directory=/specs \
+  --contractguard.cli.repository=consumer-repo \
+  --contractguard.cli.old-spec=api-main.yaml \
+  --contractguard.cli.new-spec=api-proposed.yaml \
+  --contractguard.cli.fail-on=breaking \
+  --contractguard.cli.output=contractguard-report.json
+```
+
+Exit codes: `0` no gated changes, `1` analysis failed, `2` gated changes
+found. `fail-on` accepts `breaking` (default), `potentially-breaking` (also
+gates potentially-breaking and unanalysed change categories) or `none`
+(report only). Ready-made wrappers live in
+[integrations/github-action](integrations/github-action/action.yml) and
+[integrations/gitlab](integrations/gitlab/contractguard-gate.yml); the
+consumer checkout must be a Git repository with a Maven wrapper.
+
 ## Using a real LLM
 
 Automated tests and the default demo never call a live model. To run the
@@ -170,11 +195,12 @@ CI (`.github/workflows/ci.yml`) runs all of the above from a clean checkout.
 ## Repository layout
 
 ```
-backend/    Spring Boot 3 / Java 21 modular monolith (hexagonal, ArchUnit-enforced)
-frontend/   React + TypeScript dashboard (Vite, Vitest)
-samples/    Bundled OpenAPI specs and the Java consumer source template
-scripts/    reset-demo / run-demo helpers
-docs/       Requirements, architecture, ADRs, demo script, implementation plan
+backend/       Spring Boot 3 / Java 21 modular monolith (hexagonal, ArchUnit-enforced)
+frontend/      React + TypeScript dashboard (Vite, Vitest)
+samples/       Bundled OpenAPI specs and the Java consumer source template
+scripts/       reset-demo / run-demo helpers
+integrations/  CI gate wrappers (GitHub Action, GitLab template)
+docs/          Specification, architecture, ADRs, demo script, roadmap
 ```
 
 ## Safety guarantees

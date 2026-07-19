@@ -50,6 +50,35 @@ contractguard:
     max-output-bytes: 1000000
 
 ---
+# Headless CI gate (FR-026): analysis only, JSON report on stdout, exit code
+# 0 = clean, 1 = analysis failed, 2 = gated changes found. Example:
+#   java -jar contractguard-backend.jar --spring.profiles.active=cli \
+#     --contractguard.cli.repository=customer-consumer \
+#     --contractguard.cli.old-spec=customer-api-v1.yaml \
+#     --contractguard.cli.new-spec=customer-api-v2.yaml \
+#     --contractguard.cli.fail-on=breaking
+spring:
+  config:
+    activate:
+      on-profile: cli
+  main:
+    web-application-type: none
+    banner-mode: off
+  datasource:
+    # Ephemeral store: the gate's state has no value beyond the process, and
+    # a memory database cannot collide with a running server's file lock.
+    url: jdbc:h2:mem:contractguard-cli;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+
+logging:
+  level:
+    root: warn
+    # Keep stdout clean for the JSON report; version-affinity warnings are noise here.
+    org.flywaydb: error
+
+---
 # Server deployments: run with --spring.profiles.active=postgres and the
 # CONTRACTGUARD_DB_* environment variables set.
 spring:

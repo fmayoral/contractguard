@@ -38,7 +38,8 @@ class HexagonalArchitectureTest {
 
     @ArchTest
     static final ArchRule adaptersDoNotDependOnEachOther = noClasses()
-            .that().resideInAPackage("com.contractguard.adapter.web..")
+            .that().resideInAnyPackage("com.contractguard.adapter.web..",
+                    "com.contractguard.adapter.cli..")
             .should().dependOnClassesThat()
             .resideInAnyPackage(
                     "com.contractguard.adapter.diff..",
@@ -51,8 +52,9 @@ class HexagonalArchitectureTest {
             .allowEmptyShould(true);
 
     @ArchTest
-    static final ArchRule webAdapterUsesApplicationServicesNotDomainServices = noClasses()
-            .that().resideInAPackage("com.contractguard.adapter.web..")
+    static final ArchRule drivingAdaptersUseApplicationServicesNotPorts = noClasses()
+            .that().resideInAnyPackage("com.contractguard.adapter.web..",
+                    "com.contractguard.adapter.cli..")
             .should().dependOnClassesThat()
             .resideInAPackage("com.contractguard.application.port..")
             .allowEmptyShould(true);

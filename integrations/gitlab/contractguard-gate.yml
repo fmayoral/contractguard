@@ -1,0 +1,39 @@
+# ContractGuard CI gate template. Include and extend, e.g.:
+#
+#   include:
+#     - project: your-org/contractguard
+#       file: integrations/gitlab/contractguard-gate.yml
+#
+#   api-compatibility:
+#     extends: .contractguard-gate
+#     variables:
+#       CONTRACTGUARD_JAR: contractguard-backend.jar
+#       CONTRACTGUARD_OLD_SPEC: api/openapi-main.yaml
+#       CONTRACTGUARD_NEW_SPEC: api/openapi.yaml
+#       CONTRACTGUARD_CONSUMER_PATH: checkout/consumer-repo
+#
+# Exit codes: 0 = clean, 1 = analysis failed, 2 = gated changes found.
+.contractguard-gate:
+  image: eclipse-temurin:21-jre
+  variables:
+    CONTRACTGUARD_FAIL_ON: breaking
+    CONTRACTGUARD_REPORT: contractguard-report.json
+  script:
+    - specs_dir="$(mktemp -d)"
+    - cp "$CONTRACTGUARD_OLD_SPEC" "$specs_dir/old-spec.yaml"
+    - cp "$CONTRACTGUARD_NEW_SPEC" "$specs_dir/new-spec.yaml"
+    - consumer="$(cd "$CONTRACTGUARD_CONSUMER_PATH" && pwd)"
+    - >-
+      java -jar "$CONTRACTGUARD_JAR"
+      --spring.profiles.active=cli
+      --contractguard.workspace.roots="$(dirname "$consumer")"
+      --contractguard.specs.directory="$specs_dir"
+      --contractguard.cli.repository="$(basename "$consumer")"
+      --contractguard.cli.old-spec=old-spec.yaml
+      --contractguard.cli.new-spec=new-spec.yaml
+      --contractguard.cli.fail-on="$CONTRACTGUARD_FAIL_ON"
+      --contractguard.cli.output="$CONTRACTGUARD_REPORT"
+  artifacts:
+    when: always
+    paths:
+      - $CONTRACTGUARD_REPORT

@@ -1,0 +1,46 @@
+name: ContractGuard Gate
+description: >-
+  Fail the pipeline when an OpenAPI change breaks a consumer repository.
+  Runs the ContractGuard analysis (no remediation) and emits the JSON report.
+inputs:
+  old-spec:
+    description: Path to the baseline OpenAPI specification
+    required: true
+  new-spec:
+    description: Path to the changed OpenAPI specification
+    required: true
+  consumer-path:
+    description: >-
+      Path to the consumer repository checkout. Must be a Git repository with
+      a Maven wrapper (clone it with actions/checkout into a subdirectory).
+    required: true
+  contractguard-jar:
+    description: Path to the ContractGuard backend jar
+    required: true
+  fail-on:
+    description: "Gate level: breaking, potentially-breaking or none"
+    required: false
+    default: breaking
+  report-path:
+    description: Where to write the JSON report
+    required: false
+    default: contractguard-report.json
+runs:
+  using: composite
+  steps:
+    - name: Run ContractGuard gate
+      shell: bash
+      run: |
+        specs_dir="$(mktemp -d)"
+        cp "${{ inputs.old-spec }}" "$specs_dir/old-spec.yaml"
+        cp "${{ inputs.new-spec }}" "$specs_dir/new-spec.yaml"
+        consumer="$(cd "${{ inputs.consumer-path }}" && pwd)"
+        java -jar "${{ inputs.contractguard-jar }}" \
+          --spring.profiles.active=cli \
+          --contractguard.workspace.roots="$(dirname "$consumer")" \
+          --contractguard.specs.directory="$specs_dir" \
+          --contractguard.cli.repository="$(basename "$consumer")" \
+          --contractguard.cli.old-spec=old-spec.yaml \
+          --contractguard.cli.new-spec=new-spec.yaml \
+          --contractguard.cli.fail-on="${{ inputs.fail-on }}" \
+          --contractguard.cli.output="${{ inputs.report-path }}"

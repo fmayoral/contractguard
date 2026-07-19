@@ -18,7 +18,7 @@ the dependency rules with a build-breaking ArchUnit test suite.
 
 ## Consequences
 
-- One `pom.xml` keeps the one-week build simple; quality gates configure once.
+- One `pom.xml` keeps the build simple; quality gates configure once.
 - Violations fail the build with a precise message, satisfying the mandated
   architecture tests directly.
 - Trade-off: boundaries are test-enforced rather than compiler-enforced. The

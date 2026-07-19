@@ -178,13 +178,13 @@ docs/       Requirements, architecture, ADRs, demo script, implementation plan
   migrated manually.
 - Evidence collection is text-search based; dynamically constructed
   references can be missed.
-- One repository, Maven builds and OpenAPI 3.x only (see requirements §4).
+- One repository, Maven builds and OpenAPI 3.x only (see the specification, §4).
 - Resuming a run interrupted mid-flight is not supported; such runs are
   finalised as FAILED on restart with an explanatory message.
 
 ## Documentation
 
 - [Architecture](docs/architecture.md) · [ADRs](docs/adr/)
-- [Implementation plan](docs/implementation-plan.md)
 - [Demo script & troubleshooting](docs/demo-script.md)
-- [Requirements](docs/contractguard-requirements.md)
+- [Specification](docs/specification.md)
+- [Roadmap](docs/roadmap.md)

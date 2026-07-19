@@ -26,3 +26,6 @@ Thumbs.db
 *.log
 .env
 .env.local
+
+# Local working notes (not published)
+.notes/

@@ -28,10 +28,12 @@ class PersistenceIntegrationTest {
     @BeforeEach
     void setUp() throws Exception {
         JdbcDataSource dataSource = new JdbcDataSource();
-        dataSource.setURL("jdbc:h2:mem:" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1");
+        // PostgreSQL mode mirrors the H2 configuration the application runs with.
+        dataSource.setURL("jdbc:h2:mem:" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1;MODE=PostgreSQL");
         dataSource.setUser("sa");
         try (var connection = dataSource.getConnection()) {
-            ScriptUtils.executeSqlScript(connection, new ClassPathResource("schema.sql"));
+            ScriptUtils.executeSqlScript(connection,
+                    new ClassPathResource("db/migration/h2/V1__init.sql"));
         }
         jdbc = new JdbcTemplate(dataSource);
         repository = new JdbcRunRepository(jdbc);
@@ -82,6 +84,25 @@ class PersistenceIntegrationTest {
         assertThat(found).extracting(AnalysisRun::id).containsExactly(active.id());
         assertThat(repository.findActiveByRepository("other-repo")).isEmpty();
         assertThat(repository.findById("ghost")).isEmpty();
+    }
+
+    @Test
+    void retentionDeletesOnlyOldTerminalRuns() {
+        AnalysisRun finished = new AnalysisRun("run-old", "old", "repo", "t", Fixtures.T0);
+        finished.markCancelled(Fixtures.T0);
+        repository.save(finished);
+        AnalysisRun active = new AnalysisRun("run-live", "live", "repo", "t", Fixtures.T0);
+        repository.save(active);
+        eventLog.append("run-old", "diff", "STARTED", "old event", null);
+
+        List<String> deleted = repository.deleteFinishedBefore(Fixtures.T0.plusSeconds(60));
+
+        assertThat(deleted).containsExactly("run-old");
+        assertThat(repository.findById("run-old")).isEmpty();
+        assertThat(repository.findById("run-live")).isPresent();
+
+        eventLog.deleteForRun("run-old");
+        assertThat(eventLog.eventsAfter("run-old", 0)).isEmpty();
     }
 
     @Test

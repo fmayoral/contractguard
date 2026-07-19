@@ -13,10 +13,12 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password: ""
-  sql:
-    init:
-      # File-based H2 does not count as "embedded"; run schema.sql regardless.
-      mode: always
+  flyway:
+    # Vendor-specific DDL: db/migration/h2 locally, db/migration/postgresql
+    # when the postgres profile is active.
+    locations: classpath:db/migration/{vendor}
+    # Adopt databases created before Flyway managed the schema.
+    baseline-on-migrate: true
 
 contractguard:
   # Repositories must live directly under one of these roots.
@@ -26,6 +28,8 @@ contractguard:
   storage:
     # Embedded database and run artifacts live here.
     directory: ../data
+    # Days to keep finished runs (events and artifacts included); 0 disables.
+    retention-days: 0
   specs:
     # Directory the run setup offers OpenAPI specifications from.
     directory: ../samples/openapi
@@ -44,3 +48,16 @@ contractguard:
     command-key: maven-verify
     timeout: 15m
     max-output-bytes: 1000000
+
+---
+# Server deployments: run with --spring.profiles.active=postgres and the
+# CONTRACTGUARD_DB_* environment variables set.
+spring:
+  config:
+    activate:
+      on-profile: postgres
+  datasource:
+    url: ${CONTRACTGUARD_DB_URL:jdbc:postgresql://localhost:5432/contractguard}
+    username: ${CONTRACTGUARD_DB_USER:contractguard}
+    password: ${CONTRACTGUARD_DB_PASSWORD:}
+    driver-class-name: org.postgresql.Driver

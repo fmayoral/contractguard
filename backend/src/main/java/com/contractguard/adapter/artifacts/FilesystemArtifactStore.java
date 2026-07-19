@@ -48,6 +48,26 @@ public class FilesystemArtifactStore implements ArtifactStore {
         }
     }
 
+    @Override
+    public void deleteForRun(String runId) {
+        Path directory = runDirectory(runId);
+        if (!directory.startsWith(root) || !Files.isDirectory(directory)) {
+            return;
+        }
+        try (var files = Files.list(directory)) {
+            for (Path file : files.toList()) {
+                Files.deleteIfExists(file);
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException("cannot delete artifacts of run %s".formatted(runId), e);
+        }
+        try {
+            Files.deleteIfExists(directory);
+        } catch (IOException e) {
+            throw new UncheckedIOException("cannot delete artifact directory of run %s".formatted(runId), e);
+        }
+    }
+
     private Path runDirectory(String runId) {
         return root.resolve(sanitise(runId));
     }

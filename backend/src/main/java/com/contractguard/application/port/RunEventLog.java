@@ -18,6 +18,9 @@ public interface RunEventLog {
     /** Live subscription for SSE; the returned handle unsubscribes on close. */
     AutoCloseable subscribe(String runId, Consumer<RunEvent> listener);
 
+    /** Removes all persisted events of a run; used by retention (FR-023). */
+    void deleteForRun(String runId);
+
     record RunEvent(String runId, long seq, Instant occurredAt, String step, String status,
             String message, String metadataJson) {
     }

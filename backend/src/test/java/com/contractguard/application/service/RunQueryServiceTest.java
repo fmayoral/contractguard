@@ -40,6 +40,11 @@ class RunQueryServiceTest {
             public Optional<String> read(String runId, String artifactId) {
                 return Optional.ofNullable(artifacts.get(runId + "/" + artifactId));
             }
+
+            @Override
+            public void deleteForRun(String runId) {
+                artifacts.keySet().removeIf(key -> key.startsWith(runId + "/"));
+            }
         };
         service = new RunQueryService(runs, events, store);
     }

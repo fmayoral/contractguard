@@ -36,6 +36,7 @@ import com.contractguard.application.service.ApprovalService;
 import com.contractguard.application.service.EvidenceCollector;
 import com.contractguard.application.service.ExecutionService;
 import com.contractguard.application.service.ReportService;
+import com.contractguard.application.service.RetentionService;
 import com.contractguard.application.service.RunQueryService;
 import com.contractguard.application.service.RunService;
 import org.slf4j.Logger;
@@ -176,6 +177,13 @@ public class ApplicationConfiguration {
     @Bean
     public ApprovalService approvalService(RunRepository runs, RunEventLog events, Clock clock) {
         return new ApprovalService(runs, events, clock);
+    }
+
+    @Bean
+    public RetentionService retentionService(RunRepository runs, RunEventLog events,
+            ArtifactStore artifacts, ContractGuardProperties properties, Clock clock) {
+        return new RetentionService(runs, events, artifacts,
+                properties.storage().retentionDays(), clock);
     }
 
     @Bean

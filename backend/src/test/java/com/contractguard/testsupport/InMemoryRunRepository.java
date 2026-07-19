@@ -3,6 +3,7 @@ package com.contractguard.testsupport;
 import com.contractguard.application.port.RunRepository;
 import com.contractguard.domain.AnalysisRun;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -38,5 +39,16 @@ public class InMemoryRunRepository implements RunRepository {
                 .filter(run -> run.repositoryId().equals(repositoryId))
                 .filter(run -> !run.state().isTerminal())
                 .toList();
+    }
+
+    @Override
+    public List<String> deleteFinishedBefore(Instant cutoff) {
+        List<String> expired = runs.values().stream()
+                .filter(run -> run.state().isTerminal())
+                .filter(run -> run.updatedAt().isBefore(cutoff))
+                .map(AnalysisRun::id)
+                .toList();
+        expired.forEach(runs::remove);
+        return expired;
     }
 }

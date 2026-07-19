@@ -50,4 +50,19 @@ class FilesystemArtifactStoreTest {
         assertThat(store.read("run-1", "nope.log")).isEmpty();
         assertThat(store.read("../..", "nope.log")).isEmpty();
     }
+
+    @Test
+    void deleteForRunRemovesOnlyThatRunsArtifacts() {
+        store.save("run-1", "report.md", "# One");
+        store.save("run-1", "patch.diff", "diff");
+        store.save("run-2", "report.md", "# Two");
+
+        store.deleteForRun("run-1");
+
+        assertThat(store.read("run-1", "report.md")).isEmpty();
+        assertThat(store.read("run-1", "patch.diff")).isEmpty();
+        assertThat(store.read("run-2", "report.md")).contains("# Two");
+        // Deleting an unknown run is a harmless no-op.
+        store.deleteForRun("ghost");
+    }
 }

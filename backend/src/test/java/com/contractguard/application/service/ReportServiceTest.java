@@ -43,6 +43,11 @@ class ReportServiceTest {
             public Optional<String> read(String runId, String artifactId) {
                 return Optional.ofNullable(stored.get(artifactId));
             }
+
+            @Override
+            public void deleteForRun(String runId) {
+                stored.clear();
+            }
         };
         service = new ReportService(runs, events, artifacts, new JacksonJsonCodec());
     }

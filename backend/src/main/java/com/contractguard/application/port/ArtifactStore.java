@@ -9,4 +9,7 @@ public interface ArtifactStore {
     String save(String runId, String name, String content);
 
     Optional<String> read(String runId, String artifactId);
+
+    /** Removes every artifact of a run; used by retention (FR-023). */
+    void deleteForRun(String runId);
 }

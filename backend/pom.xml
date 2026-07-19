@@ -28,6 +28,8 @@
     <spotbugs-plugin.version>4.8.6.4</spotbugs-plugin.version>
     <!-- Excluded from all E2E-less builds; the e2e CI profile clears it. -->
     <e2e.excludes>**/*E2ETest.java</e2e.excludes>
+    <!-- Excluded unless the pg profile is active; needs a Docker daemon. -->
+    <pg.excludes>**/*PostgresTest.java</pg.excludes>
   </properties>
 
   <dependencies>
@@ -46,6 +48,20 @@
     <dependency>
       <groupId>com.h2database</groupId>
       <artifactId>h2</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-database-postgresql</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
       <scope>runtime</scope>
     </dependency>
     <dependency>
@@ -70,6 +86,16 @@
       <version>${archunit.version}</version>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
@@ -85,6 +111,7 @@
         <configuration>
           <excludes>
             <exclude>${e2e.excludes}</exclude>
+            <exclude>${pg.excludes}</exclude>
           </excludes>
         </configuration>
       </plugin>
@@ -203,6 +230,13 @@
       <properties>
         <!-- Match nothing so *E2ETest classes run. -->
         <e2e.excludes>none-matching-placeholder</e2e.excludes>
+      </properties>
+    </profile>
+    <profile>
+      <id>pg</id>
+      <properties>
+        <!-- Match nothing so *PostgresTest classes run (requires Docker). -->
+        <pg.excludes>none-matching-placeholder</pg.excludes>
       </properties>
     </profile>
   </profiles>

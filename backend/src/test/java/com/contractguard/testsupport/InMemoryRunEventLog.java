@@ -33,6 +33,11 @@ public class InMemoryRunEventLog implements RunEventLog {
     }
 
     @Override
+    public void deleteForRun(String runId) {
+        events.removeIf(event -> event.runId().equals(runId));
+    }
+
+    @Override
     public AutoCloseable subscribe(String runId, Consumer<RunEvent> listener) {
         Consumer<RunEvent> filtered = event -> {
             if (event.runId().equals(runId)) {

@@ -40,6 +40,11 @@ class RunEventsApiTest {
             public Optional<String> read(String runId, String artifactId) {
                 return Optional.empty();
             }
+
+            @Override
+            public void deleteForRun(String runId) {
+                // nothing stored
+            }
         };
         RunQueryService queries = new RunQueryService(runs, events, artifacts);
         mvc = MockMvcBuilders.standaloneSetup(new RunEventsController(queries))

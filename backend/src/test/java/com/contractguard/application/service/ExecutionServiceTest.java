@@ -124,6 +124,11 @@ class ExecutionServiceTest {
             public Optional<String> read(String runId, String artifactId) {
                 return Optional.ofNullable(savedArtifacts.get(artifactId));
             }
+
+            @Override
+            public void deleteForRun(String runId) {
+                savedArtifacts.clear();
+            }
         };
         service = new ExecutionService(runs, events, fakeGit, fakePatch, builds, reader,
                 new ImplementationAgent(new LlmJsonClient(gateway, codec), new PromptLibrary(), codec),

@@ -7,7 +7,6 @@ import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
 
 import java.sql.PreparedStatement;
-import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.util.List;
@@ -43,9 +42,11 @@ public class JdbcRunEventLog implements RunEventLog {
         Timestamp occurredAt = Timestamp.from(clock.instant());
         KeyHolder keyHolder = new GeneratedKeyHolder();
         jdbc.update(connection -> {
+            // Name the key column: PostgreSQL returns the whole row for
+            // RETURN_GENERATED_KEYS, which breaks KeyHolder#getKey.
             PreparedStatement ps = connection.prepareStatement("""
                     INSERT INTO run_events (run_id, occurred_at, step, status, message, metadata)
-                    VALUES (?, ?, ?, ?, ?, ?)""", Statement.RETURN_GENERATED_KEYS);
+                    VALUES (?, ?, ?, ?, ?, ?)""", new String[] {"id"});
             ps.setString(1, runId);
             ps.setTimestamp(2, occurredAt);
             ps.setString(3, step);
@@ -68,6 +69,11 @@ public class JdbcRunEventLog implements RunEventLog {
                 SELECT id, run_id, occurred_at, step, status, message, metadata
                 FROM run_events WHERE run_id = ? AND id > ? ORDER BY id""",
                 rowMapper, runId, afterSeq);
+    }
+
+    @Override
+    public void deleteForRun(String runId) {
+        jdbc.update("DELETE FROM run_events WHERE run_id = ?", runId);
     }
 
     @Override

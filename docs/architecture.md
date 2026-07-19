@@ -93,11 +93,16 @@ deterministic scripted gateway; every validation path stays identical.
 
 ## Persistence
 
-H2 (file mode) stores the run aggregate as a versioned JSON document plus an
-append-only `run_events` table (ADR-0004). Large artifacts (patches,
-validation logs, reports) live in run-scoped directories under the storage
-root. Completed runs survive restarts; in-flight runs are finalised as
-FAILED on startup with an explanatory failure.
+The run aggregate is stored as a versioned JSON document plus an append-only
+`run_events` table (ADR-0004). Two engines are supported behind the same
+JDBC adapters: embedded H2 (file mode, the local default) and PostgreSQL for
+server deployments (`postgres` Spring profile; ADR-0006). The schema is
+managed by Flyway with vendor-specific migrations; databases that predate
+Flyway are baselined in place. Large artifacts (patches, validation logs,
+reports) live in run-scoped directories under the storage root. Completed
+runs survive restarts; in-flight runs are finalised as FAILED on startup
+with an explanatory failure. An optional retention window purges finished
+runs, their events and artifacts after a configurable number of days.
 
 ## Observability
 

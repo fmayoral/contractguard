@@ -123,6 +123,7 @@ All settings live under `contractguard.*` in
 |---|---|---|
 | `workspace.roots` | `../workspace` | Directories whose direct child Git repositories are analysable |
 | `storage.directory` | `../data` | Embedded database + run artifacts |
+| `storage.retention-days` | `0` (keep forever) | Purge finished runs, their events and artifacts after N days |
 | `specs.directory` | `../samples/openapi` | Specifications offered in run setup |
 | `llm.provider` | `mock` | `mock` (deterministic) or `openai` |
 | `llm.base-url` / `llm.api-key` / `llm.model` | env-driven | OpenAI-compatible endpoint |
@@ -130,6 +131,22 @@ All settings live under `contractguard.*` in
 | `llm.max-workflow-steps` | 20 | Investigator tool-loop budget |
 | `validation.command-key` | `maven-verify` | Only allow-listed validation command |
 | `validation.timeout` / `validation.max-output-bytes` | 15m / 1MB | Build bounds |
+
+### Database
+
+The default is embedded H2 (file mode) — zero setup. For server deployments
+run with the `postgres` profile and point it at a PostgreSQL 15+ instance:
+
+```bash
+export CONTRACTGUARD_DB_URL=jdbc:postgresql://db:5432/contractguard
+export CONTRACTGUARD_DB_USER=contractguard
+export CONTRACTGUARD_DB_PASSWORD=...
+java -jar contractguard-backend.jar --spring.profiles.active=postgres
+```
+
+The schema is managed by Flyway on both engines (vendor-specific migrations
+under `db/migration/`); databases created before Flyway are baselined in
+place on first start.
 
 ## Verification
 
@@ -140,6 +157,9 @@ cd backend && ./mvnw verify
 
 # Backend incl. the full end-to-end demo test (real git + real mvnw verify)
 cd backend && ./mvnw verify -Pe2e
+
+# Persistence adapters against real PostgreSQL (requires Docker)
+cd backend && ./mvnw test -Ppg
 
 # Frontend: lint, tests with coverage, production build
 cd frontend && npm ci && npm run lint && npm run test:coverage && npm run build

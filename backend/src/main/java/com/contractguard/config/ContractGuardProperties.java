@@ -17,7 +17,8 @@ public record ContractGuardProperties(
     public record Workspace(List<String> roots) {
     }
 
-    public record Storage(String directory) {
+    /** {@code retentionDays <= 0} keeps finished runs forever (FR-023). */
+    public record Storage(String directory, int retentionDays) {
     }
 
     public record Specs(String directory) {

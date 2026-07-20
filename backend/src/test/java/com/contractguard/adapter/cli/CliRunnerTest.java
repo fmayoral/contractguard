@@ -10,6 +10,7 @@ import com.contractguard.application.agent.ImpactInvestigator;
 import com.contractguard.application.agent.MigrationPlanner;
 import com.contractguard.application.llm.LlmJsonClient;
 import com.contractguard.application.llm.PromptLibrary;
+import com.contractguard.application.policy.RepositoryLock;
 import com.contractguard.application.policy.WorkspacePolicy;
 import com.contractguard.application.port.ArtifactStore;
 import com.contractguard.application.port.RemoteGitPort;
@@ -126,8 +127,8 @@ class CliRunnerTest {
         };
         RemoteRepositoryService remoteRepositories =
                 new RemoteRepositoryService(noRemotes, (RemoteGitPort) null, clock);
-        RunService runService = new RunService(runs, events, policy, remoteRepositories, pipeline,
-                SPECS_DIR, Runnable::run, clock);
+        RunService runService = new RunService(runs, events, policy, remoteRepositories,
+                new RepositoryLock(), pipeline, SPECS_DIR, Runnable::run, 0, clock);
         cli = new CliRunner(runService,
                 new RunQueryService(runs, events, artifactStore),
                 new ReportService(runs, events, artifactStore, codec),

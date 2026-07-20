@@ -1,5 +1,6 @@
 package com.contractguard.application.service;
 
+import com.contractguard.application.policy.RepositoryLock;
 import com.contractguard.application.policy.WorkspacePolicy;
 import com.contractguard.application.port.RunEventLog;
 import com.contractguard.application.port.RunRepository;
@@ -9,6 +10,7 @@ import com.contractguard.domain.FailureCategory;
 import com.contractguard.domain.Ids;
 import com.contractguard.domain.RemoteRepository;
 import com.contractguard.domain.RunFailure;
+import com.contractguard.domain.RunState;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -28,32 +30,60 @@ public class RunService {
     private final RunEventLog events;
     private final WorkspacePolicy workspacePolicy;
     private final RemoteRepositoryService remoteRepositories;
+    private final RepositoryLock repositoryLock;
     private final AnalysisPipeline pipeline;
     private final Path specsDirectory;
     private final Executor executor;
+    private final int maxActiveRuns;
     private final Clock clock;
 
     public RunService(RunRepository runs, RunEventLog events, WorkspacePolicy workspacePolicy,
-            RemoteRepositoryService remoteRepositories, AnalysisPipeline pipeline, Path specsDirectory,
-            Executor executor, Clock clock) {
+            RemoteRepositoryService remoteRepositories, RepositoryLock repositoryLock,
+            AnalysisPipeline pipeline, Path specsDirectory, Executor executor, int maxActiveRuns,
+            Clock clock) {
         this.runs = runs;
         this.events = events;
         this.workspacePolicy = workspacePolicy;
         this.remoteRepositories = remoteRepositories;
+        this.repositoryLock = repositoryLock;
         this.pipeline = pipeline;
         this.specsDirectory = specsDirectory.toAbsolutePath().normalize();
         this.executor = executor;
+        this.maxActiveRuns = maxActiveRuns;
         this.clock = clock;
     }
 
     public AnalysisRun createRun(String name, String repositoryId, String oldSpecFile, String newSpecFile) {
         Path oldSpec = resolveSpec(oldSpecFile);
         Path newSpec = resolveSpec(newSpecFile);
+        if (!repositoryLock.tryAcquire(repositoryId)) {
+            throw ContractGuardException.of(FailureCategory.REPOSITORY_BUSY,
+                    "repository '%s' is used by another active run".formatted(repositoryId),
+                    "Wait for the active run to finish or cancel it.");
+        }
+        try {
+            AnalysisRun run = createRunLocked(name, repositoryId, oldSpecFile, newSpecFile);
+            executor.execute(() -> pipeline.analyse(run.id(), oldSpec, newSpec));
+            return run;
+        } finally {
+            // Only the tiny check-then-insert window needs the lock: once the row exists,
+            // findActiveByRepository already represents "busy" for the run's whole lifetime (ADR-0009).
+            repositoryLock.release(repositoryId);
+        }
+    }
+
+    private AnalysisRun createRunLocked(String name, String repositoryId, String oldSpecFile,
+            String newSpecFile) {
         boolean busy = !runs.findActiveByRepository(repositoryId).isEmpty();
         if (busy) {
             throw ContractGuardException.of(FailureCategory.REPOSITORY_BUSY,
                     "repository '%s' is used by another active run".formatted(repositoryId),
                     "Wait for the active run to finish or cancel it.");
+        }
+        if (maxActiveRuns > 0 && runs.countActive() >= maxActiveRuns) {
+            throw ContractGuardException.of(FailureCategory.RUN_QUEUE_FULL,
+                    "%d run(s) are already active; the queue is full".formatted(maxActiveRuns),
+                    "Wait for an active run to finish, or raise contractguard.concurrency.max-active-runs.");
         }
         // Remote repos clone/refresh into a cache dir that is itself a workspace root, so the
         // resolve below (and everything downstream) sees an ordinary local repository (ADR-0007).
@@ -62,12 +92,12 @@ public class RunService {
         String runId = Ids.newId();
         String runName = name == null || name.isBlank()
                 ? "run-" + Ids.shortId(runId) : name.strip();
-        AnalysisRun run = new AnalysisRun(runId, runName, repositoryId, Ids.newId(), clock.instant());
+        AnalysisRun run = new AnalysisRun(runId, runName, repositoryId, Ids.newId(), clock.instant(),
+                oldSpecFile, newSpecFile);
         runs.save(run);
         events.append(runId, "run", "CREATED",
                 "Run '%s' created for repository '%s'".formatted(runName, repositoryId),
                 "{\"kind\":\"system\"}");
-        executor.execute(() -> pipeline.analyse(runId, oldSpec, newSpec));
         return run;
     }
 
@@ -101,23 +131,63 @@ public class RunService {
         return remoteRepositories.listRegistered().stream().map(RemoteRepository::repositoryId).toList();
     }
 
-    /** On startup, runs interrupted by a restart are finalised as FAILED (plan §7 A6). */
-    public int failInterruptedRuns() {
-        int count = 0;
+    /**
+     * On startup, runs interrupted by the previous shutdown are recovered (FR-032, ADR-0009):
+     * {@code AWAITING_APPROVAL} runs are left untouched (nothing was in flight — they're just
+     * waiting on a human, restart or not), runs still {@code CREATED} are safely re-dispatched
+     * from scratch (no repository mutation could have started yet), and every other non-terminal
+     * state is finalised as FAILED with a clean remediation message — deliberately not resumed
+     * mid-mutation, since the state machine's transitions are one-shot by design.
+     */
+    public InterruptedRunRecovery failInterruptedRuns() {
+        int resumed = 0;
+        int failed = 0;
         for (AnalysisRun run : runs.findAll()) {
-            if (!run.state().isTerminal()) {
-                run.markFailed(new RunFailure(FailureCategory.INTERNAL_ERROR,
-                        "run was interrupted by an application restart while in state " + run.state(),
-                        false, null,
-                        "Start a new run; the repository was not left mid-mutation by the analysis phase."),
-                        clock.instant());
-                runs.save(run);
-                events.append(run.id(), "run", "FAILED",
-                        "Run interrupted by application restart", "{\"kind\":\"system\"}");
-                count++;
+            RunState state = run.state();
+            if (state.isTerminal() || state == RunState.AWAITING_APPROVAL) {
+                continue;
             }
+            if (state == RunState.CREATED) {
+                if (resumeCreated(run)) {
+                    resumed++;
+                } else {
+                    failed++;
+                }
+                continue;
+            }
+            run.markFailed(new RunFailure(FailureCategory.INTERNAL_ERROR,
+                    "run was interrupted by an application restart while in state " + state,
+                    false, null,
+                    "Start a new run; the repository was not left mid-mutation by the analysis phase."),
+                    clock.instant());
+            runs.save(run);
+            events.append(run.id(), "run", "FAILED",
+                    "Run interrupted by application restart", "{\"kind\":\"system\"}");
+            failed++;
         }
-        return count;
+        return new InterruptedRunRecovery(resumed, failed);
+    }
+
+    /** @return true if the run was successfully re-dispatched, false if it had to be failed instead */
+    private boolean resumeCreated(AnalysisRun run) {
+        try {
+            Path oldSpec = resolveSpec(run.oldSpecFile());
+            Path newSpec = resolveSpec(run.newSpecFile());
+            events.append(run.id(), "run", "RESUMED",
+                    "Resuming analysis interrupted by the previous shutdown while still CREATED",
+                    "{\"kind\":\"system\"}");
+            executor.execute(() -> pipeline.analyse(run.id(), oldSpec, newSpec));
+            return true;
+        } catch (ContractGuardException e) {
+            run.markFailed(e.failure(), clock.instant());
+            runs.save(run);
+            events.append(run.id(), "run", "FAILED",
+                    "Cannot resume: " + e.failure().message(), "{\"kind\":\"system\"}");
+            return false;
+        }
+    }
+
+    public record InterruptedRunRecovery(int resumed, int failed) {
     }
 
     private Path resolveSpec(String fileName) {

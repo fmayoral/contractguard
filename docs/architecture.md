@@ -22,7 +22,7 @@ application
   ├── agent     ChangeExplainer, ImpactInvestigator, MigrationPlanner,
   │             ImplementationAgent  (LLM-assisted, schema-validated)
   ├── llm       PromptLibrary, LlmJsonClient (retry-once validation)
-  ├── policy    WorkspacePolicy, SecretRedactor
+  ├── policy    WorkspacePolicy, SecretRedactor, RepositoryLock  (FR-032)
   └── port      OpenApiDiffPort, RepositorySearchPort, SourceReaderPort,
                 GitWorkspacePort, PatchPort, BuildValidationPort,
                 LlmGateway, JsonCodec, RunRepository, RunEventLog, ArtifactStore,
@@ -65,6 +65,14 @@ SUCCEEDED | PUBLISH_FAILED → PUBLISHING → PUBLISHED | PUBLISH_FAILED   (FR-0
 pipeline but remain publishable: `PublishService` only enters `PUBLISHING`
 from an explicit `POST /runs/{id}/publish`, mirroring the approval gate — a
 remediation is never pushed or opened as a pull request automatically.
+
+**On restart** (FR-032, ADR-0009): `RunState`'s transitions are one-shot —
+no state lists itself as a valid target — which is exactly what makes an
+interrupted run's recovery safe rather than a design gap. A run still
+`CREATED` (nothing mutated) is re-dispatched from scratch; a run in
+`AWAITING_APPROVAL` is left untouched (nothing was in flight); every other
+non-terminal state is finalised as `FAILED` with a clean remediation
+message — deliberately not resumed mid-mutation.
 
 ## Determinism vs. agency
 

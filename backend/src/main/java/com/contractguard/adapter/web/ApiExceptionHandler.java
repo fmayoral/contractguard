@@ -59,7 +59,7 @@ public class ApiExceptionHandler {
         return switch (category) {
             case NOT_FOUND -> HttpStatus.NOT_FOUND;
             case ILLEGAL_STATE, APPROVAL_MISMATCH, REPOSITORY_BUSY, DIRTY_REPOSITORY -> HttpStatus.CONFLICT;
-            case LLM_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
+            case LLM_UNAVAILABLE, RUN_QUEUE_FULL -> HttpStatus.SERVICE_UNAVAILABLE;
             case INTERNAL_ERROR -> HttpStatus.INTERNAL_SERVER_ERROR;
             default -> HttpStatus.BAD_REQUEST;
         };

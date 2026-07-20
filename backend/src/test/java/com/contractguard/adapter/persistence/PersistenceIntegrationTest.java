@@ -87,6 +87,19 @@ class PersistenceIntegrationTest {
     }
 
     @Test
+    void countActiveCountsOnlyNonTerminalRunsSystemWide() {
+        AnalysisRun active1 = new AnalysisRun("run-active-1", "a", "repo-a", "t", Fixtures.T0);
+        repository.save(active1);
+        AnalysisRun active2 = new AnalysisRun("run-active-2", "b", "repo-b", "t", Fixtures.T0);
+        repository.save(active2);
+        AnalysisRun finished = new AnalysisRun("run-done", "c", "repo-a", "t", Fixtures.T0);
+        finished.markCancelled(Fixtures.T0);
+        repository.save(finished);
+
+        assertThat(repository.countActive()).isEqualTo(2);
+    }
+
+    @Test
     void retentionDeletesOnlyOldTerminalRuns() {
         AnalysisRun finished = new AnalysisRun("run-old", "old", "repo", "t", Fixtures.T0);
         finished.markCancelled(Fixtures.T0);

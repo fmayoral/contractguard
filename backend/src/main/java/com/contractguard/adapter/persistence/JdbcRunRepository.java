@@ -81,6 +81,15 @@ public class JdbcRunRepository implements RunRepository {
     }
 
     @Override
+    public int countActive() {
+        String placeholders = String.join(",", TERMINAL_STATES.stream().map(s -> "?").toList());
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM runs WHERE state NOT IN (" + placeholders + ")",
+                Integer.class, TERMINAL_STATES.toArray());
+        return count == null ? 0 : count;
+    }
+
+    @Override
     public List<String> deleteFinishedBefore(Instant cutoff) {
         String placeholders = String.join(",", TERMINAL_STATES.stream().map(s -> "?").toList());
         Object[] args = new Object[TERMINAL_STATES.size() + 1];

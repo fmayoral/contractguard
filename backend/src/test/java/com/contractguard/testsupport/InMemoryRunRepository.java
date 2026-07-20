@@ -42,6 +42,11 @@ public class InMemoryRunRepository implements RunRepository {
     }
 
     @Override
+    public int countActive() {
+        return (int) runs.values().stream().filter(run -> !run.state().isTerminal()).count();
+    }
+
+    @Override
     public List<String> deleteFinishedBefore(Instant cutoff) {
         List<String> expired = runs.values().stream()
                 .filter(run -> run.state().isTerminal())

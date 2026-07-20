@@ -1,6 +1,7 @@
 package com.contractguard.config;
 
 import com.contractguard.adapter.cli.CliRunner;
+import com.contractguard.application.policy.RepositoryLock;
 import com.contractguard.application.policy.WorkspacePolicy;
 import com.contractguard.application.port.RunEventLog;
 import com.contractguard.application.port.RunRepository;
@@ -31,8 +32,10 @@ public class CliConfiguration {
     public CliRunner cliRunner(RunRepository runs, RunEventLog events, WorkspacePolicy policy,
             RemoteRepositoryService remoteRepositories, AnalysisPipeline pipeline,
             ContractGuardProperties properties, RunQueryService queries, ReportService reports, Clock clock) {
-        RunService synchronousRunService = new RunService(runs, events, policy, remoteRepositories, pipeline,
-                Path.of(properties.specs().directory()), Runnable::run, clock);
+        // A fresh, process-local lock and no queue bound: the gate runs exactly one analysis
+        // and exits, so neither cross-request concurrency concern applies (FR-032).
+        RunService synchronousRunService = new RunService(runs, events, policy, remoteRepositories,
+                new RepositoryLock(), pipeline, Path.of(properties.specs().directory()), Runnable::run, 0, clock);
         return new CliRunner(synchronousRunService, queries, reports, System.out);
     }
 

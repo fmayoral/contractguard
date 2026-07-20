@@ -14,7 +14,8 @@ public record ContractGuardProperties(
         Llm llm,
         Validation validation,
         Remote remote,
-        Audit audit) {
+        Audit audit,
+        Concurrency concurrency) {
 
     public record Workspace(List<String> roots) {
     }
@@ -39,5 +40,9 @@ public record ContractGuardProperties(
 
     /** {@code defaultPrincipal} attributes audit entries until real authentication exists (FR-025, FR-024). */
     public record Audit(String defaultPrincipal) {
+    }
+
+    /** {@code maxActiveRuns} bounds the system-wide run queue (FR-032, ADR-0009). */
+    public record Concurrency(int maxActiveRuns) {
     }
 }

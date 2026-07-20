@@ -24,6 +24,8 @@ public final class AnalysisRun {
     private final Instant createdAt;
     private Instant updatedAt;
     private RunState state;
+    private final String oldSpecFile;
+    private final String newSpecFile;
     private String oldSpecName;
     private String newSpecName;
     private String oldSpecHash;
@@ -42,6 +44,17 @@ public final class AnalysisRun {
     private Approval approval;
 
     public AnalysisRun(String id, String name, String repositoryId, String traceId, Instant createdAt) {
+        this(id, name, repositoryId, traceId, createdAt, null, null);
+    }
+
+    /**
+     * @param oldSpecFile the requested old-spec file name, persisted immediately (unlike
+     *                    {@link #oldSpecName}, which is only recorded once diffing actually runs) so
+     *                    a run interrupted while still {@link RunState#CREATED} can be safely
+     *                    re-dispatched from scratch on restart (FR-032, ADR-0009)
+     */
+    public AnalysisRun(String id, String name, String repositoryId, String traceId, Instant createdAt,
+            String oldSpecFile, String newSpecFile) {
         this.id = Objects.requireNonNull(id, "id");
         this.name = Objects.requireNonNull(name, "name");
         this.repositoryId = Objects.requireNonNull(repositoryId, "repositoryId");
@@ -49,17 +62,19 @@ public final class AnalysisRun {
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt");
         this.updatedAt = createdAt;
         this.state = RunState.CREATED;
+        this.oldSpecFile = oldSpecFile;
+        this.newSpecFile = newSpecFile;
     }
 
     /** Rehydration constructor for persistence; performs no transition checks. */
     public static AnalysisRun rehydrate(String id, String name, String repositoryId, String traceId,
-            Instant createdAt, Instant updatedAt, RunState state, String oldSpecName, String newSpecName,
-            String oldSpecHash, String newSpecHash,
+            Instant createdAt, Instant updatedAt, RunState state, String oldSpecFile, String newSpecFile,
+            String oldSpecName, String newSpecName, String oldSpecHash, String newSpecHash,
             String originalBranch, String workingBranch, RunFailure failure, String pullRequestUrl,
             List<ApiChange> changes, List<ImpactEvidence> evidence, List<ImpactAssessment> assessments,
             MigrationPlan plan, Approval approval, List<PatchArtifact> patches,
             List<ValidationResult> validations) {
-        AnalysisRun run = new AnalysisRun(id, name, repositoryId, traceId, createdAt);
+        AnalysisRun run = new AnalysisRun(id, name, repositoryId, traceId, createdAt, oldSpecFile, newSpecFile);
         run.updatedAt = Objects.requireNonNull(updatedAt, "updatedAt");
         run.state = Objects.requireNonNull(state, "state");
         run.oldSpecName = oldSpecName;
@@ -292,6 +307,14 @@ public final class AnalysisRun {
 
     public RunState state() {
         return state;
+    }
+
+    public String oldSpecFile() {
+        return oldSpecFile;
+    }
+
+    public String newSpecFile() {
+        return newSpecFile;
     }
 
     public String oldSpecName() {

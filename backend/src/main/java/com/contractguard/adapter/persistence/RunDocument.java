@@ -29,13 +29,18 @@ import java.util.List;
 public record RunDocument(
         String id, String name, String repositoryId, String traceId,
         Instant createdAt, Instant updatedAt, String state,
+        String oldSpecFile, String newSpecFile,
         String oldSpecName, String newSpecName, String oldSpecHash, String newSpecHash,
         String originalBranch, String workingBranch, Failure failure, String pullRequestUrl,
         List<Change> changes, List<Evidence> evidence, List<Assessment> assessments,
         Plan plan, ApprovalDoc approval, List<Patch> patches, List<Validation> validations) {
 
-    /** v2 adds {@code pullRequestUrl} (FR-027); older payloads deserialise it as null. */
-    public static final int CURRENT_VERSION = 2;
+    /**
+     * v2 added {@code pullRequestUrl} (FR-027); v3 adds {@code oldSpecFile}/{@code newSpecFile}
+     * (FR-032, ADR-0009) so a run interrupted while still CREATED can be safely resumed. Older
+     * payloads deserialise the new fields as null.
+     */
+    public static final int CURRENT_VERSION = 3;
 
     public record Failure(String category, String message, boolean mutationOccurred,
             String artifactId, String remediation) {
@@ -78,6 +83,7 @@ public record RunDocument(
         return new RunDocument(
                 run.id(), run.name(), run.repositoryId(), run.traceId(),
                 run.createdAt(), run.updatedAt(), run.state().name(),
+                run.oldSpecFile(), run.newSpecFile(),
                 run.oldSpecName(), run.newSpecName(), run.oldSpecHash(), run.newSpecHash(),
                 run.originalBranch(), run.workingBranch(),
                 run.failure().map(f -> new Failure(f.category().name(), f.message(),
@@ -109,6 +115,7 @@ public record RunDocument(
     public AnalysisRun toDomain() {
         return AnalysisRun.rehydrate(
                 id, name, repositoryId, traceId, createdAt, updatedAt, RunState.valueOf(state),
+                oldSpecFile, newSpecFile,
                 oldSpecName, newSpecName, oldSpecHash, newSpecHash, originalBranch, workingBranch,
                 failure == null ? null : new RunFailure(FailureCategory.valueOf(failure.category()),
                         failure.message(), failure.mutationOccurred(), failure.artifactId(),

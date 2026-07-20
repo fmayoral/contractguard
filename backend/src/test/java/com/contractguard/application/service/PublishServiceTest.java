@@ -152,6 +152,7 @@ class PublishServiceTest {
         AnalysisRun run = Fixtures.runSucceeded();
         AnalysisRun otherRepo = AnalysisRun.rehydrate(run.id(), run.name(),
                 "not-registered", run.traceId(), run.createdAt(), run.updatedAt(), run.state(),
+                run.oldSpecFile(), run.newSpecFile(),
                 run.oldSpecName(), run.newSpecName(), run.oldSpecHash(), run.newSpecHash(),
                 run.originalBranch(), run.workingBranch(), null, null,
                 run.changes(), run.evidence(), run.assessments(), run.plan().orElse(null),

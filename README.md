@@ -224,6 +224,7 @@ All settings live under `contractguard.*` in
 | `validation.timeout` / `validation.max-output-bytes` | 15m / 1MB | Build bounds |
 | `remote.credential-key` | env-driven (`CONTRACTGUARD_CREDENTIAL_KEY`) | AES-256-GCM master key encrypting remote-repository tokens at rest |
 | `audit.default-principal` | `local-operator` | Attributed to every audit entry until FR-024 adds real authentication |
+| `concurrency.max-active-runs` | `10` | System-wide bound on non-terminal runs; `0` disables the limit |
 
 ### Database
 
@@ -293,6 +294,14 @@ docs/          Specification, architecture, ADRs, demo script, roadmap
   recorded to an append-only audit log with no API route to edit or delete
   an entry; unlike the operational timeline, it is never purged by the
   retention policy (ADR-0008).
+- A per-repository lock closes the race where two simultaneous requests
+  could both pass the "is this repository busy?" check before either run
+  was written; the system-wide run queue is explicitly bounded
+  (`concurrency.max-active-runs`) rather than relying on an unbounded
+  thread-pool queue. A run interrupted by a restart while still `CREATED`
+  is safely resumed from scratch; every other interrupted state is
+  finalised as FAILED with a clean message rather than resumed mid-mutation
+  (ADR-0009).
 
 ## Known limitations
 
@@ -302,8 +311,11 @@ docs/          Specification, architecture, ADRs, demo script, roadmap
 - Evidence collection is text-search based; dynamically constructed
   references can be missed.
 - One repository, Maven builds and OpenAPI 3.x only (see the specification, §4).
-- Resuming a run interrupted mid-flight is not supported; such runs are
-  finalised as FAILED on restart with an explanatory message.
+- Resuming a run interrupted mid-flight is supported only for runs still
+  `CREATED` (FR-032); anything past that point (mid-diff, mid-patch,
+  mid-publish, ...) is finalised as FAILED on restart with an explanatory
+  message rather than resumed, since the state machine's transitions are
+  intentionally one-shot (ADR-0009).
 - Remote repository support (FR-027) is GitHub-only, HTTPS-token-only: no
   GitLab/Bitbucket and no SSH yet. The draft pull request links evidence back
   to GitHub blob URLs rather than a ContractGuard report link, since the

@@ -57,6 +57,10 @@ contractguard:
     # principals; not a security boundary, just the compliance record's
     # "who" field for this single-operator MVP.
     default-principal: ${CONTRACTGUARD_AUDIT_PRINCIPAL:local-operator}
+  concurrency:
+    # Bounds the system-wide run queue (FR-032); creation is rejected with a
+    # 503 once this many runs are simultaneously non-terminal.
+    max-active-runs: 10
 
 ---
 # Headless CI gate (FR-026): analysis only, JSON report on stdout, exit code

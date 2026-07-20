@@ -24,6 +24,7 @@ import com.contractguard.application.agent.ImplementationAgent;
 import com.contractguard.application.agent.MigrationPlanner;
 import com.contractguard.application.llm.LlmJsonClient;
 import com.contractguard.application.llm.PromptLibrary;
+import com.contractguard.application.policy.RepositoryLock;
 import com.contractguard.application.policy.WorkspacePolicy;
 import com.contractguard.application.port.ArtifactStore;
 import com.contractguard.application.port.AuditTrailPort;
@@ -201,11 +202,18 @@ public class ApplicationConfiguration {
     }
 
     @Bean
+    public RepositoryLock repositoryLock() {
+        return new RepositoryLock();
+    }
+
+    @Bean
     public RunService runService(RunRepository runs, RunEventLog events, WorkspacePolicy policy,
-            RemoteRepositoryService remoteRepositories, AnalysisPipeline pipeline,
-            ContractGuardProperties properties, ExecutorService analysisExecutor, Clock clock) {
-        return new RunService(runs, events, policy, remoteRepositories, pipeline,
-                Path.of(properties.specs().directory()), analysisExecutor, clock);
+            RemoteRepositoryService remoteRepositories, RepositoryLock repositoryLock,
+            AnalysisPipeline pipeline, ContractGuardProperties properties,
+            ExecutorService analysisExecutor, Clock clock) {
+        return new RunService(runs, events, policy, remoteRepositories, repositoryLock, pipeline,
+                Path.of(properties.specs().directory()), analysisExecutor,
+                properties.concurrency().maxActiveRuns(), clock);
     }
 
     @Bean
@@ -302,9 +310,13 @@ public class ApplicationConfiguration {
     @Bean
     public ApplicationRunner interruptedRunRecovery(RunService runService) {
         return args -> {
-            int failed = runService.failInterruptedRuns();
-            if (failed > 0) {
-                log.warn("Finalised {} run(s) interrupted by the previous shutdown", failed);
+            RunService.InterruptedRunRecovery recovery = runService.failInterruptedRuns();
+            if (recovery.resumed() > 0) {
+                log.info("Resumed {} run(s) interrupted while still CREATED by the previous shutdown",
+                        recovery.resumed());
+            }
+            if (recovery.failed() > 0) {
+                log.warn("Finalised {} run(s) interrupted by the previous shutdown", recovery.failed());
             }
         };
     }

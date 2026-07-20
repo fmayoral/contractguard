@@ -19,6 +19,9 @@ public interface RunRepository {
     /** Runs in a non-terminal state operating on the given repository. */
     List<AnalysisRun> findActiveByRepository(String repositoryId);
 
+    /** Count of all runs currently in a non-terminal state, system-wide (FR-032's bounded queue). */
+    int countActive();
+
     /**
      * Deletes terminal-state runs last updated before the cutoff (FR-023).
      * Active runs are never deleted regardless of age.

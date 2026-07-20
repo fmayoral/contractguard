@@ -72,8 +72,8 @@ Consumer builds and tests execute in a resource-limited container (CPU, memory, 
 ### FR-031 — Notifications
 Slack/Teams webhook and email notifications on AWAITING_APPROVAL and terminal states, with deep links to the run. Configurable per repository/team.
 
-### FR-032 — Concurrency and Resume
-A bounded run queue with per-repository mutual exclusion (generalising today's REPOSITORY_BUSY check). Runs interrupted by a restart resume from the last persisted state or finalise as FAILED with a clean remediation message — never a stuck non-terminal state.
+### FR-032 — Concurrency and Resume (completed)
+A bounded run queue with per-repository mutual exclusion (generalising today's REPOSITORY_BUSY check). Runs interrupted by a restart resume from the last persisted state or finalise as FAILED with a clean remediation message — never a stuck non-terminal state. Resume is deliberately scoped to runs still `CREATED` (nothing mutated yet); every other interrupted state keeps the clean-fail fallback, since the state machine's one-shot transitions are a safety feature, not a gap — see ADR-0009 for why deeper resume was not attempted.
 
 **Phase 1 acceptance:** a team can deploy ContractGuard behind SSO, wire the CI gate into a provider repo, analyse a private remote consumer, approve in the UI, and receive a draft PR — with the whole sequence visible in traces, metrics and the audit log.
 

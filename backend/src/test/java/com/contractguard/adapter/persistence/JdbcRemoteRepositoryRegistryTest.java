@@ -67,4 +67,14 @@ class JdbcRemoteRepositoryRegistryTest {
         assertThat(registry.find("customer-consumer").orElseThrow().defaultBranch()).isEqualTo("develop");
         assertThat(registry.credentialFor("customer-consumer")).contains("gh-token-new");
     }
+
+    @Test
+    void findAllListsEveryRegistrationOrderedById() {
+        registry.register(RemoteRepository.forGitHub(
+                "widgets", "https://github.com/acme/widgets", "main", REGISTERED_AT), "t1");
+        registry.register(RemoteRepository.forGitHub(
+                "gadgets", "https://github.com/acme/gadgets", "main", REGISTERED_AT), "t2");
+
+        assertThat(registry.findAll()).extracting("repositoryId").containsExactly("gadgets", "widgets");
+    }
 }

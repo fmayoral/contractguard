@@ -23,12 +23,14 @@ sidebar).
 ### 1 — Analyse: diff, classify, explain
 
 Pick the consumer repository and the old/new specifications, then start the
-analysis. The backend validates inputs, computes a deterministic diff of the
-two specs, classifies each change (`BREAKING` / `NON_BREAKING` /
-`POTENTIALLY_BREAKING` / `UNKNOWN`) by fixed policy, and has the LLM explain
-the consumer consequences of each fact it is given — it cannot add or remove
-changes. The timeline shows each step as it happens, tagged by who acted
-(tool, LLM, human, system).
+analysis (a local workspace checkout, or a registered GitHub repository —
+see [Remote repositories](#remote-repositories) below). The backend
+validates inputs, computes a deterministic diff of the two specs, classifies
+each change (`BREAKING` / `NON_BREAKING` / `POTENTIALLY_BREAKING` /
+`UNKNOWN`) by fixed policy, and has the LLM explain the consumer consequences
+of each fact it is given — it cannot add or remove changes. The timeline
+shows each step as it happens, tagged by who acted (tool, LLM, human,
+system).
 
 ![Timeline and classified contract changes](docs/screenshots/1-timeline-and-contract-changes.png)
 
@@ -72,6 +74,21 @@ approved plan and decision, patches, validation output, honest limitations and
 the full event trace.
 
 ![Auditable run report](docs/screenshots/5-report.png)
+
+### 6 — Publish: push and open a draft pull request
+
+Once remediation succeeds against a registered GitHub repository, a
+**Publish** card offers a button that commits the working branch under a
+fixed `ContractGuard` bot identity, pushes it and opens a **draft** pull
+request whose body embeds the plan hash and links evidence back into the
+target repository — a distinct, explicit action from Execute, never
+automatic. The PR link then shows directly in the card; a failed publish can
+be retried once the underlying issue (e.g. an expired token) is fixed.
+
+<!-- TODO(fernando): capture docs/screenshots/6-publish-and-pull-request.png
+     (Publish card + resulting draft-PR link) once you have a registered
+     repository to publish against — see the "Remote repositories" section
+     and docs/demo-script.md §9 for the walkthrough. -->
 
 ## Prerequisites
 
@@ -130,8 +147,14 @@ consumer checkout must be a Git repository with a Maven wrapper.
 
 ## Remote repositories
 
-Consumers do not need a pre-existing local checkout. Register a GitHub
-repository over HTTPS with a personal access token (repo scope):
+Consumers do not need a pre-existing local checkout. In the dashboard,
+expand **+ Register a GitHub repository** under **New analysis run**, and
+supply a clone URL, default branch and a personal access token (`repo`
+scope) — the server needs `CONTRACTGUARD_CREDENTIAL_KEY` set (a base64
+256-bit key, e.g. `openssl rand -base64 32`) before it will accept one. The
+registered repository then appears in the **Consumer repository** picker
+under "Registered GitHub repositories", alongside any local workspace repos.
+Or register it directly over the API:
 
 ```bash
 export CONTRACTGUARD_CREDENTIAL_KEY=$(openssl rand -base64 32)  # server-side master key
@@ -142,16 +165,17 @@ curl -X POST http://localhost:7080/api/repositories/remote \
        "defaultBranch":"main","token":"ghp_..."}'
 ```
 
-Creating a run against `customer-consumer` now clones (or refreshes) it into
+Creating a run against a registered repository clones (or refreshes) it into
 `storage.directory/remote-cache/` automatically — everything downstream
 (diff, evidence search, execution) works exactly as it does for a local
-workspace repository. Once a run reaches `SUCCEEDED`, `POST
-/api/runs/{id}/publish` commits, pushes the working branch and opens a draft
-pull request; nothing is ever pushed without that explicit call. See
-[ADR-0007](docs/adr/0007-remote-repository-access.md) for the credential and
-transport design, and [docs/demo-script.md §9](docs/demo-script.md#9-test-remote-repositories-and-publishing-fr-027)
-for a full walkthrough against a real GitHub repository. There is no
-dashboard UI for this yet — see Known limitations below.
+workspace repository. Once a run reaches `SUCCEEDED`, a **Publish** card
+offers a button that commits, pushes the working branch and opens a draft
+pull request, then shows the PR link; nothing is ever pushed without that
+explicit click (or the equivalent `POST /api/runs/{id}/publish` call).
+See [ADR-0007](docs/adr/0007-remote-repository-access.md) for the credential
+and transport design, and
+[docs/demo-script.md §9](docs/demo-script.md#9-test-remote-repositories-and-publishing-fr-027)
+for a full walkthrough against a real GitHub repository.
 
 ## Using a real LLM
 
@@ -262,6 +286,9 @@ docs/          Specification, architecture, ADRs, demo script, roadmap
   GitLab/Bitbucket and no SSH yet. The draft pull request links evidence back
   to GitHub blob URLs rather than a ContractGuard report link, since the
   server binds to loopback only and has no public URL by default.
+- The dashboard's registration form and Publish button assume one operator
+  per instance; there is no per-user credential scoping or role separation
+  yet (see roadmap FR-024, Authentication and Authorisation).
 
 ## Documentation
 

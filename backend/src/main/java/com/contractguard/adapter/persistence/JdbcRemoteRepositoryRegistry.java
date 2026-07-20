@@ -5,6 +5,7 @@ import com.contractguard.adapter.security.AesGcmCredentialCipher.EncryptedValue;
 import com.contractguard.application.port.RemoteRepositoryRegistry;
 import com.contractguard.domain.RemoteRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 
 import java.sql.Timestamp;
 import java.util.List;
@@ -15,6 +16,10 @@ public class JdbcRemoteRepositoryRegistry implements RemoteRepositoryRegistry {
 
     private final JdbcTemplate jdbc;
     private final AesGcmCredentialCipher cipher;
+
+    private final RowMapper<RemoteRepository> rowMapper = (rs, rowNum) -> new RemoteRepository(
+            rs.getString("repository_id"), rs.getString("clone_url"), rs.getString("owner"),
+            rs.getString("name"), rs.getString("default_branch"), rs.getTimestamp("registered_at").toInstant());
 
     public JdbcRemoteRepositoryRegistry(JdbcTemplate jdbc, AesGcmCredentialCipher cipher) {
         this.jdbc = jdbc;
@@ -47,11 +52,16 @@ public class JdbcRemoteRepositoryRegistry implements RemoteRepositoryRegistry {
         List<RemoteRepository> found = jdbc.query(
                 "SELECT repository_id, clone_url, owner, name, default_branch, registered_at "
                         + "FROM remote_repositories WHERE repository_id = ?",
-                (rs, rowNum) -> new RemoteRepository(rs.getString("repository_id"), rs.getString("clone_url"),
-                        rs.getString("owner"), rs.getString("name"), rs.getString("default_branch"),
-                        rs.getTimestamp("registered_at").toInstant()),
-                repositoryId);
+                rowMapper, repositoryId);
         return found.stream().findFirst();
+    }
+
+    @Override
+    public List<RemoteRepository> findAll() {
+        return jdbc.query(
+                "SELECT repository_id, clone_url, owner, name, default_branch, registered_at "
+                        + "FROM remote_repositories ORDER BY repository_id",
+                rowMapper);
     }
 
     @Override

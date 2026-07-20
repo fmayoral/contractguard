@@ -7,7 +7,17 @@ import { ReportView } from './ReportView';
 import { RunList } from './RunList';
 import { DiffView } from './DiffView';
 import { ThemeToggle } from './ThemeToggle';
+import { PublishPanel } from './PublishPanel';
+import { RegisterRemoteRepository } from './RegisterRemoteRepository';
 import type { Patch, RunEvent, Validation } from '../types';
+
+function mockJsonFetch(status: number, body: unknown) {
+  const spy = vi.fn().mockResolvedValue(
+    new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }),
+  );
+  vi.stubGlobal('fetch', spy);
+  return spy;
+}
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -207,6 +217,8 @@ describe('RunList', () => {
             updatedAt: '',
             workingBranch: null,
             failureCategory: null,
+            pullRequestUrl: null,
+            remoteRepository: false,
           },
         ]}
         selectedId="a"
@@ -221,5 +233,170 @@ describe('RunList', () => {
   it('hints when empty', () => {
     render(<RunList runs={[]} selectedId={null} onSelect={() => undefined} />);
     expect(screen.getByText('No runs yet.')).toBeInTheDocument();
+  });
+});
+
+describe('PublishPanel', () => {
+  it('hints that publishing waits for remediation to succeed', () => {
+    render(
+      <PublishPanel
+        runId="run-1"
+        state="PLANNING"
+        remoteRepository={false}
+        pullRequestUrl={null}
+        onChanged={() => undefined}
+      />,
+    );
+    expect(screen.getByText(/becomes available once remediation succeeds/)).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('explains that a local repository has nothing to publish', () => {
+    render(
+      <PublishPanel
+        runId="run-1"
+        state="SUCCEEDED"
+        remoteRepository={false}
+        pullRequestUrl={null}
+        onChanged={() => undefined}
+      />,
+    );
+    expect(screen.getByText(/was not registered for remote publishing/)).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('publishes a succeeded run and refreshes on completion', async () => {
+    const user = userEvent.setup();
+    const spy = mockJsonFetch(202, { id: 'run-1', state: 'PUBLISHING' });
+    const onChanged = vi.fn();
+    render(
+      <PublishPanel
+        runId="run-1"
+        state="SUCCEEDED"
+        remoteRepository={true}
+        pullRequestUrl={null}
+        onChanged={onChanged}
+      />,
+    );
+
+    await user.click(screen.getByText('Publish (push & open draft PR)'));
+
+    expect(spy).toHaveBeenCalledWith('/api/runs/run-1/publish', expect.objectContaining({ method: 'POST' }));
+    expect(onChanged).toHaveBeenCalled();
+  });
+
+  it('shows a pushing hint while publishing', () => {
+    render(
+      <PublishPanel
+        runId="run-1"
+        state="PUBLISHING"
+        remoteRepository={true}
+        pullRequestUrl={null}
+        onChanged={() => undefined}
+      />,
+    );
+    expect(screen.getByText(/Pushing the branch and opening the pull request/)).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('offers a retry button and shows the failure hint when publishing failed', () => {
+    render(
+      <PublishPanel
+        runId="run-1"
+        state="PUBLISH_FAILED"
+        remoteRepository={true}
+        pullRequestUrl={null}
+        onChanged={() => undefined}
+      />,
+    );
+    expect(screen.getByText('Retry publish')).toBeInTheDocument();
+    expect(screen.getByText(/Publish failed/)).toBeInTheDocument();
+  });
+
+  it('links to the draft pull request once published', () => {
+    render(
+      <PublishPanel
+        runId="run-1"
+        state="PUBLISHED"
+        remoteRepository={true}
+        pullRequestUrl="https://github.com/acme/widgets/pull/7"
+        onChanged={() => undefined}
+      />,
+    );
+    expect(screen.getByText('https://github.com/acme/widgets/pull/7')).toHaveAttribute(
+      'href',
+      'https://github.com/acme/widgets/pull/7',
+    );
+  });
+
+  it('surfaces a typed error if publishing fails', async () => {
+    const user = userEvent.setup();
+    mockJsonFetch(409, { detail: 'run is not SUCCEEDED', remediation: 'Wait for remediation to finish.' });
+    render(
+      <PublishPanel
+        runId="run-1"
+        state="SUCCEEDED"
+        remoteRepository={true}
+        pullRequestUrl={null}
+        onChanged={() => undefined}
+      />,
+    );
+
+    await user.click(screen.getByText('Publish (push & open draft PR)'));
+
+    expect(await screen.findByText(/run is not SUCCEEDED/)).toBeInTheDocument();
+  });
+});
+
+describe('RegisterRemoteRepository', () => {
+  it('registers a repository, clears the form and notifies the parent', async () => {
+    const user = userEvent.setup();
+    const spy = mockJsonFetch(201, {
+      repositoryId: 'acme-widgets',
+      owner: 'acme',
+      name: 'widgets',
+      defaultBranch: 'main',
+      registeredAt: '2026-07-20T10:00:00Z',
+    });
+    const onRegistered = vi.fn();
+    render(<RegisterRemoteRepository onRegistered={onRegistered} />);
+
+    await user.click(screen.getByText('+ Register a GitHub repository'));
+    await user.type(screen.getByPlaceholderText('acme-widgets'), 'acme-widgets');
+    await user.type(screen.getByPlaceholderText('https://github.com/acme/widgets'), 'https://github.com/acme/widgets');
+    await user.type(screen.getByLabelText('Personal access token (repo scope)'), 'gh-token');
+    await user.click(screen.getByText('Register repository'));
+
+    expect(spy).toHaveBeenCalledWith(
+      '/api/repositories/remote',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(JSON.parse(spy.mock.calls[0][1].body)).toEqual({
+      repositoryId: 'acme-widgets',
+      cloneUrl: 'https://github.com/acme/widgets',
+      defaultBranch: 'main',
+      token: 'gh-token',
+    });
+    expect(onRegistered).toHaveBeenCalledWith('acme-widgets');
+    expect(screen.getByPlaceholderText('acme-widgets')).toHaveValue('');
+  });
+
+  it('surfaces a typed error and keeps the form open on failure', async () => {
+    const user = userEvent.setup();
+    mockJsonFetch(400, {
+      detail: "clone URL is not a supported GitHub HTTPS URL",
+      remediation: 'Use an https://github.com/{owner}/{repo} clone URL.',
+    });
+    const onRegistered = vi.fn();
+    render(<RegisterRemoteRepository onRegistered={onRegistered} />);
+
+    await user.click(screen.getByText('+ Register a GitHub repository'));
+    await user.type(screen.getByPlaceholderText('acme-widgets'), 'acme-widgets');
+    await user.type(screen.getByPlaceholderText('https://github.com/acme/widgets'), 'not-a-url');
+    await user.type(screen.getByLabelText('Personal access token (repo scope)'), 'gh-token');
+    await user.click(screen.getByText('Register repository'));
+
+    expect(await screen.findByText(/not a supported GitHub HTTPS URL/)).toBeInTheDocument();
+    expect(onRegistered).not.toHaveBeenCalled();
   });
 });

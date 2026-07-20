@@ -12,6 +12,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -47,6 +48,11 @@ class RemoteRepositoryServiceTest {
             @Override
             public Optional<String> credentialFor(String repositoryId) {
                 return Optional.ofNullable(tokens.get(repositoryId));
+            }
+
+            @Override
+            public List<RemoteRepository> findAll() {
+                return List.copyOf(registered.values());
             }
         };
         remoteGit = new RemoteGitPort() {
@@ -97,6 +103,17 @@ class RemoteRepositoryServiceTest {
         service.ensureLocalClone("customer-consumer");
 
         assertThat(cloneCalls).containsEntry("customer-consumer", 1);
+    }
+
+    @Test
+    void listRegisteredReturnsEveryRegistration() {
+        assertThat(service.listRegistered()).isEmpty();
+
+        service.register("customer-consumer", "https://github.com/acme/widgets", "main", "gh-token");
+        service.register("other-consumer", "https://github.com/acme/gadgets", "main", "gh-token-2");
+
+        assertThat(service.listRegistered()).extracting("repositoryId")
+                .containsExactlyInAnyOrder("customer-consumer", "other-consumer");
     }
 
     @Test

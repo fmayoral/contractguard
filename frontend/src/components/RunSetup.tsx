@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../api';
+import { RegisterRemoteRepository } from './RegisterRemoteRepository';
 import type { SetupOptions } from '../types';
 
 interface RunSetupProps {
@@ -15,17 +16,26 @@ export function RunSetup({ onCreated }: RunSetupProps) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const loadOptions = () => api.setup().then((setup) => {
+    setOptions(setup);
+    return setup;
+  });
+
   useEffect(() => {
-    api
-      .setup()
+    loadOptions()
       .then((setup) => {
-        setOptions(setup);
-        setRepository(setup.repositories[0] ?? '');
+        setRepository(setup.repositories[0] ?? setup.remoteRepositories[0] ?? '');
         setOldSpec(setup.specifications[0] ?? '');
         setNewSpec(setup.specifications[1] ?? setup.specifications[0] ?? '');
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
   }, []);
+
+  const onRepositoryRegistered = (repositoryId: string) => {
+    loadOptions()
+      .then(() => setRepository(repositoryId))
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+  };
 
   const start = async () => {
     setBusy(true);
@@ -44,6 +54,8 @@ export function RunSetup({ onCreated }: RunSetupProps) {
     return <section className="card">{error ?? 'Loading setup…'}</section>;
   }
 
+  const noRepositories = options.repositories.length === 0 && options.remoteRepositories.length === 0;
+
   return (
     <section className="card">
       <h2>New analysis run</h2>
@@ -59,9 +71,20 @@ export function RunSetup({ onCreated }: RunSetupProps) {
         <label>
           Consumer repository
           <select value={repository} onChange={(e) => setRepository(e.target.value)}>
-            {options.repositories.map((repo) => (
-              <option key={repo}>{repo}</option>
-            ))}
+            {options.repositories.length > 0 && (
+              <optgroup label="Local workspace">
+                {options.repositories.map((repo) => (
+                  <option key={repo}>{repo}</option>
+                ))}
+              </optgroup>
+            )}
+            {options.remoteRepositories.length > 0 && (
+              <optgroup label="Registered GitHub repositories">
+                {options.remoteRepositories.map((repo) => (
+                  <option key={repo}>{repo}</option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </label>
         <label>
@@ -84,12 +107,15 @@ export function RunSetup({ onCreated }: RunSetupProps) {
       <button disabled={busy || !repository || !oldSpec || !newSpec} onClick={start}>
         {busy ? 'Starting…' : 'Start analysis'}
       </button>
-      {options.repositories.length === 0 && (
+      {noRepositories && (
         <p className="hint">
-          No repositories found. Run <code>scripts/reset-demo</code> to materialise the bundled consumer.
+          No repositories found. Run <code>scripts/reset-demo</code> to materialise the bundled consumer,
+          or register a GitHub repository below.
         </p>
       )}
       {error && <p className="error">{error}</p>}
+
+      <RegisterRemoteRepository onRegistered={onRepositoryRegistered} />
     </section>
   );
 }

@@ -111,6 +111,11 @@ class PublishServiceTest {
             public Optional<String> credentialFor(String repositoryId) {
                 return registrations.containsKey(repositoryId) ? Optional.of("gh-token") : Optional.empty();
             }
+
+            @Override
+            public List<RemoteRepository> findAll() {
+                return List.copyOf(registrations.values());
+            }
         };
         service = new PublishService(runs, events, git, pushingRemoteGit, pullRequests, registry, CLOCK);
     }

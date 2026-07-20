@@ -41,6 +41,43 @@ describe('api client', () => {
     expect(JSON.parse(init.body)).toEqual({ decision: 'APPROVED', planHash: 'hash-1' });
   });
 
+  it('triggers publish with no body', async () => {
+    const spy = mockFetch(202, { id: 'run-1', state: 'PUBLISHING' });
+
+    await api.publish('run-1');
+
+    const [url, init] = spy.mock.calls[0];
+    expect(url).toBe('/api/runs/run-1/publish');
+    expect(init.method).toBe('POST');
+  });
+
+  it('registers a remote repository with a JSON body', async () => {
+    const spy = mockFetch(201, {
+      repositoryId: 'acme-widgets',
+      owner: 'acme',
+      name: 'widgets',
+      defaultBranch: 'main',
+      registeredAt: '2026-07-20T10:00:00Z',
+    });
+
+    const registered = await api.registerRemoteRepository(
+      'acme-widgets',
+      'https://github.com/acme/widgets',
+      'main',
+      'gh-token',
+    );
+
+    expect(registered.owner).toBe('acme');
+    const [url, init] = spy.mock.calls[0];
+    expect(url).toBe('/api/repositories/remote');
+    expect(JSON.parse(init.body)).toEqual({
+      repositoryId: 'acme-widgets',
+      cloneUrl: 'https://github.com/acme/widgets',
+      defaultBranch: 'main',
+      token: 'gh-token',
+    });
+  });
+
   it('surfaces problem details as typed errors', async () => {
     mockFetch(409, {
       detail: 'approval hash stale',

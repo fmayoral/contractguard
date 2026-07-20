@@ -7,6 +7,7 @@ import com.contractguard.domain.AnalysisRun;
 import com.contractguard.domain.ContractGuardException;
 import com.contractguard.domain.FailureCategory;
 import com.contractguard.domain.Ids;
+import com.contractguard.domain.RemoteRepository;
 import com.contractguard.domain.RunFailure;
 
 import java.nio.file.Files;
@@ -88,8 +89,16 @@ public class RunService {
         }
     }
 
+    /** Local workspace repositories, excluding any that are also remote-registered (they belong in {@link #listRemoteRepositories}). */
     public List<String> listRepositories() {
-        return workspacePolicy.listRepositories();
+        List<String> remoteIds = listRemoteRepositories();
+        return workspacePolicy.listRepositories().stream()
+                .filter(id -> !remoteIds.contains(id))
+                .toList();
+    }
+
+    public List<String> listRemoteRepositories() {
+        return remoteRepositories.listRegistered().stream().map(RemoteRepository::repositoryId).toList();
     }
 
     /** On startup, runs interrupted by a restart are finalised as FAILED (plan §7 A6). */

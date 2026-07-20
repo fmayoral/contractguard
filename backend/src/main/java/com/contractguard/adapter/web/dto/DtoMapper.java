@@ -12,21 +12,21 @@ public final class DtoMapper {
     private DtoMapper() {
     }
 
-    public static RunDtos.RunSummary toSummary(AnalysisRun run) {
+    public static RunDtos.RunSummary toSummary(AnalysisRun run, boolean remoteRepository) {
         return new RunDtos.RunSummary(run.id(), run.name(), run.state().name(), run.repositoryId(),
                 run.createdAt(), run.updatedAt(), run.workingBranch(),
                 run.failure().map(f -> f.category().name()).orElse(null),
-                run.pullRequestUrl().orElse(null));
+                run.pullRequestUrl().orElse(null), remoteRepository);
     }
 
-    public static RunDtos.RunDetail toDetail(AnalysisRun run) {
+    public static RunDtos.RunDetail toDetail(AnalysisRun run, boolean remoteRepository) {
         return new RunDtos.RunDetail(run.id(), run.name(), run.state().name(), run.repositoryId(),
                 run.traceId(), run.createdAt(), run.updatedAt(),
                 run.oldSpecName(), run.newSpecName(), run.oldSpecHash(), run.newSpecHash(),
                 run.originalBranch(), run.workingBranch(),
                 run.failure().map(f -> new RunDtos.Failure(f.category().name(), f.message(),
                         f.mutationOccurred(), f.artifactId(), f.remediation())).orElse(null),
-                run.pullRequestUrl().orElse(null),
+                run.pullRequestUrl().orElse(null), remoteRepository,
                 run.approval().map(a -> new RunDtos.ApprovalInfo(a.decision().name(), a.planHash(),
                         a.decidedAt())).orElse(null),
                 toChanges(run), toEvidence(run), toAssessments(run),

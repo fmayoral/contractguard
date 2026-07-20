@@ -5,6 +5,7 @@ import com.contractguard.adapter.web.dto.RunDtos;
 import com.contractguard.application.service.ApprovalService;
 import com.contractguard.application.service.ExecutionService;
 import com.contractguard.application.service.PublishService;
+import com.contractguard.application.service.RemoteRepositoryService;
 import com.contractguard.application.service.ReportService;
 import com.contractguard.application.service.RunQueryService;
 import com.contractguard.application.service.RunService;
@@ -37,17 +38,19 @@ public class RunController {
     private final ApprovalService approvals;
     private final ExecutionService executions;
     private final PublishService publishing;
+    private final RemoteRepositoryService remoteRepositories;
     private final ReportService reports;
     private final ExecutorService executor;
 
     public RunController(RunService runService, RunQueryService queries, ApprovalService approvals,
-            ExecutionService executions, PublishService publishing, ReportService reports,
-            ExecutorService executor) {
+            ExecutionService executions, PublishService publishing,
+            RemoteRepositoryService remoteRepositories, ReportService reports, ExecutorService executor) {
         this.runService = runService;
         this.queries = queries;
         this.approvals = approvals;
         this.executions = executions;
         this.publishing = publishing;
+        this.remoteRepositories = remoteRepositories;
         this.reports = reports;
         this.executor = executor;
     }
@@ -55,24 +58,24 @@ public class RunController {
     @GetMapping("/setup")
     public RunDtos.SetupOptions setup() {
         return new RunDtos.SetupOptions(runService.listRepositories(),
-                runService.listSpecificationFiles());
+                runService.listSpecificationFiles(), runService.listRemoteRepositories());
     }
 
     @PostMapping("/runs")
     public ResponseEntity<RunDtos.RunSummary> createRun(@Valid @RequestBody RunDtos.CreateRunRequest request) {
         AnalysisRun run = runService.createRun(request.name(), request.repositoryId(),
                 request.oldSpec(), request.newSpec());
-        return ResponseEntity.status(HttpStatus.CREATED).body(DtoMapper.toSummary(run));
+        return ResponseEntity.status(HttpStatus.CREATED).body(toSummary(run));
     }
 
     @GetMapping("/runs")
     public List<RunDtos.RunSummary> listRuns() {
-        return queries.listRuns().stream().map(DtoMapper::toSummary).toList();
+        return queries.listRuns().stream().map(this::toSummary).toList();
     }
 
     @GetMapping("/runs/{runId}")
     public RunDtos.RunDetail getRun(@PathVariable String runId) {
-        return DtoMapper.toDetail(queries.getRun(runId));
+        return toDetail(queries.getRun(runId));
     }
 
     @GetMapping("/runs/{runId}/changes")
@@ -83,7 +86,7 @@ public class RunController {
     @GetMapping("/runs/{runId}/impacts")
     public RunDtos.RunDetail getImpacts(@PathVariable String runId) {
         // Impacts = assessments plus their evidence; served via the detail shape.
-        return DtoMapper.toDetail(queries.getRun(runId));
+        return toDetail(queries.getRun(runId));
     }
 
     @GetMapping("/runs/{runId}/plan")
@@ -101,21 +104,21 @@ public class RunController {
     public RunDtos.RunDetail decide(@PathVariable String runId,
             @Valid @RequestBody RunDtos.ApprovalRequest request) {
         Approval.Decision decision = parseDecision(request.decision());
-        return DtoMapper.toDetail(approvals.decide(runId, decision, request.planHash()));
+        return toDetail(approvals.decide(runId, decision, request.planHash()));
     }
 
     @PostMapping("/runs/{runId}/execute")
     public ResponseEntity<RunDtos.RunSummary> execute(@PathVariable String runId) {
         AnalysisRun run = executions.beginExecution(runId);
         executor.execute(() -> executions.execute(runId));
-        return ResponseEntity.status(HttpStatus.ACCEPTED).body(DtoMapper.toSummary(run));
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(toSummary(run));
     }
 
     @PostMapping("/runs/{runId}/publish")
     public ResponseEntity<RunDtos.RunSummary> publish(@PathVariable String runId) {
         AnalysisRun run = publishing.beginPublish(runId);
         executor.execute(() -> publishing.publish(runId));
-        return ResponseEntity.status(HttpStatus.ACCEPTED).body(DtoMapper.toSummary(run));
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(toSummary(run));
     }
 
     @GetMapping(value = "/runs/{runId}/artifacts/report.md", produces = "text/markdown;charset=UTF-8")
@@ -134,6 +137,14 @@ public class RunController {
                 () -> ContractGuardException.of(FailureCategory.NOT_FOUND,
                         "artifact %s not found for run %s".formatted(artifactId, runId),
                         "List the run's validations and patches for valid artifact IDs."));
+    }
+
+    private RunDtos.RunSummary toSummary(AnalysisRun run) {
+        return DtoMapper.toSummary(run, remoteRepositories.isRemote(run.repositoryId()));
+    }
+
+    private RunDtos.RunDetail toDetail(AnalysisRun run) {
+        return DtoMapper.toDetail(run, remoteRepositories.isRemote(run.repositoryId()));
     }
 
     private static Approval.Decision parseDecision(String raw) {

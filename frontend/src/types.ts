@@ -9,6 +9,8 @@ export interface RunSummary {
   updatedAt: string;
   workingBranch: string | null;
   failureCategory: string | null;
+  pullRequestUrl: string | null;
+  remoteRepository: boolean;
 }
 
 export interface Failure {
@@ -118,6 +120,8 @@ export interface RunDetail {
   originalBranch: string | null;
   workingBranch: string | null;
   failure: Failure | null;
+  pullRequestUrl: string | null;
+  remoteRepository: boolean;
   approval: ApprovalInfo | null;
   changes: Change[];
   evidence: Evidence[];
@@ -140,4 +144,13 @@ export interface RunEvent {
 export interface SetupOptions {
   repositories: string[];
   specifications: string[];
+  remoteRepositories: string[];
+}
+
+export interface RemoteRepositorySummary {
+  repositoryId: string;
+  owner: string;
+  name: string;
+  defaultBranch: string;
+  registeredAt: string;
 }

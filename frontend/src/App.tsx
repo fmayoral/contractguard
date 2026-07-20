@@ -6,6 +6,7 @@ import { Badge } from './components/Badge';
 import { ChangeTable } from './components/ChangeTable';
 import { ImpactView } from './components/ImpactView';
 import { PlanApproval } from './components/PlanApproval';
+import { PublishPanel } from './components/PublishPanel';
 import { ReportView } from './components/ReportView';
 import { RunList } from './components/RunList';
 import { RunSetup } from './components/RunSetup';
@@ -131,6 +132,20 @@ export default function App() {
                 workingBranch={run.workingBranch}
                 patches={run.patches}
                 validations={run.validations}
+              />
+            </section>
+
+            <section className="card">
+              <h3>Publish</h3>
+              <PublishPanel
+                runId={run.id}
+                state={run.state}
+                remoteRepository={run.remoteRepository}
+                pullRequestUrl={run.pullRequestUrl}
+                onChanged={() => {
+                  refreshRun();
+                  refreshRuns();
+                }}
               />
             </section>
 

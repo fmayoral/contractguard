@@ -2,6 +2,7 @@ package com.contractguard.application.port;
 
 import com.contractguard.domain.RemoteRepository;
 
+import java.util.List;
 import java.util.Optional;
 
 /** Registered remote repositories and their encrypted-at-rest credentials (FR-027). */
@@ -14,4 +15,7 @@ public interface RemoteRepositoryRegistry {
 
     /** Decrypts and returns the stored credential; empty if the repository is not registered. */
     Optional<String> credentialFor(String repositoryId);
+
+    /** All registrations, ordered by repository ID; credentials are never included. */
+    List<RemoteRepository> findAll();
 }

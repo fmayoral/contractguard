@@ -99,11 +99,9 @@ Open <http://localhost:5173>.
 
 ## 9. Test remote repositories and publishing (FR-027)
 
-There is no dashboard UI for this yet (see "Known limitations" in the root
-README) — everything below is `curl` against the running backend. You need a
-real GitHub repository you control and a personal access token with `repo`
-scope (a small throwaway repo is ideal, since ContractGuard will open a real
-draft PR against it).
+You need a real GitHub repository you control and a personal access token
+with `repo` scope (a small throwaway repo is ideal, since ContractGuard will
+open a real draft PR against it).
 
 1. Generate a master key for encrypting stored credentials and restart the
    backend with it set (it can also just be exported before step 3 of
@@ -113,7 +111,13 @@ draft PR against it).
    export CONTRACTGUARD_CREDENTIAL_KEY=$(openssl rand -base64 32)
    ```
 
-2. Register the repository:
+2. In the dashboard, under **New analysis run**, expand **+ Register a
+   GitHub repository** and fill in a repository ID, the clone URL, default
+   branch and your token, then press **Register repository**. It now
+   appears in the **Consumer repository** picker under "Registered GitHub
+   repositories" — select it.
+
+   Equivalently, over the API:
 
    ```bash
    curl -s -X POST http://127.0.0.1:7080/api/repositories/remote \
@@ -126,37 +130,30 @@ draft PR against it).
    Expect `201` with `{repositoryId, owner, name, defaultBranch, registeredAt}`
    — the token itself is never echoed back or logged.
 
-3. Create a run against `my-remote-consumer` exactly as in section 5 (`POST
-   /api/runs`, or once the frontend supports remote repos, the **New
-   analysis run** picker). The first request triggers a clone into
-   `storage.directory/remote-cache/my-remote-consumer/`; watch the backend
-   log for `Migrating schema` / clone activity, or just check the directory
-   appears on disk.
-4. Approve and execute as in section 6. The run should reach `SUCCEEDED`.
-5. Publish:
+3. Start the run as in section 5. The first request triggers a clone into
+   `storage.directory/remote-cache/<repositoryId>/`; watch the timeline or
+   the backend log for clone activity, or just check the directory appears
+   on disk.
+4. Approve and execute as in section 6. The run should reach `SUCCEEDED`,
+   and a **Publish** card appears below Remediation & validation.
+5. Press **Publish (push & open draft PR)**. Once the run reaches
+   `PUBLISHED`, the card shows the draft PR link directly — open it to
+   confirm the detected changes and evidence are linked back into your
+   repository at the remediation branch. Equivalently:
 
    ```bash
    curl -s -X POST http://127.0.0.1:7080/api/runs/<runId>/publish | jq
    ```
 
-   Poll `GET /api/runs/<runId>` until `state` is `PUBLISHED`; the response
-   includes `pullRequestUrl`. Open it — it should be a **draft** PR with the
-   detected changes and evidence linked back into your repository at the
-   remediation branch.
 6. Failure path worth exercising: revoke the token (or use one without
-   `repo` scope) and publish again — expect `state: PUBLISH_FAILED` and a
-   `publish`/`FAILED` event in the timeline; re-running `POST
-   .../publish` with a corrected token should succeed without re-running
-   analysis or execution.
+   `repo` scope) and publish again — the card shows `PUBLISH_FAILED` with
+   the failure message and a **Retry publish** button; retrying with a
+   corrected token succeeds without re-running analysis or execution.
 
-<!-- TODO(fernando): once the frontend gets a remote-repository registration
-     form and a Publish button (see README "Known limitations"), capture and
-     add screenshots here, following the docs/screenshots/<n>-<slug>.png
-     convention used in the root README:
-       - docs/screenshots/6-register-remote-repository.png (registration form)
-       - docs/screenshots/7-publish-and-pull-request.png (Publish button +
-         resulting pullRequestUrl / draft PR link in the run detail view)
-     Until then this section stays curl-only. -->
+<!-- TODO(fernando): capture docs/screenshots/6-publish-and-pull-request.png
+     (Publish card + resulting draft-PR link) here once you've run this
+     section against a real repository — same file the root README's step 6
+     references. -->
 
 ## Troubleshooting
 

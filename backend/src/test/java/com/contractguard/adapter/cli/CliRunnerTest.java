@@ -115,6 +115,11 @@ class CliRunnerTest {
             public Optional<String> credentialFor(String repositoryId) {
                 return Optional.empty();
             }
+
+            @Override
+            public List<RemoteRepository> findAll() {
+                return List.of();
+            }
         };
         RemoteRepositoryService remoteRepositories =
                 new RemoteRepositoryService(noRemotes, (RemoteGitPort) null, clock);

@@ -3,6 +3,7 @@ package com.contractguard.adapter.web;
 import com.contractguard.application.service.ApprovalService;
 import com.contractguard.application.service.ExecutionService;
 import com.contractguard.application.service.PublishService;
+import com.contractguard.application.service.RemoteRepositoryService;
 import com.contractguard.application.service.ReportService;
 import com.contractguard.application.service.RunQueryService;
 import com.contractguard.application.service.RunService;
@@ -53,6 +54,9 @@ class RunApiTest {
 
     @MockBean
     private PublishService publishing;
+
+    @MockBean
+    private RemoteRepositoryService remoteRepositories;
 
     @MockBean
     private ReportService reports;
@@ -213,14 +217,16 @@ class RunApiTest {
     }
 
     @Test
-    void setupListsRepositoriesAndSpecifications() throws Exception {
+    void setupListsLocalAndRemoteRepositoriesSeparately() throws Exception {
         when(runService.listRepositories()).thenReturn(List.of("customer-consumer"));
         when(runService.listSpecificationFiles()).thenReturn(List.of("v1.yaml", "v2.yaml"));
+        when(runService.listRemoteRepositories()).thenReturn(List.of("acme-widgets"));
 
         mvc.perform(get("/api/setup"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.repositories[0]").value("customer-consumer"))
-                .andExpect(jsonPath("$.specifications", org.hamcrest.Matchers.hasSize(2)));
+                .andExpect(jsonPath("$.specifications", org.hamcrest.Matchers.hasSize(2)))
+                .andExpect(jsonPath("$.remoteRepositories[0]").value("acme-widgets"));
     }
 
     @Test
@@ -230,6 +236,17 @@ class RunApiTest {
         mvc.perform(get("/api/runs"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value("run-1"));
+    }
+
+    @Test
+    void runDetailFlagsWhenTheRepositoryIsRemoteRegistered() throws Exception {
+        AnalysisRun run = Fixtures.runAwaitingApproval();
+        when(queries.getRun(run.id())).thenReturn(run);
+        when(remoteRepositories.isRemote(run.repositoryId())).thenReturn(true);
+
+        mvc.perform(get("/api/runs/" + run.id()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.remoteRepository").value(true));
     }
 
     @Test

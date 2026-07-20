@@ -7,6 +7,7 @@ import com.contractguard.domain.FailureCategory;
 import com.contractguard.domain.RemoteRepository;
 
 import java.time.Clock;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -55,5 +56,9 @@ public class RemoteRepositoryService {
 
     public boolean isRemote(String repositoryId) {
         return registry.find(repositoryId).isPresent();
+    }
+
+    public List<RemoteRepository> listRegistered() {
+        return registry.findAll();
     }
 }

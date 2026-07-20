@@ -20,6 +20,8 @@ const awaitingApprovalRun: RunDetail = {
   originalBranch: null,
   workingBranch: null,
   failure: null,
+  pullRequestUrl: null,
+  remoteRepository: false,
   approval: null,
   changes: [
     {
@@ -121,6 +123,7 @@ describe('App critical journey', () => {
           body: {
             repositories: ['customer-consumer'],
             specifications: ['customer-api-v1.yaml', 'customer-api-v2.yaml'],
+            remoteRepositories: [],
           },
         };
       }
@@ -163,7 +166,7 @@ describe('App critical journey', () => {
     let approved = false;
     const spy = installFetch((url, init) => {
       if (url === '/api/setup') {
-        return { body: { repositories: [], specifications: [] } };
+        return { body: { repositories: [], specifications: [], remoteRepositories: [] } };
       }
       if (url === '/api/runs' && !init?.method) {
         return { body: [{ id: 'run-1', name: 'demo', state: 'AWAITING_APPROVAL' }] };
@@ -213,7 +216,7 @@ describe('App critical journey', () => {
     const user = userEvent.setup();
     let detailFetches = 0;
     installFetch((url, init) => {
-      if (url === '/api/setup') return { body: { repositories: [], specifications: [] } };
+      if (url === '/api/setup') return { body: { repositories: [], specifications: [], remoteRepositories: [] } };
       if (url === '/api/runs' && !init?.method) {
         return { body: [{ id: 'run-1', name: 'demo', state: 'DIFFING' }] };
       }
@@ -247,7 +250,7 @@ describe('App critical journey', () => {
   it('shows the failure card with mutation state for failed runs', async () => {
     const user = userEvent.setup();
     installFetch((url, init) => {
-      if (url === '/api/setup') return { body: { repositories: [], specifications: [] } };
+      if (url === '/api/setup') return { body: { repositories: [], specifications: [], remoteRepositories: [] } };
       if (url === '/api/runs' && !init?.method) {
         return { body: [{ id: 'run-1', name: 'demo', state: 'FAILED' }] };
       }

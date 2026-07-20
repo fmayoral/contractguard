@@ -62,6 +62,11 @@ class RunServiceTest {
             public Optional<String> credentialFor(String repositoryId) {
                 return Optional.empty();
             }
+
+            @Override
+            public List<RemoteRepository> findAll() {
+                return List.of();
+            }
         };
         RemoteRepositoryService remoteRepositories =
                 new RemoteRepositoryService(noRemotes, (RemoteGitPort) null, Clock.systemUTC());
@@ -86,6 +91,42 @@ class RunServiceTest {
     void blankNameGetsAGeneratedOne() {
         AnalysisRun run = service.createRun(" ", "customer-consumer", "old.yaml", "new.yaml");
         assertThat(run.name()).startsWith("run-");
+    }
+
+    @Test
+    void remoteRegisteredRepositoriesAreListedSeparatelyFromLocalOnes() throws IOException {
+        Files.createDirectories(workspace.resolve("acme-widgets/.git"));
+        RemoteRepository registered = RemoteRepository.forGitHub(
+                "acme-widgets", "https://github.com/acme/widgets", "main", Fixtures.T0);
+        RemoteRepositoryRegistry oneRemote = new RemoteRepositoryRegistry() {
+            @Override
+            public void register(RemoteRepository repository, String token) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public Optional<RemoteRepository> find(String repositoryId) {
+                return "acme-widgets".equals(repositoryId) ? Optional.of(registered) : Optional.empty();
+            }
+
+            @Override
+            public Optional<String> credentialFor(String repositoryId) {
+                return Optional.empty();
+            }
+
+            @Override
+            public List<RemoteRepository> findAll() {
+                return List.of(registered);
+            }
+        };
+        RunService withRemote = new RunService(runs, events, new WorkspacePolicy(List.of(workspace)),
+                new RemoteRepositoryService(oneRemote, (RemoteGitPort) null, Clock.systemUTC()),
+                null, specsDir, submitted::add, Clock.systemUTC());
+
+        // "acme-widgets" was already cloned (it has a local .git dir under the workspace root too),
+        // but it must appear only in the remote list, never duplicated into the local one.
+        assertThat(withRemote.listRepositories()).containsExactly("customer-consumer");
+        assertThat(withRemote.listRemoteRepositories()).containsExactly("acme-widgets");
     }
 
     @Test

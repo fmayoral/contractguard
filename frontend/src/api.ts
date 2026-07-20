@@ -1,4 +1,4 @@
-import type { RunDetail, RunEvent, RunSummary, SetupOptions } from './types';
+import type { RemoteRepositorySummary, RunDetail, RunEvent, RunSummary, SetupOptions } from './types';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -60,6 +60,20 @@ export const api = {
   },
   execute(runId: string): Promise<RunSummary> {
     return request(`/api/runs/${runId}/execute`, { method: 'POST' });
+  },
+  publish(runId: string): Promise<RunSummary> {
+    return request(`/api/runs/${runId}/publish`, { method: 'POST' });
+  },
+  registerRemoteRepository(
+    repositoryId: string,
+    cloneUrl: string,
+    defaultBranch: string,
+    token: string,
+  ): Promise<RemoteRepositorySummary> {
+    return request('/api/repositories/remote', {
+      method: 'POST',
+      body: JSON.stringify({ repositoryId, cloneUrl, defaultBranch, token }),
+    });
   },
   events(runId: string): Promise<RunEvent[]> {
     return request(`/api/runs/${runId}/events/list`);

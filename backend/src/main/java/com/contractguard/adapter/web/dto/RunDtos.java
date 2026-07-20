@@ -27,15 +27,15 @@ public final class RunDtos {
 
     public record RunSummary(String id, String name, String state, String repositoryId,
             Instant createdAt, Instant updatedAt, String workingBranch, String failureCategory,
-            String pullRequestUrl) {
+            String pullRequestUrl, boolean remoteRepository) {
     }
 
     public record RunDetail(String id, String name, String state, String repositoryId, String traceId,
             Instant createdAt, Instant updatedAt, String oldSpecName, String newSpecName,
             String oldSpecHash, String newSpecHash, String originalBranch, String workingBranch,
-            Failure failure, String pullRequestUrl, ApprovalInfo approval, List<Change> changes,
-            List<Evidence> evidence, List<Assessment> assessments, Plan plan, List<Patch> patches,
-            List<Validation> validations) {
+            Failure failure, String pullRequestUrl, boolean remoteRepository, ApprovalInfo approval,
+            List<Change> changes, List<Evidence> evidence, List<Assessment> assessments, Plan plan,
+            List<Patch> patches, List<Validation> validations) {
     }
 
     public record RegisterRemoteRepositoryRequest(
@@ -91,6 +91,7 @@ public final class RunDtos {
             String message, String metadata) {
     }
 
-    public record SetupOptions(List<String> repositories, List<String> specifications) {
+    public record SetupOptions(List<String> repositories, List<String> specifications,
+            List<String> remoteRepositories) {
     }
 }

@@ -11,6 +11,7 @@ import com.contractguard.adapter.json.JacksonJsonCodec;
 import com.contractguard.adapter.llm.LlmSettings;
 import com.contractguard.adapter.llm.OpenAiCompatibleLlmGateway;
 import com.contractguard.adapter.llm.ScriptedLlmGateway;
+import com.contractguard.adapter.persistence.JdbcAuditTrail;
 import com.contractguard.adapter.persistence.JdbcRemoteRepositoryRegistry;
 import com.contractguard.adapter.persistence.JdbcRunEventLog;
 import com.contractguard.adapter.persistence.JdbcRunRepository;
@@ -25,6 +26,7 @@ import com.contractguard.application.llm.LlmJsonClient;
 import com.contractguard.application.llm.PromptLibrary;
 import com.contractguard.application.policy.WorkspacePolicy;
 import com.contractguard.application.port.ArtifactStore;
+import com.contractguard.application.port.AuditTrailPort;
 import com.contractguard.application.port.BuildValidationPort;
 import com.contractguard.application.port.GitWorkspacePort;
 import com.contractguard.application.port.JsonCodec;
@@ -40,6 +42,7 @@ import com.contractguard.application.port.RunRepository;
 import com.contractguard.application.port.SourceReaderPort;
 import com.contractguard.application.service.AnalysisPipeline;
 import com.contractguard.application.service.ApprovalService;
+import com.contractguard.application.service.AuditTrailService;
 import com.contractguard.application.service.EvidenceCollector;
 import com.contractguard.application.service.ExecutionService;
 import com.contractguard.application.service.PublishService;
@@ -173,12 +176,23 @@ public class ApplicationConfiguration {
     }
 
     @Bean
+    public AuditTrailPort auditTrailPort(JdbcTemplate jdbc) {
+        return new JdbcAuditTrail(jdbc);
+    }
+
+    @Bean
+    public AuditTrailService auditTrailService(AuditTrailPort port, ContractGuardProperties properties,
+            Clock clock) {
+        return new AuditTrailService(port, properties.audit().defaultPrincipal(), clock);
+    }
+
+    @Bean
     public AnalysisPipeline analysisPipeline(RunRepository runs, RunEventLog events,
             WorkspacePolicy policy, OpenApiDiffPort diffPort, EvidenceCollector evidenceCollector,
             ChangeExplainer changeExplainer, ImpactInvestigator investigator,
-            MigrationPlanner planner, JsonCodec codec, Clock clock) {
+            MigrationPlanner planner, JsonCodec codec, AuditTrailService audit, Clock clock) {
         return new AnalysisPipeline(runs, events, policy, diffPort, evidenceCollector,
-                changeExplainer, investigator, planner, codec, clock);
+                changeExplainer, investigator, planner, codec, audit, clock);
     }
 
     @Bean(destroyMethod = "shutdown")
@@ -223,13 +237,14 @@ public class ApplicationConfiguration {
     @Bean
     public PublishService publishService(RunRepository runs, RunEventLog events, GitWorkspacePort git,
             RemoteGitPort remoteGit, PullRequestPort pullRequests, RemoteRepositoryRegistry remoteRepositories,
-            Clock clock) {
-        return new PublishService(runs, events, git, remoteGit, pullRequests, remoteRepositories, clock);
+            AuditTrailService audit, Clock clock) {
+        return new PublishService(runs, events, git, remoteGit, pullRequests, remoteRepositories, audit, clock);
     }
 
     @Bean
-    public ApprovalService approvalService(RunRepository runs, RunEventLog events, Clock clock) {
-        return new ApprovalService(runs, events, clock);
+    public ApprovalService approvalService(RunRepository runs, RunEventLog events,
+            AuditTrailService audit, Clock clock) {
+        return new ApprovalService(runs, events, audit, clock);
     }
 
     @Bean
@@ -279,9 +294,9 @@ public class ApplicationConfiguration {
     public ExecutionService executionService(RunRepository runs, RunEventLog events,
             GitWorkspacePort git, PatchPort patches, BuildValidationPort builds,
             SourceReaderPort sourceReader, ImplementationAgent agent, ArtifactStore artifacts,
-            ContractGuardProperties properties, Clock clock) {
+            ContractGuardProperties properties, AuditTrailService audit, Clock clock) {
         return new ExecutionService(runs, events, git, patches, builds, sourceReader, agent,
-                artifacts, properties.validation().commandKey(), clock);
+                artifacts, properties.validation().commandKey(), audit, clock);
     }
 
     @Bean

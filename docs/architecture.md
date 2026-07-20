@@ -17,7 +17,8 @@ adapter.web ──────────────► application services o
 application
   ├── service   AnalysisPipeline, ExecutionService, ApprovalService,
   │             RunService, RunQueryService, ReportService, EvidenceCollector,
-  │             RemoteRepositoryService, PublishService  (FR-027)
+  │             RemoteRepositoryService, PublishService  (FR-027),
+  │             AuditTrailService  (FR-025)
   ├── agent     ChangeExplainer, ImpactInvestigator, MigrationPlanner,
   │             ImplementationAgent  (LLM-assisted, schema-validated)
   ├── llm       PromptLibrary, LlmJsonClient (retry-once validation)
@@ -25,21 +26,22 @@ application
   └── port      OpenApiDiffPort, RepositorySearchPort, SourceReaderPort,
                 GitWorkspacePort, PatchPort, BuildValidationPort,
                 LlmGateway, JsonCodec, RunRepository, RunEventLog, ArtifactStore,
-                RemoteGitPort, PullRequestPort, RemoteRepositoryRegistry  (FR-027)
+                RemoteGitPort, PullRequestPort, RemoteRepositoryRegistry  (FR-027),
+                AuditTrailPort  (FR-025)
   │
 domain          AnalysisRun (aggregate + state machine), ApiChange,
                 ImpactEvidence, ImpactAssessment, MigrationPlan, Approval,
                 PatchArtifact, ValidationResult, ClassificationPolicy,
-                PlanHasher, RemoteRepository, typed failures
+                PlanHasher, RemoteRepository, AuditEntry, typed failures
                 (ContractGuardException/RunFailure)
   │
 adapters        diff (swagger-parser), search (filesystem), git (CLI: local +
                 credentialed remote clone/fetch/push), github (PR creation,
                 HTTP), process (allow-listed argv), llm (OpenAI-compatible
                 HTTP + deterministic scripted), persistence (H2/PostgreSQL,
-                Flyway-managed), security (AES-GCM credential cipher),
-                artifacts (files), json (Jackson), web (Spring MVC), cli
-                (headless CI gate)
+                Flyway-managed; includes the audit_log table, FR-025),
+                security (AES-GCM credential cipher), artifacts (files),
+                json (Jackson), web (Spring MVC), cli (headless CI gate)
 ```
 
 ## Workflow state machine

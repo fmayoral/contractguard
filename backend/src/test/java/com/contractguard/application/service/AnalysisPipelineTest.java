@@ -12,9 +12,11 @@ import com.contractguard.application.llm.LlmJsonClient;
 import com.contractguard.application.llm.PromptLibrary;
 import com.contractguard.application.policy.WorkspacePolicy;
 import com.contractguard.domain.AnalysisRun;
+import com.contractguard.domain.AuditEventType;
 import com.contractguard.domain.ChangeType;
 import com.contractguard.domain.FailureCategory;
 import com.contractguard.domain.RunState;
+import com.contractguard.testsupport.InMemoryAuditTrail;
 import com.contractguard.testsupport.InMemoryRunEventLog;
 import com.contractguard.testsupport.InMemoryRunRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,6 +50,7 @@ class AnalysisPipelineTest {
 
     private InMemoryRunRepository runs;
     private InMemoryRunEventLog events;
+    private InMemoryAuditTrail audit;
     private AnalysisPipeline pipeline;
 
     @BeforeEach
@@ -57,6 +60,7 @@ class AnalysisPipelineTest {
 
         runs = new InMemoryRunRepository();
         events = new InMemoryRunEventLog();
+        audit = new InMemoryAuditTrail();
         WorkspacePolicy policy = new WorkspacePolicy(List.of(workspace));
         JacksonJsonCodec codec = new JacksonJsonCodec();
         PromptLibrary prompts = new PromptLibrary();
@@ -69,7 +73,7 @@ class AnalysisPipelineTest {
                 new ImpactInvestigator(client, prompts, codec, search,
                         new BoundedSourceReaderAdapter(policy), 10),
                 new MigrationPlanner(client, prompts, codec, policy, List.of("maven-verify"), clock),
-                codec, clock);
+                codec, new AuditTrailService(audit, "test-operator", clock), clock);
     }
 
     private AnalysisRun newRun() {
@@ -119,6 +123,16 @@ class AnalysisPipelineTest {
         List<String> steps = events.all().stream().map(e -> e.step()).toList();
         assertThat(steps).contains("input-validation", "diff", "change-explainer",
                 "search", "assessment", "planning", "approval");
+
+        // Every state transition on the path to AWAITING_APPROVAL is audited.
+        List<String> transitions = audit.findByRun("run-1").stream()
+                .filter(entry -> entry.eventType() == AuditEventType.STATE_TRANSITION)
+                .map(entry -> entry.detail())
+                .toList();
+        assertThat(transitions).contains("CREATED -> VALIDATING_INPUT", "DIFFING -> SEARCHING",
+                "PLANNING -> AWAITING_APPROVAL");
+        assertThat(audit.findByRun("run-1")).allSatisfy(entry ->
+                assertThat(entry.principal()).isEqualTo("test-operator"));
     }
 
     @Test

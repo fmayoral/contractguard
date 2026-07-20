@@ -177,6 +177,23 @@ and transport design, and
 [docs/demo-script.md §9](docs/demo-script.md#9-test-remote-repositories-and-publishing-fr-027)
 for a full walkthrough against a real GitHub repository.
 
+## Audit trail
+
+Every state transition, approval decision and repository mutation is
+recorded to a separate, append-only audit log — distinct from the
+operational timeline: it is never purged by the retention policy that
+deletes finished runs, and there is no API route to edit or delete an entry.
+
+```bash
+curl 'http://localhost:7080/api/audit?runId=<runId>'          # one run
+curl 'http://localhost:7080/api/audit?repositoryId=<repoId>'  # one repository, across runs
+curl 'http://localhost:7080/api/audit'                        # everything
+```
+
+`principal` is a single operator-configured placeholder
+(`contractguard.audit.default-principal`) until FR-024 (authentication)
+lands — see [ADR-0008](docs/adr/0008-audit-trail.md).
+
 ## Using a real LLM
 
 Automated tests and the default demo never call a live model. To run the
@@ -206,6 +223,7 @@ All settings live under `contractguard.*` in
 | `validation.command-key` | `maven-verify` | Only allow-listed validation command |
 | `validation.timeout` / `validation.max-output-bytes` | 15m / 1MB | Build bounds |
 | `remote.credential-key` | env-driven (`CONTRACTGUARD_CREDENTIAL_KEY`) | AES-256-GCM master key encrypting remote-repository tokens at rest |
+| `audit.default-principal` | `local-operator` | Attributed to every audit entry until FR-024 adds real authentication |
 
 ### Database
 
@@ -271,6 +289,10 @@ docs/          Specification, architecture, ADRs, demo script, roadmap
 - Process execution uses fixed argument arrays with timeouts and output caps;
   model output is never executed.
 - At most one repair attempt after a failed validation, enforced structurally.
+- Every state transition, approval decision and repository mutation is
+  recorded to an append-only audit log with no API route to edit or delete
+  an entry; unlike the operational timeline, it is never purged by the
+  retention policy (ADR-0008).
 
 ## Known limitations
 
@@ -289,6 +311,8 @@ docs/          Specification, architecture, ADRs, demo script, roadmap
 - The dashboard's registration form and Publish button assume one operator
   per instance; there is no per-user credential scoping or role separation
   yet (see roadmap FR-024, Authentication and Authorisation).
+- The audit trail (FR-025) attributes every entry to one configured
+  principal, not a real authenticated identity, for the same reason.
 
 ## Documentation
 

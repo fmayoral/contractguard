@@ -17,11 +17,13 @@ public class ApprovalService {
 
     private final RunRepository runs;
     private final RunEventLog events;
+    private final AuditTrailService audit;
     private final Clock clock;
 
-    public ApprovalService(RunRepository runs, RunEventLog events, Clock clock) {
+    public ApprovalService(RunRepository runs, RunEventLog events, AuditTrailService audit, Clock clock) {
         this.runs = runs;
         this.events = events;
+        this.audit = audit;
         this.clock = clock;
     }
 
@@ -37,6 +39,7 @@ public class ApprovalService {
                         ? "Plan approved (hash %s); execution may start".formatted(shortHash(planHash))
                         : "Plan rejected; the repository was not modified",
                 "{\"kind\":\"human\"}");
+        audit.recordApprovalDecision(run, decision.name(), planHash);
         return run;
     }
 

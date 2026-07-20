@@ -51,8 +51,8 @@ Replace the embedded store with PostgreSQL behind the existing `RunRepository`/`
 ### FR-024 — Authentication and Authorisation
 OIDC single sign-on (Entra ID, Okta, Keycloak). Three roles: **Viewer** (read runs/reports), **Operator** (create and execute runs), **Approver** (decide plans). Approval records gain the authenticated principal; the report's Approval section shows who decided. Local no-auth mode stays available for single-developer use.
 
-### FR-025 — Audit Trail
-Every state transition, approval decision and repository mutation is written to an append-only audit log with principal, timestamp, run ID and plan hash. Exportable as JSON; immutable through the API.
+### FR-025 — Audit Trail (completed)
+Every state transition, approval decision and repository mutation is written to an append-only audit log with principal, timestamp, run ID and plan hash. Exportable as JSON; immutable through the API. `principal` is a single operator-configured placeholder until FR-024 lands (see ADR-0008); the log survives FR-023's retention purge by design (no foreign key to `runs`).
 
 ### FR-026 — Headless CLI and CI Gate (completed)
 A `contractguard` CLI that runs analysis (no remediation) against two specs and a consumer checkout, emits the JSON report, and exits non-zero on BREAKING changes above a configurable severity threshold. Packaged as a GitHub Action and GitLab CI template so a provider's PR that edits an OpenAPI spec fails fast with the impact table as a PR comment.

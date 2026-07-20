@@ -14,8 +14,10 @@ import com.contractguard.domain.Approval;
 import com.contractguard.domain.ContractGuardException;
 import com.contractguard.domain.FailureCategory;
 import com.contractguard.domain.Fixtures;
+import com.contractguard.domain.AuditEventType;
 import com.contractguard.domain.PatchArtifact;
 import com.contractguard.domain.RunState;
+import com.contractguard.testsupport.InMemoryAuditTrail;
 import com.contractguard.testsupport.InMemoryRunEventLog;
 import com.contractguard.testsupport.InMemoryRunRepository;
 import com.contractguard.testsupport.QueuedLlmGateway;
@@ -43,6 +45,7 @@ class ExecutionServiceTest {
 
     private InMemoryRunRepository runs;
     private InMemoryRunEventLog events;
+    private InMemoryAuditTrail audit;
     private QueuedLlmGateway gateway;
     private FakeGit fakeGit;
     private FakePatch fakePatch;
@@ -103,6 +106,7 @@ class ExecutionServiceTest {
     void setUp() {
         runs = new InMemoryRunRepository();
         events = new InMemoryRunEventLog();
+        audit = new InMemoryAuditTrail();
         gateway = new QueuedLlmGateway();
         fakeGit = new FakeGit();
         fakePatch = new FakePatch();
@@ -137,7 +141,8 @@ class ExecutionServiceTest {
         };
         service = new ExecutionService(runs, events, fakeGit, fakePatch, builds, reader,
                 new ImplementationAgent(new LlmJsonClient(gateway, codec), new PromptLibrary(), codec),
-                artifacts, "maven-verify", Clock.systemUTC());
+                artifacts, "maven-verify",
+                new AuditTrailService(audit, "test-operator", Clock.systemUTC()), Clock.systemUTC());
     }
 
     private AnalysisRun approvedRun() {
@@ -179,6 +184,14 @@ class ExecutionServiceTest {
         });
         assertThat(fakePatch.appliedDiffs).hasSize(1);
         assertThat(savedArtifacts).containsKeys("patch-attempt-1.diff", "validation-attempt-1.log");
+
+        List<AuditEventType> auditedTypes = audit.findByRun(run.id()).stream()
+                .map(com.contractguard.domain.AuditEntry::eventType).toList();
+        assertThat(auditedTypes).contains(AuditEventType.STATE_TRANSITION, AuditEventType.REPOSITORY_MUTATION);
+        assertThat(audit.findByRun(run.id())).anySatisfy(entry ->
+                assertThat(entry.detail()).contains("PATCHING"));
+        assertThat(audit.findByRun(run.id())).anySatisfy(entry ->
+                assertThat(entry.detail()).containsIgnoringCase("branch"));
     }
 
     @Test

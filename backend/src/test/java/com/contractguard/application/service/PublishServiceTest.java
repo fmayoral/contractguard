@@ -5,11 +5,13 @@ import com.contractguard.application.port.PullRequestPort;
 import com.contractguard.application.port.RemoteGitPort;
 import com.contractguard.application.port.RemoteRepositoryRegistry;
 import com.contractguard.domain.AnalysisRun;
+import com.contractguard.domain.AuditEventType;
 import com.contractguard.domain.ContractGuardException;
 import com.contractguard.domain.FailureCategory;
 import com.contractguard.domain.Fixtures;
 import com.contractguard.domain.RemoteRepository;
 import com.contractguard.domain.RunState;
+import com.contractguard.testsupport.InMemoryAuditTrail;
 import com.contractguard.testsupport.InMemoryRunEventLog;
 import com.contractguard.testsupport.InMemoryRunRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,6 +37,7 @@ class PublishServiceTest {
 
     private InMemoryRunRepository runs;
     private InMemoryRunEventLog events;
+    private InMemoryAuditTrail audit;
     private List<String> commits;
     private List<String> pushedBranches;
     private PullRequestPort.PullRequestResult prResult;
@@ -47,6 +50,7 @@ class PublishServiceTest {
     void setUp() {
         runs = new InMemoryRunRepository();
         events = new InMemoryRunEventLog();
+        audit = new InMemoryAuditTrail();
         commits = new ArrayList<>();
         pushedBranches = new ArrayList<>();
         prResult = new PullRequestPort.PullRequestResult("https://github.com/acme/widgets/pull/7", 7);
@@ -117,7 +121,8 @@ class PublishServiceTest {
                 return List.copyOf(registrations.values());
             }
         };
-        service = new PublishService(runs, events, git, pushingRemoteGit, pullRequests, registry, CLOCK);
+        service = new PublishService(runs, events, git, pushingRemoteGit, pullRequests, registry,
+                new AuditTrailService(audit, "test-operator", CLOCK), CLOCK);
     }
 
     @Test
@@ -134,6 +139,12 @@ class PublishServiceTest {
         assertThat(commits).hasSize(1);
         assertThat(pushedBranches).containsExactly(run.workingBranch());
         assertThat(events.all()).anySatisfy(event -> assertThat(event.status()).isEqualTo("PR_OPENED"));
+
+        List<AuditEventType> auditedTypes = audit.findByRun(run.id()).stream()
+                .map(com.contractguard.domain.AuditEntry::eventType).toList();
+        assertThat(auditedTypes).contains(AuditEventType.STATE_TRANSITION, AuditEventType.REPOSITORY_MUTATION);
+        assertThat(audit.findByRun(run.id())).anySatisfy(entry ->
+                assertThat(entry.detail()).contains("pull/7"));
     }
 
     @Test

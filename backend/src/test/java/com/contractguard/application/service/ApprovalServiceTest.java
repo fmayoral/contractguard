@@ -5,7 +5,9 @@ import com.contractguard.domain.Approval;
 import com.contractguard.domain.ContractGuardException;
 import com.contractguard.domain.FailureCategory;
 import com.contractguard.domain.Fixtures;
+import com.contractguard.domain.AuditEventType;
 import com.contractguard.domain.RunState;
+import com.contractguard.testsupport.InMemoryAuditTrail;
 import com.contractguard.testsupport.InMemoryRunEventLog;
 import com.contractguard.testsupport.InMemoryRunRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,13 +22,16 @@ class ApprovalServiceTest {
 
     private InMemoryRunRepository runs;
     private InMemoryRunEventLog events;
+    private InMemoryAuditTrail audit;
     private ApprovalService service;
 
     @BeforeEach
     void setUp() {
         runs = new InMemoryRunRepository();
         events = new InMemoryRunEventLog();
-        service = new ApprovalService(runs, events, Clock.systemUTC());
+        audit = new InMemoryAuditTrail();
+        service = new ApprovalService(runs, events, new AuditTrailService(audit, "test-operator", Clock.systemUTC()),
+                Clock.systemUTC());
     }
 
     private AnalysisRun awaitingApproval() {
@@ -47,6 +52,11 @@ class ApprovalServiceTest {
         assertThat(events.all()).anySatisfy(event -> {
             assertThat(event.step()).isEqualTo("approval");
             assertThat(event.status()).isEqualTo("APPROVED");
+        });
+        assertThat(audit.findByRun(run.id())).anySatisfy(entry -> {
+            assertThat(entry.eventType()).isEqualTo(AuditEventType.APPROVAL_DECISION);
+            assertThat(entry.principal()).isEqualTo("test-operator");
+            assertThat(entry.planHash()).isEqualTo(hash);
         });
     }
 

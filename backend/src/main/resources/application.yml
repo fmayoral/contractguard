@@ -52,6 +52,11 @@ contractguard:
     # Encrypts remote-repository credentials at rest (FR-027); required only
     # to register a remote repository, not for purely local workspace use.
     credential-key: ${CONTRACTGUARD_CREDENTIAL_KEY:}
+  audit:
+    # Attributed to every audit entry until FR-024 adds real authenticated
+    # principals; not a security boundary, just the compliance record's
+    # "who" field for this single-operator MVP.
+    default-principal: ${CONTRACTGUARD_AUDIT_PRINCIPAL:local-operator}
 
 ---
 # Headless CI gate (FR-026): analysis only, JSON report on stdout, exit code

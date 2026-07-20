@@ -15,12 +15,14 @@ import com.contractguard.application.port.ArtifactStore;
 import com.contractguard.application.port.RemoteGitPort;
 import com.contractguard.application.port.RemoteRepositoryRegistry;
 import com.contractguard.application.service.AnalysisPipeline;
+import com.contractguard.application.service.AuditTrailService;
 import com.contractguard.application.service.EvidenceCollector;
 import com.contractguard.application.service.RemoteRepositoryService;
 import com.contractguard.application.service.ReportService;
 import com.contractguard.application.service.RunQueryService;
 import com.contractguard.application.service.RunService;
 import com.contractguard.domain.RemoteRepository;
+import com.contractguard.testsupport.InMemoryAuditTrail;
 import com.contractguard.testsupport.InMemoryRunEventLog;
 import com.contractguard.testsupport.InMemoryRunRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -74,6 +76,7 @@ class CliRunnerTest {
         LlmJsonClient client = new LlmJsonClient(new ScriptedLlmGateway(), codec);
         FilesystemRepositorySearchAdapter search = new FilesystemRepositorySearchAdapter(policy);
         Clock clock = Clock.systemUTC();
+        AuditTrailService audit = new AuditTrailService(new InMemoryAuditTrail(), "test-operator", clock);
         AnalysisPipeline pipeline = new AnalysisPipeline(runs, events, policy,
                 new SwaggerOpenApiDiffAdapter(),
                 new EvidenceCollector(search),
@@ -81,7 +84,7 @@ class CliRunnerTest {
                 new ImpactInvestigator(client, prompts, codec, search,
                         new BoundedSourceReaderAdapter(policy), 10),
                 new MigrationPlanner(client, prompts, codec, policy, List.of("maven-verify"), clock),
-                codec, clock);
+                codec, audit, clock);
 
         ArtifactStore artifactStore = new ArtifactStore() {
             @Override

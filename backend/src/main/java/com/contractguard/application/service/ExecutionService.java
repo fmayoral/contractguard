@@ -43,11 +43,13 @@ public class ExecutionService {
     private final ImplementationAgent agent;
     private final ArtifactStore artifacts;
     private final String validationCommandKey;
+    private final AuditTrailService audit;
     private final Clock clock;
 
     public ExecutionService(RunRepository runs, RunEventLog events, GitWorkspacePort git,
             PatchPort patches, BuildValidationPort builds, SourceReaderPort sourceReader,
-            ImplementationAgent agent, ArtifactStore artifacts, String validationCommandKey, Clock clock) {
+            ImplementationAgent agent, ArtifactStore artifacts, String validationCommandKey,
+            AuditTrailService audit, Clock clock) {
         this.runs = runs;
         this.events = events;
         this.git = git;
@@ -57,6 +59,7 @@ public class ExecutionService {
         this.agent = agent;
         this.artifacts = artifacts;
         this.validationCommandKey = validationCommandKey;
+        this.audit = audit;
         this.clock = clock;
     }
 
@@ -68,8 +71,10 @@ public class ExecutionService {
                     "run %s has no recorded approval; execution is impossible".formatted(runId),
                     "Approve the migration plan first.");
         }
+        RunState from = run.state();
         run.transitionTo(RunState.PREPARING_BRANCH, clock.instant());
         runs.save(run);
+        audit.recordTransition(run, from, RunState.PREPARING_BRANCH);
         return run;
     }
 
@@ -111,11 +116,15 @@ public class ExecutionService {
         events.append(run.id(), "branch", "COMPLETED",
                 "Working branch %s created from %s".formatted(branchName, status.currentBranch()),
                 "{\"kind\":\"tool\"}");
+        audit.recordRepositoryMutation(run, "Branch %s created from %s"
+                .formatted(branchName, status.currentBranch()));
     }
 
     private void patchAndValidate(AnalysisRun run) {
+        RunState fromPreparing = run.state();
         run.transitionTo(RunState.PATCHING, clock.instant());
         runs.save(run);
+        audit.recordTransition(run, fromPreparing, RunState.PATCHING);
         MigrationPlan plan = run.plan().orElseThrow();
 
         applyPatch(run, plan, ImplementationAgent.IMPLEMENTATION_PROMPT, null, 1);
@@ -127,8 +136,10 @@ public class ExecutionService {
         if (!run.repairAllowed()) {
             throw validationFailed(first);
         }
+        RunState fromValidating = run.state();
         run.transitionTo(RunState.REPAIRING, clock.instant());
         runs.save(run);
+        audit.recordTransition(run, fromValidating, RunState.REPAIRING);
         events.append(run.id(), "repair", "STARTED",
                 "First validation failed; attempting the single bounded repair", "{\"kind\":\"llm\"}");
         String failureOutput = boundedFailureOutput(run, first);
@@ -170,6 +181,8 @@ public class ExecutionService {
         runs.save(run);
         events.append(run.id(), "patch", "APPLIED",
                 "Patch applied to %s".formatted(run.workingBranch()), "{\"kind\":\"tool\"}");
+        audit.recordRepositoryMutation(run, "Patch attempt %d applied to %s (%d file(s))"
+                .formatted(attempt, run.workingBranch(), check.changedPaths().size()));
     }
 
     private Map<String, String> readApprovedFiles(AnalysisRun run, Set<String> approvedFiles) {
@@ -213,8 +226,10 @@ public class ExecutionService {
     }
 
     private ValidationResult validate(AnalysisRun run, int attempt) {
+        RunState from = run.state();
         run.transitionTo(RunState.VALIDATING, clock.instant());
         runs.save(run);
+        audit.recordTransition(run, from, RunState.VALIDATING);
         events.append(run.id(), "validation", "STARTED",
                 "Attempt %d: running %s".formatted(attempt, validationCommandKey), "{\"kind\":\"tool\"}");
         BuildValidationPort.BuildResult result = builds.run(run.repositoryId(), validationCommandKey);
@@ -238,8 +253,10 @@ public class ExecutionService {
     }
 
     private void succeed(AnalysisRun run) {
+        RunState from = run.state();
         run.transitionTo(RunState.SUCCEEDED, clock.instant());
         runs.save(run);
+        audit.recordTransition(run, from, RunState.SUCCEEDED);
         events.append(run.id(), "run", "SUCCEEDED",
                 "Remediation validated on %s; original branch %s untouched"
                         .formatted(run.workingBranch(), run.originalBranch()),
@@ -278,9 +295,11 @@ public class ExecutionService {
     }
 
     private void fail(AnalysisRun run, RunFailure failure) {
-        if (!run.state().isTerminal()) {
+        RunState from = run.state();
+        if (!from.isTerminal()) {
             run.markFailed(failure, clock.instant());
             runs.save(run);
+            audit.recordTransition(run, from, RunState.FAILED);
         }
         events.append(run.id(), "run", "FAILED",
                 "%s: %s%s".formatted(failure.category(), failure.message(),

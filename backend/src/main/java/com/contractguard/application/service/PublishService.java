@@ -29,17 +29,19 @@ public class PublishService {
     private final RemoteGitPort remoteGit;
     private final PullRequestPort pullRequests;
     private final RemoteRepositoryRegistry remoteRepositories;
+    private final AuditTrailService audit;
     private final Clock clock;
 
     public PublishService(RunRepository runs, RunEventLog events, GitWorkspacePort git,
             RemoteGitPort remoteGit, PullRequestPort pullRequests,
-            RemoteRepositoryRegistry remoteRepositories, Clock clock) {
+            RemoteRepositoryRegistry remoteRepositories, AuditTrailService audit, Clock clock) {
         this.runs = runs;
         this.events = events;
         this.git = git;
         this.remoteGit = remoteGit;
         this.pullRequests = pullRequests;
         this.remoteRepositories = remoteRepositories;
+        this.audit = audit;
         this.clock = clock;
     }
 
@@ -47,8 +49,10 @@ public class PublishService {
     public AnalysisRun beginPublish(String runId) {
         AnalysisRun run = RunLookup.require(runs, runId);
         RemoteRepository remote = requireRemote(run);
+        RunState from = run.state();
         run.transitionTo(RunState.PUBLISHING, clock.instant());
         runs.save(run);
+        audit.recordTransition(run, from, RunState.PUBLISHING);
         events.append(run.id(), "publish", "STARTED",
                 "Publishing %s to %s/%s".formatted(run.workingBranch(), remote.owner(), remote.name()),
                 "{\"kind\":\"tool\"}");
@@ -68,18 +72,24 @@ public class PublishService {
                     .formatted(run.name(), Ids.shortId(run.id())));
             events.append(run.id(), "publish", "COMMITTED",
                     "Committed working branch " + run.workingBranch(), "{\"kind\":\"tool\"}");
+            audit.recordRepositoryMutation(run, "Committed working branch " + run.workingBranch());
 
             remoteGit.push(run.repositoryId(), run.workingBranch(), remote, credential);
             events.append(run.id(), "publish", "PUSHED",
                     "Pushed %s to origin".formatted(run.workingBranch()), "{\"kind\":\"tool\"}");
+            audit.recordRepositoryMutation(run, "Pushed %s to %s/%s"
+                    .formatted(run.workingBranch(), remote.owner(), remote.name()));
 
             String body = PullRequestBodyRenderer.render(run, remote);
             PullRequestPort.PullRequestResult result = pullRequests.openDraftPullRequest(
                     new PullRequestPort.PullRequestRequest(remote.owner(), remote.name(), run.workingBranch(),
                             remote.defaultBranch(), "ContractGuard: " + run.name(), body, credential));
+            audit.recordRepositoryMutation(run, "Opened draft pull request: " + result.url());
 
+            RunState from = run.state();
             run.recordPublished(result.url(), clock.instant());
             runs.save(run);
+            audit.recordTransition(run, from, RunState.PUBLISHED);
             events.append(run.id(), "publish", "PR_OPENED",
                     "Draft pull request opened: " + result.url(), "{\"kind\":\"tool\"}");
         } catch (ContractGuardException e) {
@@ -102,6 +112,7 @@ public class PublishService {
         if (run.state() == RunState.PUBLISHING) {
             run.recordPublishFailure(failure, clock.instant());
             runs.save(run);
+            audit.recordTransition(run, RunState.PUBLISHING, RunState.PUBLISH_FAILED);
         }
         events.append(run.id(), "publish", "FAILED",
                 "%s: %s".formatted(failure.category(), failure.message()), "{\"kind\":\"system\"}");

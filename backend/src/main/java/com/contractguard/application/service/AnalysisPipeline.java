@@ -39,11 +39,13 @@ public class AnalysisPipeline {
     private final ImpactInvestigator investigator;
     private final MigrationPlanner planner;
     private final JsonCodec codec;
+    private final AuditTrailService audit;
     private final Clock clock;
 
     public AnalysisPipeline(RunRepository runs, RunEventLog events, WorkspacePolicy workspacePolicy,
             OpenApiDiffPort diffPort, EvidenceCollector evidenceCollector, ChangeExplainer changeExplainer,
-            ImpactInvestigator investigator, MigrationPlanner planner, JsonCodec codec, Clock clock) {
+            ImpactInvestigator investigator, MigrationPlanner planner, JsonCodec codec,
+            AuditTrailService audit, Clock clock) {
         this.runs = runs;
         this.events = events;
         this.workspacePolicy = workspacePolicy;
@@ -53,6 +55,7 @@ public class AnalysisPipeline {
         this.investigator = investigator;
         this.planner = planner;
         this.codec = codec;
+        this.audit = audit;
         this.clock = clock;
     }
 
@@ -146,6 +149,7 @@ public class AnalysisPipeline {
         run.attachPlan(plan, clock.instant());
         run.transitionTo(RunState.AWAITING_APPROVAL, clock.instant());
         runs.save(run);
+        audit.recordTransition(run, RunState.PLANNING, RunState.AWAITING_APPROVAL);
         complete(run, "planning", "Plan v%d with %d item(s) ready".formatted(
                 plan.version(), plan.items().size()),
                 Map.of("planHash", plan.hash(), "items", plan.items().size(), "kind", "llm"));
@@ -160,9 +164,11 @@ public class AnalysisPipeline {
     }
 
     private void transition(AnalysisRun run, RunState state, String step, String message) {
+        RunState from = run.state();
         run.transitionTo(state, clock.instant());
         runs.save(run);
         events.append(run.id(), step, "STARTED", message, "{\"kind\":\"tool\"}");
+        audit.recordTransition(run, from, state);
     }
 
     private void complete(AnalysisRun run, String step, String message, Map<String, Object> metadata) {
@@ -179,9 +185,11 @@ public class AnalysisPipeline {
     }
 
     private void fail(AnalysisRun run, RunFailure failure) {
-        if (!run.state().isTerminal()) {
+        RunState from = run.state();
+        if (!from.isTerminal()) {
             run.markFailed(failure, clock.instant());
             runs.save(run);
+            audit.recordTransition(run, from, RunState.FAILED);
         }
         events.append(run.id(), "run", "FAILED",
                 "%s: %s".formatted(failure.category(), failure.message()), "{\"kind\":\"system\"}");

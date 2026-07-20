@@ -13,7 +13,8 @@ public record ContractGuardProperties(
         Specs specs,
         Llm llm,
         Validation validation,
-        Remote remote) {
+        Remote remote,
+        Audit audit) {
 
     public record Workspace(List<String> roots) {
     }
@@ -34,5 +35,9 @@ public record ContractGuardProperties(
 
     /** {@code credentialKey} encrypts remote-repository tokens at rest (FR-027, ADR-0007). */
     public record Remote(String credentialKey) {
+    }
+
+    /** {@code defaultPrincipal} attributes audit entries until real authentication exists (FR-025, FR-024). */
+    public record Audit(String defaultPrincipal) {
     }
 }

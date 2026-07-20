@@ -31,7 +31,16 @@ public record ContractGuardProperties(
             Duration timeout, int maxTokens, double temperature, int maxWorkflowSteps) {
     }
 
-    public record Validation(String commandKey, Duration timeout, int maxOutputBytes) {
+    public record Validation(String commandKey, Duration timeout, int maxOutputBytes, Docker docker) {
+
+        /**
+         * Sandboxed build validation (FR-030, ADR-0010): opt-in, {@code enabled=false} by
+         * default. {@code mavenLocalRepo} is bind-mounted read-only in place of network
+         * egress; blank/unset disables that mount.
+         */
+        public record Docker(boolean enabled, String image, String memory, String cpus,
+                boolean networkEnabled, String mavenLocalRepo) {
+        }
     }
 
     /** {@code credentialKey} encrypts remote-repository tokens at rest (FR-027, ADR-0007). */

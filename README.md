@@ -96,6 +96,9 @@ be retried once the underlying issue (e.g. an expired token) is fixed.
 - Git on `PATH`
 - Node.js 20+ (frontend)
 - Internet access for the first Maven/npm dependency download
+- Optional: a local Docker daemon, only to enable sandboxed build validation
+  (`contractguard.validation.docker.enabled` — off by default, see
+  [Sandboxed validation](#sandboxed-validation) below)
 
 ## Quick start
 
@@ -194,6 +197,32 @@ curl 'http://localhost:7080/api/audit'                        # everything
 (`contractguard.audit.default-principal`) until FR-024 (authentication)
 lands — see [ADR-0008](docs/adr/0008-audit-trail.md).
 
+## Sandboxed validation
+
+By default the consumer's own build (`mvnw verify`) runs directly on the
+host, exactly as in the MVP. Set `contractguard.validation.docker.enabled`
+to `true` (and start Docker) to run it in a resource-limited, network-
+isolated container instead:
+
+```bash
+export CONTRACTGUARD_VALIDATION_DOCKER_ENABLED=true
+cd backend
+./mvnw spring-boot:run -Dspring-boot.run.arguments=--contractguard.validation.docker.enabled=true
+```
+
+No network egress by default — instead of opening a package-registry
+exception, the host's own `~/.m2` is mounted **read-only** into the
+container, so previously-resolved dependencies (and the Maven wrapper's own
+cached distribution) are available offline. A repository whose dependencies
+were never resolved on this host will still fail without network access;
+set `validation.docker.network-enabled: true` if that's not acceptable for
+a given deployment. Memory, CPU and wall-clock are all bounded
+(`validation.docker.memory` / `.cpus` / `validation.timeout`); a timed-out
+sandboxed build is killed and its container removed, never left running.
+See [ADR-0010](docs/adr/0010-sandboxed-validation.md) for the full design,
+including a `ProcessRunner` timeout bug this work found and fixed along the
+way.
+
 ## Using a real LLM
 
 Automated tests and the default demo never call a live model. To run the
@@ -222,6 +251,10 @@ All settings live under `contractguard.*` in
 | `llm.max-workflow-steps` | 20 | Investigator tool-loop budget |
 | `validation.command-key` | `maven-verify` | Only allow-listed validation command |
 | `validation.timeout` / `validation.max-output-bytes` | 15m / 1MB | Build bounds |
+| `validation.docker.enabled` | `false` | Run validation in a sandboxed container instead of on the host |
+| `validation.docker.image` / `.memory` / `.cpus` | `eclipse-temurin:21-jdk` / `2g` / `2` | Sandbox resource limits |
+| `validation.docker.network-enabled` | `false` | Off by default; see [Sandboxed validation](#sandboxed-validation) |
+| `validation.docker.maven-local-repo` | `${user.home}/.m2` | Mounted read-only so offline builds still resolve cached dependencies |
 | `remote.credential-key` | env-driven (`CONTRACTGUARD_CREDENTIAL_KEY`) | AES-256-GCM master key encrypting remote-repository tokens at rest |
 | `audit.default-principal` | `local-operator` | Attributed to every audit entry until FR-024 adds real authentication |
 | `concurrency.max-active-runs` | `10` | System-wide bound on non-terminal runs; `0` disables the limit |
@@ -254,6 +287,9 @@ cd backend && ./mvnw verify -Pe2e
 
 # Persistence adapters against real PostgreSQL (requires Docker)
 cd backend && ./mvnw test -Ppg
+
+# Sandboxed-validation adapter against real docker run (requires Docker)
+cd backend && ./mvnw test -Pdocker
 
 # Frontend: lint, tests with coverage, production build
 cd frontend && npm ci && npm run lint && npm run test:coverage && npm run build
@@ -302,6 +338,10 @@ docs/          Specification, architecture, ADRs, demo script, roadmap
   is safely resumed from scratch; every other interrupted state is
   finalised as FAILED with a clean message rather than resumed mid-mutation
   (ADR-0009).
+- Consumer builds can run in a resource-limited, network-isolated container
+  instead of on the host (opt-in, `validation.docker.enabled`); a timed-out
+  sandboxed build is killed and its container removed rather than left
+  running (ADR-0010).
 
 ## Known limitations
 
@@ -325,6 +365,10 @@ docs/          Specification, architecture, ADRs, demo script, roadmap
   yet (see roadmap FR-024, Authentication and Authorisation).
 - The audit trail (FR-025) attributes every entry to one configured
   principal, not a real authenticated identity, for the same reason.
+- Sandboxed validation (FR-030) has no `--user` mapping into the container,
+  so build output may end up root-owned on a Linux host; and network access
+  is genuinely off by default, so a repository whose dependencies were
+  never resolved on the host will fail rather than fetch them.
 
 ## Documentation
 

@@ -66,8 +66,8 @@ First-class adapters for Anthropic (direct + Bedrock), Azure OpenAI and Ollama a
 ### FR-029 — Observability
 OpenTelemetry traces spanning the whole run (each pipeline node a span, LLM calls annotated with token counts), Prometheus metrics (runs by state, durations, failure categories, LLM spend), structured JSON logs correlated by the existing `traceId`. Health/readiness endpoints for orchestration.
 
-### FR-030 — Sandboxed Validation
-Consumer builds and tests execute in a resource-limited container (CPU, memory, wall-clock, no network egress by default) rather than on the host. Build images configurable per repository.
+### FR-030 — Sandboxed Validation (completed)
+Consumer builds and tests execute in a resource-limited container (CPU, memory, wall-clock, no network egress by default) rather than on the host. Build images configurable per repository. Opt-in via `contractguard.validation.docker.enabled` (off by default, preserving the zero-setup host path); "no network egress" is honored by bind-mounting the host's `~/.m2` read-only rather than opening a package-registry exception — see ADR-0010, which also documents a pre-existing `ProcessRunner` timeout bug this work surfaced and fixed.
 
 ### FR-031 — Notifications
 Slack/Teams webhook and email notifications on AWAITING_APPROVAL and terminal states, with deep links to the run. Configurable per repository/team.

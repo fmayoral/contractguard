@@ -5,6 +5,7 @@ import com.contractguard.adapter.diff.SwaggerOpenApiDiffAdapter;
 import com.contractguard.adapter.git.GitCliAdapter;
 import com.contractguard.adapter.git.RemoteGitCliAdapter;
 import com.contractguard.adapter.github.GitHubPullRequestAdapter;
+import com.contractguard.adapter.process.DockerBuildValidationAdapter;
 import com.contractguard.adapter.process.MavenBuildValidationAdapter;
 import com.contractguard.adapter.process.ProcessRunner;
 import com.contractguard.adapter.json.JacksonJsonCodec;
@@ -288,8 +289,20 @@ public class ApplicationConfiguration {
     @Bean
     public BuildValidationPort buildValidationPort(WorkspacePolicy policy, ProcessRunner processRunner,
             ContractGuardProperties properties) {
+        ContractGuardProperties.Validation validation = properties.validation();
+        ContractGuardProperties.Validation.Docker docker = validation.docker();
+        if (docker != null && docker.enabled()) {
+            log.info("Build validation: sandboxed ({}), network {}", docker.image(),
+                    docker.networkEnabled() ? "enabled" : "disabled");
+            Path mavenLocalRepo = docker.mavenLocalRepo() == null || docker.mavenLocalRepo().isBlank()
+                    ? null : Path.of(docker.mavenLocalRepo());
+            return new DockerBuildValidationAdapter(policy, processRunner, validation.timeout(),
+                    validation.maxOutputBytes(), docker.image(), docker.memory(), docker.cpus(),
+                    docker.networkEnabled(), mavenLocalRepo);
+        }
+        log.info("Build validation: host process (unsandboxed)");
         return new MavenBuildValidationAdapter(policy, processRunner,
-                properties.validation().timeout(), properties.validation().maxOutputBytes());
+                validation.timeout(), validation.maxOutputBytes());
     }
 
     @Bean

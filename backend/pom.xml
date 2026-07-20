@@ -30,6 +30,8 @@
     <e2e.excludes>**/*E2ETest.java</e2e.excludes>
     <!-- Excluded unless the pg profile is active; needs a Docker daemon. -->
     <pg.excludes>**/*PostgresTest.java</pg.excludes>
+    <!-- Excluded unless the docker profile is active; needs a Docker daemon. -->
+    <docker.excludes>**/*DockerTest.java</docker.excludes>
   </properties>
 
   <dependencies>
@@ -112,6 +114,7 @@
           <excludes>
             <exclude>${e2e.excludes}</exclude>
             <exclude>${pg.excludes}</exclude>
+            <exclude>${docker.excludes}</exclude>
           </excludes>
         </configuration>
       </plugin>
@@ -237,6 +240,13 @@
       <properties>
         <!-- Match nothing so *PostgresTest classes run (requires Docker). -->
         <pg.excludes>none-matching-placeholder</pg.excludes>
+      </properties>
+    </profile>
+    <profile>
+      <id>docker</id>
+      <properties>
+        <!-- Match nothing so *DockerTest classes run (requires a Docker daemon). -->
+        <docker.excludes>none-matching-placeholder</docker.excludes>
       </properties>
     </profile>
   </profiles>

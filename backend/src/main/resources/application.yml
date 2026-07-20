@@ -48,6 +48,19 @@ contractguard:
     command-key: maven-verify
     timeout: 15m
     max-output-bytes: 1000000
+    docker:
+      # Sandboxed build validation (FR-030): the consumer's own build runs on
+      # the host by default. Set to true to run it in a resource-limited,
+      # network-isolated container instead (requires a local Docker daemon).
+      enabled: ${CONTRACTGUARD_VALIDATION_DOCKER_ENABLED:false}
+      image: eclipse-temurin:21-jdk
+      memory: 2g
+      cpus: "2"
+      # No network egress by default (see ADR-0010); maven-local-repo below is
+      # bind-mounted read-only instead, so already-resolved dependencies and
+      # the Maven wrapper's cached distribution still work offline.
+      network-enabled: false
+      maven-local-repo: ${CONTRACTGUARD_DOCKER_M2:${user.home}/.m2}
   remote:
     # Encrypts remote-repository credentials at rest (FR-027); required only
     # to register a remote repository, not for purely local workspace use.

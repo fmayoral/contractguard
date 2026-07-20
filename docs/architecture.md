@@ -37,11 +37,13 @@ domain          AnalysisRun (aggregate + state machine), ApiChange,
   │
 adapters        diff (swagger-parser), search (filesystem), git (CLI: local +
                 credentialed remote clone/fetch/push), github (PR creation,
-                HTTP), process (allow-listed argv), llm (OpenAI-compatible
-                HTTP + deterministic scripted), persistence (H2/PostgreSQL,
-                Flyway-managed; includes the audit_log table, FR-025),
-                security (AES-GCM credential cipher), artifacts (files),
-                json (Jackson), web (Spring MVC), cli (headless CI gate)
+                HTTP), process (allow-listed argv: host Maven or, opt-in,
+                a resource-limited `docker run` sandbox — FR-030, ADR-0010),
+                llm (OpenAI-compatible HTTP + deterministic scripted),
+                persistence (H2/PostgreSQL, Flyway-managed; includes the
+                audit_log table, FR-025), security (AES-GCM credential
+                cipher), artifacts (files), json (Jackson), web (Spring MVC),
+                cli (headless CI gate)
 ```
 
 ## Workflow state machine

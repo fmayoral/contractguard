@@ -4,7 +4,9 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -12,8 +14,18 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ProcessRunnerTest {
 
+    private static final boolean WINDOWS =
+            System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
+
     private final ProcessRunner runner = new ProcessRunner();
     private final Path cwd = Path.of(".");
+
+    /** No `sleep` binary on Windows; `ping` is the standard portable stand-in for a timed delay. */
+    private static List<String> sleepCommand(int seconds) {
+        return WINDOWS
+                ? List.of("ping", "-n", String.valueOf(seconds + 1), "127.0.0.1")
+                : List.of("sleep", String.valueOf(seconds));
+    }
 
     @Test
     void capturesExitCodeAndOutput() {
@@ -42,6 +54,23 @@ class ProcessRunnerTest {
         assertThat(result.truncated()).isTrue();
         assertThat(result.output().getBytes()).hasSizeLessThanOrEqualTo(60);
         assertThat(result.exitCode()).isZero();
+    }
+
+    @Test
+    void timeoutKillsAStillRunningProcessInsteadOfWaitingForItToExit() {
+        // A process that runs (and keeps producing output) well past the configured
+        // timeout must be killed close to the deadline, not merely detected as having
+        // overrun after it eventually finished on its own.
+        Instant started = Instant.now();
+
+        ProcessRunner.ProcessResult result = runner.run(
+                sleepCommand(20), cwd, Map.of(), Duration.ofSeconds(2), 10_000);
+
+        Duration wallClock = Duration.between(started, Instant.now());
+        assertThat(result.timedOut()).isTrue();
+        assertThat(result.exitCode()).isEqualTo(-1);
+        // Generous upper bound: destroyForcibly + the 10s grace wait, well under the 20s sleep.
+        assertThat(wallClock).isLessThan(Duration.ofSeconds(15));
     }
 
     @Test

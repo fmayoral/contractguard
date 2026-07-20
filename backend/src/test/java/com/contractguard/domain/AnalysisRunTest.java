@@ -117,7 +117,7 @@ class AnalysisRunTest {
             // Simulate a re-planned run: same aggregate back in PLANNING with the old approval attached.
             AnalysisRun replanned = AnalysisRun.rehydrate(approved.id(), approved.name(),
                     approved.repositoryId(), approved.traceId(), approved.createdAt(), approved.updatedAt(),
-                    RunState.PLANNING, null, null, null, null, null, null, null,
+                    RunState.PLANNING, null, null, null, null, null, null, null, null,
                     approved.changes(), approved.evidence(), approved.assessments(),
                     approved.plan().orElseThrow(), approved.approval().orElseThrow(), List.of(), List.of());
 
@@ -220,7 +220,7 @@ class AnalysisRunTest {
             AnalysisRun original = Fixtures.runAwaitingApproval();
             AnalysisRun restored = AnalysisRun.rehydrate(original.id(), original.name(),
                     original.repositoryId(), original.traceId(), original.createdAt(), original.updatedAt(),
-                    original.state(), "old.yaml", "new.yaml", "old-hash", "new-hash", null, null, null,
+                    original.state(), "old.yaml", "new.yaml", "old-hash", "new-hash", null, null, null, null,
                     original.changes(), original.evidence(), original.assessments(),
                     original.plan().orElseThrow(), null, List.of(), List.of());
             assertThat(restored.state()).isEqualTo(RunState.AWAITING_APPROVAL);
@@ -241,5 +241,56 @@ class AnalysisRunTest {
         run.markPatchApplied("p-1", T0);
         assertThat(run.patches().get(0).checkStatus()).isEqualTo(PatchArtifact.CheckStatus.APPLIED);
         assertThatIllegalArgumentException().isThrownBy(() -> run.markPatchApplied("missing", T0));
+    }
+
+    @Nested
+    class Publishing {
+
+        @Test
+        void succeededRunCanBePublished() {
+            AnalysisRun run = Fixtures.runSucceeded();
+            run.transitionTo(RunState.PUBLISHING, T0);
+            run.recordPublished("https://github.com/acme/widgets/pull/7", T0);
+            assertThat(run.state()).isEqualTo(RunState.PUBLISHED);
+            assertThat(run.pullRequestUrl()).contains("https://github.com/acme/widgets/pull/7");
+            assertThat(run.state().isTerminal()).isTrue();
+        }
+
+        @Test
+        void publishFailureRecordsReasonAndAllowsRetry() {
+            AnalysisRun run = Fixtures.runSucceeded();
+            run.transitionTo(RunState.PUBLISHING, T0);
+            RunFailure failure = new RunFailure(FailureCategory.PULL_REQUEST_FAILED, "boom", true, null, "retry");
+
+            run.recordPublishFailure(failure, T0);
+
+            assertThat(run.state()).isEqualTo(RunState.PUBLISH_FAILED);
+            assertThat(run.failure()).contains(failure);
+            assertThat(run.pullRequestUrl()).isEmpty();
+
+            // Retryable: PUBLISH_FAILED can go back through PUBLISHING to a successful publish.
+            run.transitionTo(RunState.PUBLISHING, T0);
+            run.recordPublished("https://github.com/acme/widgets/pull/8", T0);
+            assertThat(run.state()).isEqualTo(RunState.PUBLISHED);
+            assertThat(run.failure()).isEmpty();
+        }
+
+        @Test
+        void recordPublishedOutsidePublishingIsRejected() {
+            AnalysisRun run = Fixtures.runSucceeded();
+            assertThatThrownBy(() -> run.recordPublished("https://github.com/acme/widgets/pull/1", T0))
+                    .isInstanceOf(ContractGuardException.class)
+                    .satisfies(e -> assertThat(((ContractGuardException) e).failure().category())
+                            .isEqualTo(FailureCategory.ILLEGAL_STATE));
+        }
+
+        @Test
+        void publishingCannotStartBeforeSuccess() {
+            AnalysisRun run = Fixtures.runAwaitingApproval();
+            assertThatThrownBy(() -> run.transitionTo(RunState.PUBLISHING, T0))
+                    .isInstanceOf(ContractGuardException.class)
+                    .satisfies(e -> assertThat(((ContractGuardException) e).failure().category())
+                            .isEqualTo(FailureCategory.ILLEGAL_STATE));
+        }
     }
 }

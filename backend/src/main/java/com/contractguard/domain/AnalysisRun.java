@@ -31,6 +31,7 @@ public final class AnalysisRun {
     private String originalBranch;
     private String workingBranch;
     private RunFailure failure;
+    private String pullRequestUrl;
 
     private final List<ApiChange> changes = new ArrayList<>();
     private final List<ImpactEvidence> evidence = new ArrayList<>();
@@ -54,9 +55,10 @@ public final class AnalysisRun {
     public static AnalysisRun rehydrate(String id, String name, String repositoryId, String traceId,
             Instant createdAt, Instant updatedAt, RunState state, String oldSpecName, String newSpecName,
             String oldSpecHash, String newSpecHash,
-            String originalBranch, String workingBranch, RunFailure failure, List<ApiChange> changes,
-            List<ImpactEvidence> evidence, List<ImpactAssessment> assessments, MigrationPlan plan,
-            Approval approval, List<PatchArtifact> patches, List<ValidationResult> validations) {
+            String originalBranch, String workingBranch, RunFailure failure, String pullRequestUrl,
+            List<ApiChange> changes, List<ImpactEvidence> evidence, List<ImpactAssessment> assessments,
+            MigrationPlan plan, Approval approval, List<PatchArtifact> patches,
+            List<ValidationResult> validations) {
         AnalysisRun run = new AnalysisRun(id, name, repositoryId, traceId, createdAt);
         run.updatedAt = Objects.requireNonNull(updatedAt, "updatedAt");
         run.state = Objects.requireNonNull(state, "state");
@@ -67,6 +69,7 @@ public final class AnalysisRun {
         run.originalBranch = originalBranch;
         run.workingBranch = workingBranch;
         run.failure = failure;
+        run.pullRequestUrl = pullRequestUrl;
         run.changes.addAll(changes);
         run.evidence.addAll(evidence);
         run.assessments.addAll(assessments);
@@ -232,6 +235,21 @@ public final class AnalysisRun {
         transitionTo(RunState.CANCELLED, now);
     }
 
+    /** Records the opened draft pull request and completes the publish flow (FR-027). */
+    public void recordPublished(String pullRequestUrl, Instant now) {
+        requireState(RunState.PUBLISHING, "record published");
+        this.pullRequestUrl = Objects.requireNonNull(pullRequestUrl, "pullRequestUrl");
+        this.failure = null;
+        transitionTo(RunState.PUBLISHED, now);
+    }
+
+    /** Records why publishing failed; the run may be republished from PUBLISH_FAILED. */
+    public void recordPublishFailure(RunFailure runFailure, Instant now) {
+        requireState(RunState.PUBLISHING, "record publish failure");
+        this.failure = Objects.requireNonNull(runFailure, "failure");
+        transitionTo(RunState.PUBLISH_FAILED, now);
+    }
+
     private void requireState(RunState expected, String action) {
         if (state != expected) {
             throw illegalIn(action);
@@ -302,6 +320,10 @@ public final class AnalysisRun {
 
     public Optional<RunFailure> failure() {
         return Optional.ofNullable(failure);
+    }
+
+    public Optional<String> pullRequestUrl() {
+        return Optional.ofNullable(pullRequestUrl);
     }
 
     public List<ApiChange> changes() {

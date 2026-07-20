@@ -5,6 +5,7 @@ import com.contractguard.application.policy.WorkspacePolicy;
 import com.contractguard.application.port.RunEventLog;
 import com.contractguard.application.port.RunRepository;
 import com.contractguard.application.service.AnalysisPipeline;
+import com.contractguard.application.service.RemoteRepositoryService;
 import com.contractguard.application.service.ReportService;
 import com.contractguard.application.service.RunQueryService;
 import com.contractguard.application.service.RunService;
@@ -28,9 +29,9 @@ public class CliConfiguration {
 
     @Bean
     public CliRunner cliRunner(RunRepository runs, RunEventLog events, WorkspacePolicy policy,
-            AnalysisPipeline pipeline, ContractGuardProperties properties,
-            RunQueryService queries, ReportService reports, Clock clock) {
-        RunService synchronousRunService = new RunService(runs, events, policy, pipeline,
+            RemoteRepositoryService remoteRepositories, AnalysisPipeline pipeline,
+            ContractGuardProperties properties, RunQueryService queries, ReportService reports, Clock clock) {
+        RunService synchronousRunService = new RunService(runs, events, policy, remoteRepositories, pipeline,
                 Path.of(properties.specs().directory()), Runnable::run, clock);
         return new CliRunner(synchronousRunService, queries, reports, System.out);
     }

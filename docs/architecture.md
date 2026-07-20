@@ -16,24 +16,30 @@ adapter.web ──────────────► application services o
   │
 application
   ├── service   AnalysisPipeline, ExecutionService, ApprovalService,
-  │             RunService, RunQueryService, ReportService, EvidenceCollector
+  │             RunService, RunQueryService, ReportService, EvidenceCollector,
+  │             RemoteRepositoryService, PublishService  (FR-027)
   ├── agent     ChangeExplainer, ImpactInvestigator, MigrationPlanner,
   │             ImplementationAgent  (LLM-assisted, schema-validated)
   ├── llm       PromptLibrary, LlmJsonClient (retry-once validation)
   ├── policy    WorkspacePolicy, SecretRedactor
   └── port      OpenApiDiffPort, RepositorySearchPort, SourceReaderPort,
                 GitWorkspacePort, PatchPort, BuildValidationPort,
-                LlmGateway, JsonCodec, RunRepository, RunEventLog, ArtifactStore
+                LlmGateway, JsonCodec, RunRepository, RunEventLog, ArtifactStore,
+                RemoteGitPort, PullRequestPort, RemoteRepositoryRegistry  (FR-027)
   │
 domain          AnalysisRun (aggregate + state machine), ApiChange,
                 ImpactEvidence, ImpactAssessment, MigrationPlan, Approval,
                 PatchArtifact, ValidationResult, ClassificationPolicy,
-                PlanHasher, typed failures (ContractGuardException/RunFailure)
+                PlanHasher, RemoteRepository, typed failures
+                (ContractGuardException/RunFailure)
   │
-adapters        diff (swagger-parser), search (filesystem), git (CLI),
-                process (allow-listed argv), llm (OpenAI-compatible HTTP +
-                deterministic scripted), persistence (H2), artifacts (files),
-                json (Jackson), web (Spring MVC)
+adapters        diff (swagger-parser), search (filesystem), git (CLI: local +
+                credentialed remote clone/fetch/push), github (PR creation,
+                HTTP), process (allow-listed argv), llm (OpenAI-compatible
+                HTTP + deterministic scripted), persistence (H2/PostgreSQL,
+                Flyway-managed), security (AES-GCM credential cipher),
+                artifacts (files), json (Jackson), web (Spring MVC), cli
+                (headless CI gate)
 ```
 
 ## Workflow state machine
@@ -50,7 +56,13 @@ AWAITING_APPROVAL → REJECTED | PREPARING_BRANCH
 PREPARING_BRANCH → PATCHING → VALIDATING → SUCCEEDED | REPAIRING | FAILED
 REPAIRING → VALIDATING   (structurally at most once)
 any active state → FAILED | CANCELLED
+SUCCEEDED | PUBLISH_FAILED → PUBLISHING → PUBLISHED | PUBLISH_FAILED   (FR-027, human-triggered, retryable)
 ```
+
+`SUCCEEDED` and `PUBLISH_FAILED` are terminal for the analysis/execution
+pipeline but remain publishable: `PublishService` only enters `PUBLISHING`
+from an explicit `POST /runs/{id}/publish`, mirroring the approval gate — a
+remediation is never pushed or opened as a pull request automatically.
 
 ## Determinism vs. agency
 

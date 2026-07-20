@@ -30,11 +30,12 @@ public record RunDocument(
         String id, String name, String repositoryId, String traceId,
         Instant createdAt, Instant updatedAt, String state,
         String oldSpecName, String newSpecName, String oldSpecHash, String newSpecHash,
-        String originalBranch, String workingBranch, Failure failure,
+        String originalBranch, String workingBranch, Failure failure, String pullRequestUrl,
         List<Change> changes, List<Evidence> evidence, List<Assessment> assessments,
         Plan plan, ApprovalDoc approval, List<Patch> patches, List<Validation> validations) {
 
-    public static final int CURRENT_VERSION = 1;
+    /** v2 adds {@code pullRequestUrl} (FR-027); older payloads deserialise it as null. */
+    public static final int CURRENT_VERSION = 2;
 
     public record Failure(String category, String message, boolean mutationOccurred,
             String artifactId, String remediation) {
@@ -81,6 +82,7 @@ public record RunDocument(
                 run.originalBranch(), run.workingBranch(),
                 run.failure().map(f -> new Failure(f.category().name(), f.message(),
                         f.mutationOccurred(), f.artifactId(), f.remediation())).orElse(null),
+                run.pullRequestUrl().orElse(null),
                 run.changes().stream().map(c -> new Change(c.id(), c.type().name(),
                         c.classification().name(), c.method(), c.path(), c.schema(), c.property(),
                         c.oldValue(), c.newValue(), c.reason(), c.rawEvidence(), c.explanation())).toList(),
@@ -111,6 +113,7 @@ public record RunDocument(
                 failure == null ? null : new RunFailure(FailureCategory.valueOf(failure.category()),
                         failure.message(), failure.mutationOccurred(), failure.artifactId(),
                         failure.remediation()),
+                pullRequestUrl,
                 changes.stream().map(c -> new ApiChange(c.id(), ChangeType.valueOf(c.type()),
                         Classification.valueOf(c.classification()), c.method(), c.path(), c.schema(),
                         c.property(), c.oldValue(), c.newValue(), c.reason(), c.rawEvidence(),

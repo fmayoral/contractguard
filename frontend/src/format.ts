@@ -15,12 +15,14 @@ export const ACTIVE_STATES = [
 ];
 
 export function isTerminal(state: string): boolean {
-  return ['SUCCEEDED', 'FAILED', 'REJECTED', 'CANCELLED'].includes(state);
+  return ['SUCCEEDED', 'FAILED', 'REJECTED', 'CANCELLED', 'PUBLISHED', 'PUBLISH_FAILED'].includes(
+    state,
+  );
 }
 
 export function stateTone(state: string): 'ok' | 'bad' | 'warn' | 'busy' {
-  if (state === 'SUCCEEDED') return 'ok';
-  if (state === 'FAILED') return 'bad';
+  if (state === 'SUCCEEDED' || state === 'PUBLISHED') return 'ok';
+  if (state === 'FAILED' || state === 'PUBLISH_FAILED') return 'bad';
   if (state === 'REJECTED' || state === 'CANCELLED') return 'warn';
   if (state === 'AWAITING_APPROVAL') return 'warn';
   return 'busy';

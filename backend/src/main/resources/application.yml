@@ -48,6 +48,10 @@ contractguard:
     command-key: maven-verify
     timeout: 15m
     max-output-bytes: 1000000
+  remote:
+    # Encrypts remote-repository credentials at rest (FR-027); required only
+    # to register a remote repository, not for purely local workspace use.
+    credential-key: ${CONTRACTGUARD_CREDENTIAL_KEY:}
 
 ---
 # Headless CI gate (FR-026): analysis only, JSON report on stdout, exit code

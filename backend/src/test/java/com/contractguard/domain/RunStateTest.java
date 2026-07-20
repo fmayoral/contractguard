@@ -53,11 +53,21 @@ class RunStateTest {
     }
 
     @Test
-    void terminalStatesHaveNoSuccessors() {
+    void deadEndTerminalStatesHaveNoSuccessors() {
         for (RunState terminal : new RunState[] {
-                RunState.SUCCEEDED, RunState.FAILED, RunState.REJECTED, RunState.CANCELLED}) {
+                RunState.FAILED, RunState.REJECTED, RunState.CANCELLED, RunState.PUBLISHED}) {
             assertThat(terminal.isTerminal()).isTrue();
             assertThat(terminal.successors()).isEmpty();
+        }
+    }
+
+    @Test
+    void succeededAndPublishFailedAreTerminalButRemainPublishable() {
+        // FR-027: publishing is a distinct, explicit action a human triggers after
+        // the pipeline already finished — never automatic, and retryable on failure.
+        for (RunState state : new RunState[] {RunState.SUCCEEDED, RunState.PUBLISH_FAILED}) {
+            assertThat(state.isTerminal()).isTrue();
+            assertThat(state.canTransitionTo(RunState.PUBLISHING)).isTrue();
         }
     }
 

@@ -26,14 +26,27 @@ public final class RunDtos {
     }
 
     public record RunSummary(String id, String name, String state, String repositoryId,
-            Instant createdAt, Instant updatedAt, String workingBranch, String failureCategory) {
+            Instant createdAt, Instant updatedAt, String workingBranch, String failureCategory,
+            String pullRequestUrl) {
     }
 
     public record RunDetail(String id, String name, String state, String repositoryId, String traceId,
             Instant createdAt, Instant updatedAt, String oldSpecName, String newSpecName,
             String oldSpecHash, String newSpecHash, String originalBranch, String workingBranch,
-            Failure failure, ApprovalInfo approval, List<Change> changes, List<Evidence> evidence,
-            List<Assessment> assessments, Plan plan, List<Patch> patches, List<Validation> validations) {
+            Failure failure, String pullRequestUrl, ApprovalInfo approval, List<Change> changes,
+            List<Evidence> evidence, List<Assessment> assessments, Plan plan, List<Patch> patches,
+            List<Validation> validations) {
+    }
+
+    public record RegisterRemoteRepositoryRequest(
+            @jakarta.validation.constraints.NotBlank String repositoryId,
+            @jakarta.validation.constraints.NotBlank String cloneUrl,
+            @jakarta.validation.constraints.NotBlank String defaultBranch,
+            @jakarta.validation.constraints.NotBlank String token) {
+    }
+
+    public record RemoteRepositorySummary(String repositoryId, String owner, String name,
+            String defaultBranch, Instant registeredAt) {
     }
 
     public record Failure(String category, String message, boolean mutationOccurred,

@@ -23,9 +23,13 @@ public enum RunState {
     REPAIRING,
     SUCCEEDED,
     FAILED,
-    CANCELLED;
+    CANCELLED,
+    PUBLISHING,
+    PUBLISHED,
+    PUBLISH_FAILED;
 
-    private static final Set<RunState> TERMINAL = EnumSet.of(SUCCEEDED, FAILED, REJECTED, CANCELLED);
+    private static final Set<RunState> TERMINAL =
+            EnumSet.of(SUCCEEDED, FAILED, REJECTED, CANCELLED, PUBLISHED, PUBLISH_FAILED);
 
     public Set<RunState> successors() {
         return switch (this) {
@@ -40,7 +44,12 @@ public enum RunState {
             case PATCHING -> withAbort(VALIDATING);
             case VALIDATING -> withAbort(SUCCEEDED, REPAIRING);
             case REPAIRING -> withAbort(VALIDATING);
-            case SUCCEEDED, FAILED, REJECTED, CANCELLED -> EnumSet.noneOf(RunState.class);
+            // SUCCEEDED/PUBLISH_FAILED are terminal outcomes that remain publishable
+            // on demand (FR-027); publishing is never automatic (no abort states here
+            // since there is nothing left to abort — the run's analysis already finished).
+            case SUCCEEDED, PUBLISH_FAILED -> EnumSet.of(PUBLISHING);
+            case PUBLISHING -> withAbort(PUBLISHED, PUBLISH_FAILED);
+            case FAILED, REJECTED, CANCELLED, PUBLISHED -> EnumSet.noneOf(RunState.class);
         };
     }
 

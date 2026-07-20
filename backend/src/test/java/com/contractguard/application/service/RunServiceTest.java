@@ -1,10 +1,13 @@
 package com.contractguard.application.service;
 
 import com.contractguard.application.policy.WorkspacePolicy;
+import com.contractguard.application.port.RemoteGitPort;
+import com.contractguard.application.port.RemoteRepositoryRegistry;
 import com.contractguard.domain.AnalysisRun;
 import com.contractguard.domain.ContractGuardException;
 import com.contractguard.domain.FailureCategory;
 import com.contractguard.domain.Fixtures;
+import com.contractguard.domain.RemoteRepository;
 import com.contractguard.domain.RunState;
 import com.contractguard.testsupport.InMemoryRunEventLog;
 import com.contractguard.testsupport.InMemoryRunRepository;
@@ -18,6 +21,7 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -42,8 +46,27 @@ class RunServiceTest {
         Files.writeString(specsDir.resolve("new.yaml"), "openapi: 3.0.3");
         runs = new InMemoryRunRepository();
         events = new InMemoryRunEventLog();
+        // No remote repositories registered: ensureLocalClone must be a no-op for local workspace runs.
+        RemoteRepositoryRegistry noRemotes = new RemoteRepositoryRegistry() {
+            @Override
+            public void register(RemoteRepository repository, String token) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public Optional<RemoteRepository> find(String repositoryId) {
+                return Optional.empty();
+            }
+
+            @Override
+            public Optional<String> credentialFor(String repositoryId) {
+                return Optional.empty();
+            }
+        };
+        RemoteRepositoryService remoteRepositories =
+                new RemoteRepositoryService(noRemotes, (RemoteGitPort) null, Clock.systemUTC());
         // The executor records instead of running: creation must not block on analysis.
-        service = new RunService(runs, events, new WorkspacePolicy(List.of(workspace)),
+        service = new RunService(runs, events, new WorkspacePolicy(List.of(workspace)), remoteRepositories,
                 null, specsDir, submitted::add, Clock.systemUTC());
     }
 

@@ -68,4 +68,20 @@ public final class Fixtures {
         run.transitionTo(RunState.AWAITING_APPROVAL, T0);
         return run;
     }
+
+    /** Drives a run all the way to SUCCEEDED with a branch and one applied, validated patch. */
+    public static AnalysisRun runSucceeded() {
+        AnalysisRun run = runAwaitingApproval();
+        String hash = run.plan().orElseThrow().hash();
+        run.recordApproval(new Approval(run.id(), hash, Approval.Decision.APPROVED, T0), T0);
+        run.transitionTo(RunState.PREPARING_BRANCH, T0);
+        run.recordBranches("main", "contractguard/run-1", T0);
+        run.transitionTo(RunState.PATCHING, T0);
+        run.recordPatch(patch("p-1", 1), T0);
+        run.markPatchApplied("p-1", T0);
+        run.transitionTo(RunState.VALIDATING, T0);
+        run.recordValidation(validation(1, true), T0);
+        run.transitionTo(RunState.SUCCEEDED, T0);
+        return run;
+    }
 }

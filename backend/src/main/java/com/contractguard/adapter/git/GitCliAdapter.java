@@ -31,6 +31,8 @@ public class GitCliAdapter implements GitWorkspacePort, PatchPort {
     private static final Duration GIT_TIMEOUT = Duration.ofSeconds(30);
     private static final int MAX_OUTPUT = 200_000;
     private static final int CONTEXT_LINES = 3;
+    private static final String BOT_NAME = "ContractGuard";
+    private static final String BOT_EMAIL = "contractguard@localhost";
 
     private final WorkspacePolicy policy;
     private final ProcessRunner processRunner;
@@ -63,6 +65,13 @@ public class GitCliAdapter implements GitWorkspacePort, PatchPort {
     public void createBranch(String repositoryId, String branchName) {
         Path repo = policy.resolveRepository(repositoryId);
         git(repo, "checkout", "-b", branchName);
+    }
+
+    @Override
+    public void commit(String repositoryId, String message) {
+        Path repo = policy.resolveRepository(repositoryId);
+        git(repo, "add", "-A");
+        git(repo, "-c", "user.name=" + BOT_NAME, "-c", "user.email=" + BOT_EMAIL, "commit", "-m", message);
     }
 
     @Override

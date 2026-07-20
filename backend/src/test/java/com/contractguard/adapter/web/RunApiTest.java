@@ -2,6 +2,7 @@ package com.contractguard.adapter.web;
 
 import com.contractguard.application.service.ApprovalService;
 import com.contractguard.application.service.ExecutionService;
+import com.contractguard.application.service.PublishService;
 import com.contractguard.application.service.ReportService;
 import com.contractguard.application.service.RunQueryService;
 import com.contractguard.application.service.RunService;
@@ -49,6 +50,9 @@ class RunApiTest {
 
     @MockBean
     private ExecutionService executions;
+
+    @MockBean
+    private PublishService publishing;
 
     @MockBean
     private ReportService reports;
@@ -146,6 +150,28 @@ class RunApiTest {
         when(executions.beginExecution(run.id())).thenReturn(run);
 
         mvc.perform(post("/api/runs/" + run.id() + "/execute"))
+                .andExpect(status().isAccepted());
+        verify(executor).execute(any());
+    }
+
+    @Test
+    void publishForUnregisteredRepositoryGets400() throws Exception {
+        when(publishing.beginPublish("run-1")).thenThrow(ContractGuardException.of(
+                FailureCategory.REMOTE_REPOSITORY_NOT_REGISTERED,
+                "repository 'customer-consumer' is not registered for remote publishing",
+                "Register the repository via POST /api/repositories/remote first."));
+
+        mvc.perform(post("/api/runs/run-1/publish"))
+                .andExpect(status().isBadRequest());
+        verify(executor, never()).execute(any());
+    }
+
+    @Test
+    void publishAfterSuccessIsAcceptedAndScheduled() throws Exception {
+        AnalysisRun run = Fixtures.runAwaitingApproval();
+        when(publishing.beginPublish(run.id())).thenReturn(run);
+
+        mvc.perform(post("/api/runs/" + run.id() + "/publish"))
                 .andExpect(status().isAccepted());
         verify(executor).execute(any());
     }

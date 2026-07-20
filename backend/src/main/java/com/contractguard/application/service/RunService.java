@@ -26,16 +26,19 @@ public class RunService {
     private final RunRepository runs;
     private final RunEventLog events;
     private final WorkspacePolicy workspacePolicy;
+    private final RemoteRepositoryService remoteRepositories;
     private final AnalysisPipeline pipeline;
     private final Path specsDirectory;
     private final Executor executor;
     private final Clock clock;
 
     public RunService(RunRepository runs, RunEventLog events, WorkspacePolicy workspacePolicy,
-            AnalysisPipeline pipeline, Path specsDirectory, Executor executor, Clock clock) {
+            RemoteRepositoryService remoteRepositories, AnalysisPipeline pipeline, Path specsDirectory,
+            Executor executor, Clock clock) {
         this.runs = runs;
         this.events = events;
         this.workspacePolicy = workspacePolicy;
+        this.remoteRepositories = remoteRepositories;
         this.pipeline = pipeline;
         this.specsDirectory = specsDirectory.toAbsolutePath().normalize();
         this.executor = executor;
@@ -45,13 +48,16 @@ public class RunService {
     public AnalysisRun createRun(String name, String repositoryId, String oldSpecFile, String newSpecFile) {
         Path oldSpec = resolveSpec(oldSpecFile);
         Path newSpec = resolveSpec(newSpecFile);
-        workspacePolicy.resolveRepository(repositoryId);
         boolean busy = !runs.findActiveByRepository(repositoryId).isEmpty();
         if (busy) {
             throw ContractGuardException.of(FailureCategory.REPOSITORY_BUSY,
                     "repository '%s' is used by another active run".formatted(repositoryId),
                     "Wait for the active run to finish or cancel it.");
         }
+        // Remote repos clone/refresh into a cache dir that is itself a workspace root, so the
+        // resolve below (and everything downstream) sees an ordinary local repository (ADR-0007).
+        remoteRepositories.ensureLocalClone(repositoryId);
+        workspacePolicy.resolveRepository(repositoryId);
         String runId = Ids.newId();
         String runName = name == null || name.isBlank()
                 ? "run-" + Ids.shortId(runId) : name.strip();

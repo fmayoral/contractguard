@@ -128,6 +128,31 @@ gates potentially-breaking and unanalysed change categories) or `none`
 [integrations/gitlab](integrations/gitlab/contractguard-gate.yml); the
 consumer checkout must be a Git repository with a Maven wrapper.
 
+## Remote repositories
+
+Consumers do not need a pre-existing local checkout. Register a GitHub
+repository over HTTPS with a personal access token (repo scope):
+
+```bash
+export CONTRACTGUARD_CREDENTIAL_KEY=$(openssl rand -base64 32)  # server-side master key
+curl -X POST http://localhost:7080/api/repositories/remote \
+  -H 'Content-Type: application/json' \
+  -d '{"repositoryId":"customer-consumer",
+       "cloneUrl":"https://github.com/acme/widgets",
+       "defaultBranch":"main","token":"ghp_..."}'
+```
+
+Creating a run against `customer-consumer` now clones (or refreshes) it into
+`storage.directory/remote-cache/` automatically — everything downstream
+(diff, evidence search, execution) works exactly as it does for a local
+workspace repository. Once a run reaches `SUCCEEDED`, `POST
+/api/runs/{id}/publish` commits, pushes the working branch and opens a draft
+pull request; nothing is ever pushed without that explicit call. See
+[ADR-0007](docs/adr/0007-remote-repository-access.md) for the credential and
+transport design, and [docs/demo-script.md §9](docs/demo-script.md#9-test-remote-repositories-and-publishing-fr-027)
+for a full walkthrough against a real GitHub repository. There is no
+dashboard UI for this yet — see Known limitations below.
+
 ## Using a real LLM
 
 Automated tests and the default demo never call a live model. To run the
@@ -156,6 +181,7 @@ All settings live under `contractguard.*` in
 | `llm.max-workflow-steps` | 20 | Investigator tool-loop budget |
 | `validation.command-key` | `maven-verify` | Only allow-listed validation command |
 | `validation.timeout` / `validation.max-output-bytes` | 15m / 1MB | Build bounds |
+| `remote.credential-key` | env-driven (`CONTRACTGUARD_CREDENTIAL_KEY`) | AES-256-GCM master key encrypting remote-repository tokens at rest |
 
 ### Database
 
@@ -212,7 +238,12 @@ docs/          Specification, architecture, ADRs, demo script, roadmap
 - Patches are computed by the backend, verified with `git apply --check`,
   restricted to approved files, and rejected if credential-shaped content
   appears. All mutations happen on `contractguard/run-<id>`; the original
-  branch is never touched and no remote operation exists in the codebase.
+  branch is never touched.
+- Remote operations (clone, fetch, push, opening a pull request) only exist
+  for repositories explicitly registered via `POST /api/repositories/remote`,
+  and pushing/opening a PR is a separate, explicit `POST
+  /runs/{id}/publish` call — never automatic. Credentials are AES-256-GCM
+  encrypted at rest and never appear in a process argument list (ADR-0007).
 - Process execution uses fixed argument arrays with timeouts and output caps;
   model output is never executed.
 - At most one repair attempt after a failed validation, enforced structurally.
@@ -227,6 +258,10 @@ docs/          Specification, architecture, ADRs, demo script, roadmap
 - One repository, Maven builds and OpenAPI 3.x only (see the specification, §4).
 - Resuming a run interrupted mid-flight is not supported; such runs are
   finalised as FAILED on restart with an explanatory message.
+- Remote repository support (FR-027) is GitHub-only, HTTPS-token-only: no
+  GitLab/Bitbucket and no SSH yet. The draft pull request links evidence back
+  to GitHub blob URLs rather than a ContractGuard report link, since the
+  server binds to loopback only and has no public URL by default.
 
 ## Documentation
 

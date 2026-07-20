@@ -4,6 +4,7 @@ import com.contractguard.adapter.web.dto.DtoMapper;
 import com.contractguard.adapter.web.dto.RunDtos;
 import com.contractguard.application.service.ApprovalService;
 import com.contractguard.application.service.ExecutionService;
+import com.contractguard.application.service.PublishService;
 import com.contractguard.application.service.ReportService;
 import com.contractguard.application.service.RunQueryService;
 import com.contractguard.application.service.RunService;
@@ -35,15 +36,18 @@ public class RunController {
     private final RunQueryService queries;
     private final ApprovalService approvals;
     private final ExecutionService executions;
+    private final PublishService publishing;
     private final ReportService reports;
     private final ExecutorService executor;
 
     public RunController(RunService runService, RunQueryService queries, ApprovalService approvals,
-            ExecutionService executions, ReportService reports, ExecutorService executor) {
+            ExecutionService executions, PublishService publishing, ReportService reports,
+            ExecutorService executor) {
         this.runService = runService;
         this.queries = queries;
         this.approvals = approvals;
         this.executions = executions;
+        this.publishing = publishing;
         this.reports = reports;
         this.executor = executor;
     }
@@ -104,6 +108,13 @@ public class RunController {
     public ResponseEntity<RunDtos.RunSummary> execute(@PathVariable String runId) {
         AnalysisRun run = executions.beginExecution(runId);
         executor.execute(() -> executions.execute(runId));
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(DtoMapper.toSummary(run));
+    }
+
+    @PostMapping("/runs/{runId}/publish")
+    public ResponseEntity<RunDtos.RunSummary> publish(@PathVariable String runId) {
+        AnalysisRun run = publishing.beginPublish(runId);
+        executor.execute(() -> publishing.publish(runId));
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(DtoMapper.toSummary(run));
     }
 

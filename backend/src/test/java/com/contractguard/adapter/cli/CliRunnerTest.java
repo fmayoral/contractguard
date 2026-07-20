@@ -12,11 +12,15 @@ import com.contractguard.application.llm.LlmJsonClient;
 import com.contractguard.application.llm.PromptLibrary;
 import com.contractguard.application.policy.WorkspacePolicy;
 import com.contractguard.application.port.ArtifactStore;
+import com.contractguard.application.port.RemoteGitPort;
+import com.contractguard.application.port.RemoteRepositoryRegistry;
 import com.contractguard.application.service.AnalysisPipeline;
 import com.contractguard.application.service.EvidenceCollector;
+import com.contractguard.application.service.RemoteRepositoryService;
 import com.contractguard.application.service.ReportService;
 import com.contractguard.application.service.RunQueryService;
 import com.contractguard.application.service.RunService;
+import com.contractguard.domain.RemoteRepository;
 import com.contractguard.testsupport.InMemoryRunEventLog;
 import com.contractguard.testsupport.InMemoryRunRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -96,7 +100,25 @@ class CliRunnerTest {
                 artifacts.keySet().removeIf(key -> key.startsWith(runId + "/"));
             }
         };
-        RunService runService = new RunService(runs, events, policy, pipeline,
+        RemoteRepositoryRegistry noRemotes = new RemoteRepositoryRegistry() {
+            @Override
+            public void register(RemoteRepository repository, String token) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public Optional<RemoteRepository> find(String repositoryId) {
+                return Optional.empty();
+            }
+
+            @Override
+            public Optional<String> credentialFor(String repositoryId) {
+                return Optional.empty();
+            }
+        };
+        RemoteRepositoryService remoteRepositories =
+                new RemoteRepositoryService(noRemotes, (RemoteGitPort) null, clock);
+        RunService runService = new RunService(runs, events, policy, remoteRepositories, pipeline,
                 SPECS_DIR, Runnable::run, clock);
         cli = new CliRunner(runService,
                 new RunQueryService(runs, events, artifactStore),

@@ -3,16 +3,20 @@ package com.contractguard.config;
 import com.contractguard.adapter.artifacts.FilesystemArtifactStore;
 import com.contractguard.adapter.diff.SwaggerOpenApiDiffAdapter;
 import com.contractguard.adapter.git.GitCliAdapter;
+import com.contractguard.adapter.git.RemoteGitCliAdapter;
+import com.contractguard.adapter.github.GitHubPullRequestAdapter;
 import com.contractguard.adapter.process.MavenBuildValidationAdapter;
 import com.contractguard.adapter.process.ProcessRunner;
 import com.contractguard.adapter.json.JacksonJsonCodec;
 import com.contractguard.adapter.llm.LlmSettings;
 import com.contractguard.adapter.llm.OpenAiCompatibleLlmGateway;
 import com.contractguard.adapter.llm.ScriptedLlmGateway;
+import com.contractguard.adapter.persistence.JdbcRemoteRepositoryRegistry;
 import com.contractguard.adapter.persistence.JdbcRunEventLog;
 import com.contractguard.adapter.persistence.JdbcRunRepository;
 import com.contractguard.adapter.search.BoundedSourceReaderAdapter;
 import com.contractguard.adapter.search.FilesystemRepositorySearchAdapter;
+import com.contractguard.adapter.security.AesGcmCredentialCipher;
 import com.contractguard.application.agent.ChangeExplainer;
 import com.contractguard.application.agent.ImpactInvestigator;
 import com.contractguard.application.agent.ImplementationAgent;
@@ -27,6 +31,9 @@ import com.contractguard.application.port.JsonCodec;
 import com.contractguard.application.port.PatchPort;
 import com.contractguard.application.port.LlmGateway;
 import com.contractguard.application.port.OpenApiDiffPort;
+import com.contractguard.application.port.PullRequestPort;
+import com.contractguard.application.port.RemoteGitPort;
+import com.contractguard.application.port.RemoteRepositoryRegistry;
 import com.contractguard.application.port.RepositorySearchPort;
 import com.contractguard.application.port.RunEventLog;
 import com.contractguard.application.port.RunRepository;
@@ -35,6 +42,8 @@ import com.contractguard.application.service.AnalysisPipeline;
 import com.contractguard.application.service.ApprovalService;
 import com.contractguard.application.service.EvidenceCollector;
 import com.contractguard.application.service.ExecutionService;
+import com.contractguard.application.service.PublishService;
+import com.contractguard.application.service.RemoteRepositoryService;
 import com.contractguard.application.service.ReportService;
 import com.contractguard.application.service.RetentionService;
 import com.contractguard.application.service.RunQueryService;
@@ -49,6 +58,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.nio.file.Path;
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -72,7 +82,17 @@ public class ApplicationConfiguration {
 
     @Bean
     public WorkspacePolicy workspacePolicy(ContractGuardProperties properties) {
-        return new WorkspacePolicy(properties.workspace().roots().stream().map(Path::of).toList());
+        // The remote-repository clone cache is itself a workspace root, so once a
+        // remote repo is cloned there it is an ordinary local repository to every
+        // other adapter — diff, search and execution need no remote-aware branch (ADR-0007).
+        List<Path> roots = new ArrayList<>(
+                properties.workspace().roots().stream().map(Path::of).toList());
+        roots.add(remoteCacheDirectory(properties));
+        return new WorkspacePolicy(roots);
+    }
+
+    private static Path remoteCacheDirectory(ContractGuardProperties properties) {
+        return Path.of(properties.storage().directory()).resolve("remote-cache");
     }
 
     @Bean
@@ -168,10 +188,43 @@ public class ApplicationConfiguration {
 
     @Bean
     public RunService runService(RunRepository runs, RunEventLog events, WorkspacePolicy policy,
-            AnalysisPipeline pipeline, ContractGuardProperties properties,
-            ExecutorService analysisExecutor, Clock clock) {
-        return new RunService(runs, events, policy, pipeline,
+            RemoteRepositoryService remoteRepositories, AnalysisPipeline pipeline,
+            ContractGuardProperties properties, ExecutorService analysisExecutor, Clock clock) {
+        return new RunService(runs, events, policy, remoteRepositories, pipeline,
                 Path.of(properties.specs().directory()), analysisExecutor, clock);
+    }
+
+    @Bean
+    public AesGcmCredentialCipher credentialCipher(ContractGuardProperties properties) {
+        return new AesGcmCredentialCipher(properties.remote().credentialKey());
+    }
+
+    @Bean
+    public RemoteRepositoryRegistry remoteRepositoryRegistry(JdbcTemplate jdbc, AesGcmCredentialCipher cipher) {
+        return new JdbcRemoteRepositoryRegistry(jdbc, cipher);
+    }
+
+    @Bean
+    public RemoteGitPort remoteGitPort(ProcessRunner processRunner, ContractGuardProperties properties) {
+        return new RemoteGitCliAdapter(remoteCacheDirectory(properties), processRunner);
+    }
+
+    @Bean
+    public PullRequestPort pullRequestPort() {
+        return new GitHubPullRequestAdapter();
+    }
+
+    @Bean
+    public RemoteRepositoryService remoteRepositoryService(RemoteRepositoryRegistry registry,
+            RemoteGitPort remoteGit, Clock clock) {
+        return new RemoteRepositoryService(registry, remoteGit, clock);
+    }
+
+    @Bean
+    public PublishService publishService(RunRepository runs, RunEventLog events, GitWorkspacePort git,
+            RemoteGitPort remoteGit, PullRequestPort pullRequests, RemoteRepositoryRegistry remoteRepositories,
+            Clock clock) {
+        return new PublishService(runs, events, git, remoteGit, pullRequests, remoteRepositories, clock);
     }
 
     @Bean

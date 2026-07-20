@@ -1,0 +1,109 @@
+package com.contractguard.application.service;
+
+import com.contractguard.application.port.GitWorkspacePort;
+import com.contractguard.application.port.PullRequestPort;
+import com.contractguard.application.port.RemoteGitPort;
+import com.contractguard.application.port.RemoteRepositoryRegistry;
+import com.contractguard.application.port.RunEventLog;
+import com.contractguard.application.port.RunRepository;
+import com.contractguard.domain.AnalysisRun;
+import com.contractguard.domain.ContractGuardException;
+import com.contractguard.domain.FailureCategory;
+import com.contractguard.domain.Ids;
+import com.contractguard.domain.RemoteRepository;
+import com.contractguard.domain.RunFailure;
+import com.contractguard.domain.RunState;
+
+import java.time.Clock;
+
+/**
+ * Pushes an already-validated remediation branch and opens a draft pull
+ * request (FR-027). Publishing is a distinct, explicit human action — never
+ * automatic — mirroring the approval gate that guards execution.
+ */
+public class PublishService {
+
+    private final RunRepository runs;
+    private final RunEventLog events;
+    private final GitWorkspacePort git;
+    private final RemoteGitPort remoteGit;
+    private final PullRequestPort pullRequests;
+    private final RemoteRepositoryRegistry remoteRepositories;
+    private final Clock clock;
+
+    public PublishService(RunRepository runs, RunEventLog events, GitWorkspacePort git,
+            RemoteGitPort remoteGit, PullRequestPort pullRequests,
+            RemoteRepositoryRegistry remoteRepositories, Clock clock) {
+        this.runs = runs;
+        this.events = events;
+        this.git = git;
+        this.remoteGit = remoteGit;
+        this.pullRequests = pullRequests;
+        this.remoteRepositories = remoteRepositories;
+        this.clock = clock;
+    }
+
+    /** Precondition check + state move; called synchronously by the API before async publishing. */
+    public AnalysisRun beginPublish(String runId) {
+        AnalysisRun run = RunLookup.require(runs, runId);
+        RemoteRepository remote = requireRemote(run);
+        run.transitionTo(RunState.PUBLISHING, clock.instant());
+        runs.save(run);
+        events.append(run.id(), "publish", "STARTED",
+                "Publishing %s to %s/%s".formatted(run.workingBranch(), remote.owner(), remote.name()),
+                "{\"kind\":\"tool\"}");
+        return run;
+    }
+
+    public void publish(String runId) {
+        AnalysisRun run = RunLookup.require(runs, runId);
+        try {
+            RemoteRepository remote = requireRemote(run);
+            String credential = remoteRepositories.credentialFor(run.repositoryId()).orElseThrow(() ->
+                    ContractGuardException.of(FailureCategory.CREDENTIAL_KEY_NOT_CONFIGURED,
+                            "no stored credential for repository '%s'".formatted(run.repositoryId()),
+                            "Re-register the repository with a credential."));
+
+            git.commit(run.repositoryId(), "ContractGuard: remediate %s (run %s)"
+                    .formatted(run.name(), Ids.shortId(run.id())));
+            events.append(run.id(), "publish", "COMMITTED",
+                    "Committed working branch " + run.workingBranch(), "{\"kind\":\"tool\"}");
+
+            remoteGit.push(run.repositoryId(), run.workingBranch(), remote, credential);
+            events.append(run.id(), "publish", "PUSHED",
+                    "Pushed %s to origin".formatted(run.workingBranch()), "{\"kind\":\"tool\"}");
+
+            String body = PullRequestBodyRenderer.render(run, remote);
+            PullRequestPort.PullRequestResult result = pullRequests.openDraftPullRequest(
+                    new PullRequestPort.PullRequestRequest(remote.owner(), remote.name(), run.workingBranch(),
+                            remote.defaultBranch(), "ContractGuard: " + run.name(), body, credential));
+
+            run.recordPublished(result.url(), clock.instant());
+            runs.save(run);
+            events.append(run.id(), "publish", "PR_OPENED",
+                    "Draft pull request opened: " + result.url(), "{\"kind\":\"tool\"}");
+        } catch (ContractGuardException e) {
+            failPublish(run, e.failure());
+        } catch (RuntimeException e) {
+            failPublish(run, new RunFailure(FailureCategory.INTERNAL_ERROR,
+                    "unexpected publish error: " + e.getMessage(), true, null,
+                    "Inspect the application logs; the remote branch may already be pushed."));
+        }
+    }
+
+    private RemoteRepository requireRemote(AnalysisRun run) {
+        return remoteRepositories.find(run.repositoryId()).orElseThrow(() ->
+                ContractGuardException.of(FailureCategory.REMOTE_REPOSITORY_NOT_REGISTERED,
+                        "repository '%s' is not registered for remote publishing".formatted(run.repositoryId()),
+                        "Register the repository via POST /api/repositories/remote first."));
+    }
+
+    private void failPublish(AnalysisRun run, RunFailure failure) {
+        if (run.state() == RunState.PUBLISHING) {
+            run.recordPublishFailure(failure, clock.instant());
+            runs.save(run);
+        }
+        events.append(run.id(), "publish", "FAILED",
+                "%s: %s".formatted(failure.category(), failure.message()), "{\"kind\":\"system\"}");
+    }
+}

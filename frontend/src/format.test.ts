@@ -17,7 +17,10 @@ describe('state helpers', () => {
     expect(isTerminal('FAILED')).toBe(true);
     expect(isTerminal('REJECTED')).toBe(true);
     expect(isTerminal('CANCELLED')).toBe(true);
+    expect(isTerminal('PUBLISHED')).toBe(true);
+    expect(isTerminal('PUBLISH_FAILED')).toBe(true);
     expect(isTerminal('VALIDATING')).toBe(false);
+    expect(isTerminal('PUBLISHING')).toBe(false);
   });
 
   it('maps run states to tones', () => {
@@ -26,6 +29,9 @@ describe('state helpers', () => {
     expect(stateTone('REJECTED')).toBe('warn');
     expect(stateTone('AWAITING_APPROVAL')).toBe('warn');
     expect(stateTone('DIFFING')).toBe('busy');
+    expect(stateTone('PUBLISHED')).toBe('ok');
+    expect(stateTone('PUBLISH_FAILED')).toBe('bad');
+    expect(stateTone('PUBLISHING')).toBe('busy');
   });
 
   it('maps classifications and severities to tones', () => {

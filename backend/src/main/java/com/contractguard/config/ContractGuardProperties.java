@@ -12,7 +12,8 @@ public record ContractGuardProperties(
         Storage storage,
         Specs specs,
         Llm llm,
-        Validation validation) {
+        Validation validation,
+        Remote remote) {
 
     public record Workspace(List<String> roots) {
     }
@@ -29,5 +30,9 @@ public record ContractGuardProperties(
     }
 
     public record Validation(String commandKey, Duration timeout, int maxOutputBytes) {
+    }
+
+    /** {@code credentialKey} encrypts remote-repository tokens at rest (FR-027, ADR-0007). */
+    public record Remote(String credentialKey) {
     }
 }

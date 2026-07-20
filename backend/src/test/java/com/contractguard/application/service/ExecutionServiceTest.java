@@ -69,6 +69,11 @@ class ExecutionServiceTest {
         public void createBranch(String repositoryId, String branchName) {
             createdBranches.add(branchName);
         }
+
+        @Override
+        public void commit(String repositoryId, String message) {
+            // not exercised by ExecutionService; FR-027 publish flow has its own tests
+        }
     }
 
     static class FakePatch implements PatchPort {

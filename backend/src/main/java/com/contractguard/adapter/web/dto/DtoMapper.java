@@ -15,7 +15,8 @@ public final class DtoMapper {
     public static RunDtos.RunSummary toSummary(AnalysisRun run) {
         return new RunDtos.RunSummary(run.id(), run.name(), run.state().name(), run.repositoryId(),
                 run.createdAt(), run.updatedAt(), run.workingBranch(),
-                run.failure().map(f -> f.category().name()).orElse(null));
+                run.failure().map(f -> f.category().name()).orElse(null),
+                run.pullRequestUrl().orElse(null));
     }
 
     public static RunDtos.RunDetail toDetail(AnalysisRun run) {
@@ -25,6 +26,7 @@ public final class DtoMapper {
                 run.originalBranch(), run.workingBranch(),
                 run.failure().map(f -> new RunDtos.Failure(f.category().name(), f.message(),
                         f.mutationOccurred(), f.artifactId(), f.remediation())).orElse(null),
+                run.pullRequestUrl().orElse(null),
                 run.approval().map(a -> new RunDtos.ApprovalInfo(a.decision().name(), a.planHash(),
                         a.decidedAt())).orElse(null),
                 toChanges(run), toEvidence(run), toAssessments(run),

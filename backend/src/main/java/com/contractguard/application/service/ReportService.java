@@ -216,6 +216,7 @@ public class ReportService {
     private void renderOutcomeSection(StringBuilder md, AnalysisRun run) {
         md.append("## Outcome\n\n");
         md.append("Final state: **").append(run.state()).append("**\n\n");
+        run.pullRequestUrl().ifPresent(url -> md.append("- Pull request: ").append(url).append("\n\n"));
         run.failure().ifPresent(failure -> md.append("- Failure: ").append(failure.category())
                 .append(" — ").append(failure.message()).append('\n')
                 .append("- Repository mutated: ").append(failure.mutationOccurred() ? "yes" : "no")

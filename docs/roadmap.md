@@ -45,7 +45,7 @@ Each phase is releasable on its own; later phases must not be prerequisites for 
 
 ## 5. Phase 1 — Enterprise Foundations
 
-### FR-023 — Durable Persistence
+### FR-023 — Durable Persistence (completed)
 Replace the embedded store with PostgreSQL behind the existing `RunRepository`/`RunEventLog`/`ArtifactStore` ports. Schema managed by Flyway migrations from day one; `RunDocument.CURRENT_VERSION` governs document upgrades. H2 remains for tests and single-user local mode. Configurable retention policy for runs and artifacts.
 
 ### FR-024 — Authentication and Authorisation
@@ -54,11 +54,11 @@ OIDC single sign-on (Entra ID, Okta, Keycloak). Three roles: **Viewer** (read ru
 ### FR-025 — Audit Trail
 Every state transition, approval decision and repository mutation is written to an append-only audit log with principal, timestamp, run ID and plan hash. Exportable as JSON; immutable through the API.
 
-### FR-026 — Headless CLI and CI Gate
+### FR-026 — Headless CLI and CI Gate (completed)
 A `contractguard` CLI that runs analysis (no remediation) against two specs and a consumer checkout, emits the JSON report, and exits non-zero on BREAKING changes above a configurable severity threshold. Packaged as a GitHub Action and GitLab CI template so a provider's PR that edits an OpenAPI spec fails fast with the impact table as a PR comment.
 
-### FR-027 — Remote Repository Support
-Clone/fetch consumer repositories over HTTPS/SSH with scoped, encrypted-at-rest credentials, replacing the workspace-directory-only model. Remediation branches can be pushed and opened as **draft pull requests** (GitHub/GitLab/Bitbucket) instead of being left as local branches; the PR body embeds the report and evidence links.
+### FR-027 — Remote Repository Support (completed for GitHub over HTTPS; GitLab/Bitbucket/SSH remain future work)
+Clone/fetch consumer repositories over HTTPS with scoped, encrypted-at-rest credentials, replacing the workspace-directory-only model. Remediation branches are pushed and opened as **draft pull requests** on GitHub instead of being left as local branches; the PR body embeds the plan hash and evidence links (as GitHub blob links into the target repository, since the server has no public URL of its own — ADR-0007). GitLab/Bitbucket and SSH access are additive behind the same `RemoteGitPort`/`PullRequestPort` ports, not yet built.
 
 ### FR-028 — LLM Provider Matrix and Cost Controls
 First-class adapters for Anthropic (direct + Bedrock), Azure OpenAI and Ollama alongside the existing OpenAI-compatible gateway. Per-run token and cost accounting persisted with the run and shown in UI and reports; org-level monthly budget with hard stop. Mock mode remains the test default.

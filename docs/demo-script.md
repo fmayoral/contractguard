@@ -97,6 +97,67 @@ Open <http://localhost:5173>.
 - **Run history**: restart the backend — completed runs and their reports
   remain available.
 
+## 9. Test remote repositories and publishing (FR-027)
+
+There is no dashboard UI for this yet (see "Known limitations" in the root
+README) — everything below is `curl` against the running backend. You need a
+real GitHub repository you control and a personal access token with `repo`
+scope (a small throwaway repo is ideal, since ContractGuard will open a real
+draft PR against it).
+
+1. Generate a master key for encrypting stored credentials and restart the
+   backend with it set (it can also just be exported before step 3 of
+   section 3 above):
+
+   ```bash
+   export CONTRACTGUARD_CREDENTIAL_KEY=$(openssl rand -base64 32)
+   ```
+
+2. Register the repository:
+
+   ```bash
+   curl -s -X POST http://127.0.0.1:7080/api/repositories/remote \
+     -H 'Content-Type: application/json' \
+     -d '{"repositoryId":"my-remote-consumer",
+          "cloneUrl":"https://github.com/<you>/<repo>",
+          "defaultBranch":"main","token":"ghp_..."}' | jq
+   ```
+
+   Expect `201` with `{repositoryId, owner, name, defaultBranch, registeredAt}`
+   — the token itself is never echoed back or logged.
+
+3. Create a run against `my-remote-consumer` exactly as in section 5 (`POST
+   /api/runs`, or once the frontend supports remote repos, the **New
+   analysis run** picker). The first request triggers a clone into
+   `storage.directory/remote-cache/my-remote-consumer/`; watch the backend
+   log for `Migrating schema` / clone activity, or just check the directory
+   appears on disk.
+4. Approve and execute as in section 6. The run should reach `SUCCEEDED`.
+5. Publish:
+
+   ```bash
+   curl -s -X POST http://127.0.0.1:7080/api/runs/<runId>/publish | jq
+   ```
+
+   Poll `GET /api/runs/<runId>` until `state` is `PUBLISHED`; the response
+   includes `pullRequestUrl`. Open it — it should be a **draft** PR with the
+   detected changes and evidence linked back into your repository at the
+   remediation branch.
+6. Failure path worth exercising: revoke the token (or use one without
+   `repo` scope) and publish again — expect `state: PUBLISH_FAILED` and a
+   `publish`/`FAILED` event in the timeline; re-running `POST
+   .../publish` with a corrected token should succeed without re-running
+   analysis or execution.
+
+<!-- TODO(fernando): once the frontend gets a remote-repository registration
+     form and a Publish button (see README "Known limitations"), capture and
+     add screenshots here, following the docs/screenshots/<n>-<slug>.png
+     convention used in the root README:
+       - docs/screenshots/6-register-remote-repository.png (registration form)
+       - docs/screenshots/7-publish-and-pull-request.png (Publish button +
+         resulting pullRequestUrl / draft PR link in the run detail view)
+     Until then this section stays curl-only. -->
+
 ## Troubleshooting
 
 | Symptom | Fix |
@@ -106,3 +167,6 @@ Open <http://localhost:5173>.
 | Validation timeout on first run | The consumer's first `mvnw verify` downloads dependencies; re-run, or raise `contractguard.validation.timeout` |
 | Run failed with `REPOSITORY_BUSY` | Another run is active on the repository; wait or restart the backend |
 | Stale demo state | Re-run `scripts/reset-demo.sh` |
+| `CREDENTIAL_KEY_NOT_CONFIGURED` registering a remote repository | Set `CONTRACTGUARD_CREDENTIAL_KEY` (base64, 32 bytes — `openssl rand -base64 32`) before registering |
+| `REMOTE_REPOSITORY_NOT_REGISTERED` on publish | The run's `repositoryId` was never registered via `POST /api/repositories/remote`; local-workspace runs cannot be published |
+| Publish fails with `REMOTE_GIT_FAILURE` | Check the token has `repo` scope and the default branch name is correct; the run moves to `PUBLISH_FAILED` and can be retried with `POST .../publish` once fixed |

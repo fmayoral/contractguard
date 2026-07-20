@@ -17,7 +17,7 @@ import java.util.Optional;
 public class JdbcRunRepository implements RunRepository {
 
     private static final List<String> TERMINAL_STATES =
-            List.of("SUCCEEDED", "FAILED", "REJECTED", "CANCELLED");
+            List.of("SUCCEEDED", "FAILED", "REJECTED", "CANCELLED", "PUBLISHED", "PUBLISH_FAILED");
 
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper = new ObjectMapper()

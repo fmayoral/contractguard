@@ -1,15 +1,28 @@
 package com.contractguard.adapter.web.dto;
 
 import com.contractguard.application.service.RunQueryService;
+import com.contractguard.application.service.SpecOption;
 import com.contractguard.domain.AnalysisRun;
+import com.contractguard.domain.RemoteRepository;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /** Maps domain objects to wire DTOs; the only place that knows both shapes. */
 public final class DtoMapper {
 
     private DtoMapper() {
+    }
+
+    public static RunDtos.SpecOption toSpecOption(SpecOption option) {
+        return new RunDtos.SpecOption(option.id(), option.label(),
+                option.origin().name().toLowerCase(Locale.ROOT), option.sourceId());
+    }
+
+    public static RunDtos.SpecSourceSummary toSpecSourceSummary(RemoteRepository source) {
+        return new RunDtos.SpecSourceSummary(source.repositoryId(), source.owner(), source.name(),
+                source.defaultBranch(), source.registeredAt());
     }
 
     public static RunDtos.RunSummary toSummary(AnalysisRun run, boolean remoteRepository) {

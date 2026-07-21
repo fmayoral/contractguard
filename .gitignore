@@ -26,6 +26,7 @@ Thumbs.db
 *.log
 .env
 .env.local
+docker-compose.override.yml
 
 # Local working notes (not published)
 .notes/

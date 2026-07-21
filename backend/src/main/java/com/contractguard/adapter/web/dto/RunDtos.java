@@ -49,6 +49,21 @@ public final class RunDtos {
             String defaultBranch, Instant registeredAt) {
     }
 
+    /** @param token optional; a public spec-source repository needs no credential (FR-043, ADR-0012) */
+    public record RegisterSpecSourceRequest(
+            @jakarta.validation.constraints.NotBlank String repositoryId,
+            @jakarta.validation.constraints.NotBlank String cloneUrl,
+            @jakarta.validation.constraints.NotBlank String defaultBranch,
+            String token) {
+    }
+
+    public record SpecSourceSummary(String repositoryId, String owner, String name,
+            String defaultBranch, Instant registeredAt) {
+    }
+
+    public record SpecOption(String id, String label, String origin, String sourceId) {
+    }
+
     public record Failure(String category, String message, boolean mutationOccurred,
             String artifactId, String remediation) {
     }
@@ -91,7 +106,7 @@ public final class RunDtos {
             String message, String metadata) {
     }
 
-    public record SetupOptions(List<String> repositories, List<String> specifications,
-            List<String> remoteRepositories) {
+    public record SetupOptions(List<String> repositories, List<SpecOption> specifications,
+            List<String> remoteRepositories, List<SpecSourceSummary> specSources) {
     }
 }

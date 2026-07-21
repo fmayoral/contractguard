@@ -15,11 +15,11 @@ flowchart TD
 
     subgraph APP["application (framework-free)"]
         direction TB
-        SVC["service<br/>AnalysisPipeline, ExecutionService, ApprovalService,<br/>RunService, RunQueryService, ReportService, EvidenceCollector,<br/>RemoteRepositoryService, PublishService (FR-027),<br/>AuditTrailService (FR-025)"]
+        SVC["service<br/>AnalysisPipeline, ExecutionService, ApprovalService,<br/>RunService, RunQueryService, ReportService, EvidenceCollector,<br/>RemoteRepositoryService, PublishService (FR-027),<br/>AuditTrailService (FR-025), SpecSourceService (FR-043)"]
         AGENT["agent<br/>ChangeExplainer, ImpactInvestigator,<br/>MigrationPlanner, ImplementationAgent<br/>(LLM-assisted, schema-validated)"]
         LLMC["llm<br/>PromptLibrary, LlmJsonClient<br/>(retry-once validation)"]
         POLICY["policy<br/>WorkspacePolicy, SecretRedactor,<br/>RepositoryLock (FR-032)"]
-        PORT["port (interfaces only)<br/>OpenApiDiffPort, RepositorySearchPort, SourceReaderPort,<br/>GitWorkspacePort, PatchPort, BuildValidationPort, LlmGateway,<br/>JsonCodec, RunRepository, RunEventLog, ArtifactStore,<br/>RemoteGitPort, PullRequestPort, RemoteRepositoryRegistry (FR-027),<br/>AuditTrailPort (FR-025), ObservabilityPort (FR-029)"]
+        PORT["port (interfaces only)<br/>OpenApiDiffPort, RepositorySearchPort, SourceReaderPort,<br/>GitWorkspacePort, PatchPort, BuildValidationPort, LlmGateway,<br/>JsonCodec, RunRepository, RunEventLog, ArtifactStore,<br/>RemoteGitPort, PullRequestPort, RemoteRepositoryRegistry (FR-027),<br/>AuditTrailPort (FR-025), ObservabilityPort (FR-029),<br/>SpecSourceRegistry (FR-043)"]
         SVC --> AGENT
         AGENT --> LLMC
         SVC --> POLICY
@@ -40,7 +40,7 @@ flowchart TD
         A4["github<br/>(PR creation, HTTP)"]
         A5["process<br/>(host Maven, or opt-in<br/>sandboxed docker run — FR-030)"]
         A6["llm<br/>(OpenAI-compatible HTTP<br/>+ deterministic scripted)"]
-        A7["persistence<br/>(H2 / PostgreSQL, Flyway-managed,<br/>incl. audit_log — FR-025)"]
+        A7["persistence<br/>(H2 / PostgreSQL, Flyway-managed,<br/>incl. audit_log — FR-025,<br/>spec_source_repositories — FR-043)"]
         A8["security<br/>(AES-GCM credential cipher)"]
         A9["artifacts / json<br/>(files, Jackson)"]
         A10["web / cli<br/>(Spring MVC, headless CI gate)"]

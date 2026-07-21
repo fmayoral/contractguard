@@ -18,6 +18,7 @@ import com.contractguard.adapter.persistence.JdbcAuditTrail;
 import com.contractguard.adapter.persistence.JdbcRemoteRepositoryRegistry;
 import com.contractguard.adapter.persistence.JdbcRunEventLog;
 import com.contractguard.adapter.persistence.JdbcRunRepository;
+import com.contractguard.adapter.persistence.JdbcSpecSourceRegistry;
 import com.contractguard.adapter.search.BoundedSourceReaderAdapter;
 import com.contractguard.adapter.search.FilesystemRepositorySearchAdapter;
 import com.contractguard.adapter.security.AesGcmCredentialCipher;
@@ -45,6 +46,7 @@ import com.contractguard.application.port.RepositorySearchPort;
 import com.contractguard.application.port.RunEventLog;
 import com.contractguard.application.port.RunRepository;
 import com.contractguard.application.port.SourceReaderPort;
+import com.contractguard.application.port.SpecSourceRegistry;
 import com.contractguard.application.service.AnalysisPipeline;
 import com.contractguard.application.service.ApprovalService;
 import com.contractguard.application.service.AuditTrailService;
@@ -56,6 +58,7 @@ import com.contractguard.application.service.ReportService;
 import com.contractguard.application.service.RetentionService;
 import com.contractguard.application.service.RunQueryService;
 import com.contractguard.application.service.RunService;
+import com.contractguard.application.service.SpecSourceService;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.observation.ObservationRegistry;
 import io.opentelemetry.exporter.logging.LoggingSpanExporter;
@@ -105,6 +108,19 @@ public class ApplicationConfiguration {
 
     private static Path remoteCacheDirectory(ContractGuardProperties properties) {
         return Path.of(properties.storage().directory()).resolve("remote-cache");
+    }
+
+    /**
+     * Deliberately NOT added to {@link WorkspacePolicy}'s roots, unlike {@link #remoteCacheDirectory} —
+     * a spec-source repository must never become selectable as an analysable consumer repository
+     * (FR-043, ADR-0012).
+     */
+    private static Path specSourceCacheDirectory(ContractGuardProperties properties) {
+        return Path.of(properties.storage().directory()).resolve("spec-source-cache");
+    }
+
+    private static Path uploadedSpecsDirectory(ContractGuardProperties properties) {
+        return Path.of(properties.storage().directory()).resolve("uploaded-specs");
     }
 
     @Bean
@@ -228,11 +244,11 @@ public class ApplicationConfiguration {
 
     @Bean
     public RunService runService(RunRepository runs, RunEventLog events, WorkspacePolicy policy,
-            RemoteRepositoryService remoteRepositories, RepositoryLock repositoryLock,
-            AnalysisPipeline pipeline, ContractGuardProperties properties,
+            RemoteRepositoryService remoteRepositories, SpecSourceService specSources,
+            RepositoryLock repositoryLock, AnalysisPipeline pipeline, ContractGuardProperties properties,
             ExecutorService analysisExecutor, Clock clock) {
-        return new RunService(runs, events, policy, remoteRepositories, repositoryLock, pipeline,
-                Path.of(properties.specs().directory()), analysisExecutor,
+        return new RunService(runs, events, policy, remoteRepositories, specSources, repositoryLock, pipeline,
+                Path.of(properties.specs().directory()), uploadedSpecsDirectory(properties), analysisExecutor,
                 properties.concurrency().maxActiveRuns(), clock);
     }
 
@@ -260,6 +276,21 @@ public class ApplicationConfiguration {
     public RemoteRepositoryService remoteRepositoryService(RemoteRepositoryRegistry registry,
             RemoteGitPort remoteGit, Clock clock) {
         return new RemoteRepositoryService(registry, remoteGit, clock);
+    }
+
+    @Bean
+    public SpecSourceRegistry specSourceRegistry(JdbcTemplate jdbc, AesGcmCredentialCipher cipher) {
+        return new JdbcSpecSourceRegistry(jdbc, cipher);
+    }
+
+    @Bean
+    public SpecSourceService specSourceService(SpecSourceRegistry registry, ProcessRunner processRunner,
+            ContractGuardProperties properties, Clock clock) {
+        // A second RemoteGitCliAdapter instance with its own cache root -- reusing the class costs
+        // nothing new, but it must stay a separate RemoteGitPort from the consumer one (remoteGitPort
+        // bean above) since spec sources are never pushed to and never become a WorkspacePolicy root.
+        RemoteGitPort specSourceGit = new RemoteGitCliAdapter(specSourceCacheDirectory(properties), processRunner);
+        return new SpecSourceService(registry, specSourceGit, specSourceCacheDirectory(properties), clock);
     }
 
     @Bean

@@ -5,6 +5,8 @@ import com.contractguard.application.port.RemoteGitPort;
 import com.contractguard.domain.ContractGuardException;
 import com.contractguard.domain.FailureCategory;
 import com.contractguard.domain.RemoteRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -24,6 +26,7 @@ import java.util.Map;
  */
 public class RemoteGitCliAdapter implements RemoteGitPort {
 
+    private static final Logger log = LoggerFactory.getLogger(RemoteGitCliAdapter.class);
     private static final Duration REMOTE_TIMEOUT = Duration.ofMinutes(5);
     private static final int MAX_OUTPUT = 200_000;
     private static final String TOKEN_ENV_VAR = "CONTRACTGUARD_GIT_TOKEN";
@@ -54,7 +57,7 @@ public class RemoteGitCliAdapter implements RemoteGitPort {
             throw new UncheckedIOException("cannot create remote cache directory " + cacheRoot, e);
         }
         run(cacheRoot, credential, "git", "clone", "--branch", remote.defaultBranch(),
-                authenticatedUrl(remote.cloneUrl()), dest.toAbsolutePath().toString());
+                authenticatedUrl(remote.cloneUrl(), credential), dest.toAbsolutePath().toString());
     }
 
     @Override
@@ -69,26 +72,36 @@ public class RemoteGitCliAdapter implements RemoteGitPort {
 
     /**
      * Embeds the askpass username for HTTPS URLs so git prompts for a password
-     * only; other transports (used only by tests standing in a local bare
-     * repository for the remote) pass through unchanged. Restricting which
-     * clone URLs are accepted at all is the domain's job (only GitHub HTTPS
-     * URLs survive {@link RemoteRepository#forGitHub}), not this adapter's.
+     * only when a credential was actually supplied (FR-043, ADR-0012): a blank
+     * credential clones anonymously, exactly like a bare {@code git clone <url>}
+     * against a public repository — embedding an empty password instead can make
+     * GitHub reject even a public, unauthenticated-eligible request. Other
+     * transports (used only by tests standing in a local bare repository for the
+     * remote) pass through unchanged. Restricting which clone URLs are accepted
+     * at all is the domain's job (only GitHub HTTPS URLs survive
+     * {@link RemoteRepository#forGitHub}), not this adapter's.
      */
-    private static String authenticatedUrl(String cloneUrl) {
-        if (!cloneUrl.startsWith("https://")) {
+    private static String authenticatedUrl(String cloneUrl, String credential) {
+        if (!cloneUrl.startsWith("https://") || credential == null || credential.isBlank()) {
             return cloneUrl;
         }
         return "https://" + USERNAME + "@" + cloneUrl.substring("https://".length());
     }
 
     private void run(Path workingDirectory, String credential, String... command) {
-        Map<String, String> env = Map.of(
-                "GIT_ASKPASS", askpassScript().toAbsolutePath().toString(),
-                "GIT_TERMINAL_PROMPT", "0",
-                TOKEN_ENV_VAR, credential);
+        Map<String, String> env = credential == null || credential.isBlank()
+                ? Map.of("GIT_TERMINAL_PROMPT", "0")
+                : Map.of(
+                        "GIT_ASKPASS", askpassScript().toAbsolutePath().toString(),
+                        "GIT_TERMINAL_PROMPT", "0",
+                        TOKEN_ENV_VAR, credential);
         ProcessRunner.ProcessResult result =
                 processRunner.run(List.of(command), workingDirectory, env, REMOTE_TIMEOUT, MAX_OUTPUT);
         if (result.exitCode() != 0) {
+            // Callers that isolate per-repository failures (e.g. SpecSourceService) never see this
+            // exception surface anywhere else, so it's logged here or it's lost entirely.
+            log.warn("remote git command failed in {}: {} (exit {}): {}", workingDirectory,
+                    String.join(" ", command), result.exitCode(), scrub(result.output()));
             throw ContractGuardException.of(FailureCategory.REMOTE_GIT_FAILURE,
                     "%s failed: %s".formatted(String.join(" ", command), scrub(result.output())),
                     "Check the clone URL, default branch and that the credential has the required scope.");

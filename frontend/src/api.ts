@@ -1,4 +1,11 @@
-import type { RemoteRepositorySummary, RunDetail, RunEvent, RunSummary, SetupOptions } from './types';
+import type {
+  RemoteRepositorySummary,
+  RunDetail,
+  RunEvent,
+  RunSummary,
+  SetupOptions,
+  SpecOption,
+} from './types';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -13,6 +20,21 @@ export class ApiError extends Error {
   }
 }
 
+function problemDetailError(status: number, text: string): ApiError {
+  let detail = `HTTP ${status}`;
+  let category: string | null = null;
+  let remediation: string | null = null;
+  try {
+    const problem = JSON.parse(text);
+    detail = problem.detail ?? detail;
+    category = problem.category ?? null;
+    remediation = problem.remediation ?? null;
+  } catch {
+    // non-JSON error body; keep the generic detail
+  }
+  return new ApiError(status, detail, category, remediation);
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     headers: { 'Content-Type': 'application/json' },
@@ -20,18 +42,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   const text = await response.text();
   if (!response.ok) {
-    let detail = `HTTP ${response.status}`;
-    let category: string | null = null;
-    let remediation: string | null = null;
-    try {
-      const problem = JSON.parse(text);
-      detail = problem.detail ?? detail;
-      category = problem.category ?? null;
-      remediation = problem.remediation ?? null;
-    } catch {
-      // non-JSON error body; keep the generic detail
-    }
-    throw new ApiError(response.status, detail, category, remediation);
+    throw problemDetailError(response.status, text);
   }
   return (text ? JSON.parse(text) : undefined) as T;
 }
@@ -74,6 +85,28 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ repositoryId, cloneUrl, defaultBranch, token }),
     });
+  },
+  registerSpecSource(
+    repositoryId: string,
+    cloneUrl: string,
+    defaultBranch: string,
+    token: string,
+  ): Promise<RemoteRepositorySummary> {
+    return request('/api/spec-sources', {
+      method: 'POST',
+      // A blank token registers an unauthenticated (public-repository) spec source (ADR-0012).
+      body: JSON.stringify({ repositoryId, cloneUrl, defaultBranch, token: token || undefined }),
+    });
+  },
+  async uploadSpecification(file: File): Promise<SpecOption> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await fetch('/api/specs', { method: 'POST', body: formData });
+    const text = await response.text();
+    if (!response.ok) {
+      throw problemDetailError(response.status, text);
+    }
+    return JSON.parse(text) as SpecOption;
   },
   events(runId: string): Promise<RunEvent[]> {
     return request(`/api/runs/${runId}/events/list`);

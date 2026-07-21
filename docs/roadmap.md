@@ -75,6 +75,9 @@ Slack/Teams webhook and email notifications on AWAITING_APPROVAL and terminal st
 ### FR-032 — Concurrency and Resume (completed)
 A bounded run queue with per-repository mutual exclusion (generalising today's REPOSITORY_BUSY check). Runs interrupted by a restart resume from the last persisted state or finalise as FAILED with a clean remediation message — never a stuck non-terminal state. Resume is deliberately scoped to runs still `CREATED` (nothing mutated yet); every other interrupted state keeps the clean-fail fallback, since the state machine's one-shot transitions are a safety feature, not a gap — see ADR-0009 for why deeper resume was not attempted.
 
+### FR-043 — Specification Source Registration and Upload (completed)
+Closes the gap FR-027 left for specs: `contractguard.specs.directory` was the only source, requiring filesystem or deployment access to offer a user's own OpenAPI files. Adds a second, read-only registration kind — a spec-source repository, reusing FR-027's clone/credential machinery but a separate registry/table, never a `WorkspacePolicy` root — with an **optional** token, since most spec repositories are public; and a direct upload endpoint for users with spec files but no repository for them. All three origins (bundled, uploaded, spec-source) land in one combined picker via a qualified spec ID (`local:`/`upload:`/`source:<id>:`), with a bare file name still resolving locally for backward compatibility with the FR-026 CLI gate and already-persisted runs. The dashboard's setup form became a 3-step wizard (repository → specifications → review) to keep the now-larger set of choices approachable — see [ADR-0012](adr/0012-spec-source-repositories-and-upload.md).
+
 **Phase 1 acceptance:** a team can deploy ContractGuard behind SSO, wire the CI gate into a provider repo, analyse a private remote consumer, approve in the UI, and receive a draft PR — with the whole sequence visible in traces, metrics and the audit log.
 
 ---

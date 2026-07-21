@@ -12,6 +12,7 @@ import com.contractguard.domain.RemoteRepository;
 import com.contractguard.domain.RunState;
 import com.contractguard.testsupport.InMemoryRunEventLog;
 import com.contractguard.testsupport.InMemoryRunRepository;
+import com.contractguard.testsupport.InMemorySpecSourceRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -45,8 +46,10 @@ class RunServiceTest {
             RepositoryLock lock, AnalysisPipeline pipeline, int maxActiveRuns) {
         RemoteRepositoryService remoteRepositories =
                 new RemoteRepositoryService(registry, (RemoteGitPort) null, Clock.systemUTC());
-        return new RunService(runs, events, policy, remoteRepositories, lock, pipeline,
-                specsDir, submitted::add, maxActiveRuns, Clock.systemUTC());
+        SpecSourceService specSources = new SpecSourceService(new InMemorySpecSourceRegistry(),
+                (RemoteGitPort) null, specsDir.resolve("spec-source-cache"), Clock.systemUTC());
+        return new RunService(runs, events, policy, remoteRepositories, specSources, lock, pipeline,
+                specsDir, specsDir.resolve("uploads"), submitted::add, maxActiveRuns, Clock.systemUTC());
     }
 
     private static RemoteRepositoryRegistry noRemotesRegistry() {
@@ -241,9 +244,74 @@ class RunServiceTest {
     }
 
     @Test
+    void uploadedSpecificationCanBeUsedToCreateARun() {
+        service.uploadSpecification("uploaded.yaml", "openapi: 3.0.3");
+
+        AnalysisRun run = service.createRun("x", "customer-consumer", "upload:uploaded.yaml", "new.yaml");
+
+        assertThat(run.oldSpecFile()).isEqualTo("upload:uploaded.yaml");
+    }
+
+    @Test
+    void uploadRejectsAnUnsupportedExtension() {
+        assertThatThrownBy(() -> service.uploadSpecification("spec.txt", "not yaml"))
+                .isInstanceOf(ContractGuardException.class);
+    }
+
+    @Test
+    void uploadRejectsADegenerateFileNameCleanlyInsteadOfThrowingNpe() {
+        // Path.of("/").getFileName() returns null -- a real edge case SpotBugs caught; the upload
+        // must be rejected with a typed failure, never an uncaught NullPointerException.
+        assertThatThrownBy(() -> service.uploadSpecification("/", "content"))
+                .isInstanceOf(ContractGuardException.class);
+    }
+
+    @Test
+    void uploadStripsAnyPathComponentFromTheOriginalFileName() {
+        SpecOption uploaded = service.uploadSpecification("../../etc/evil.yaml", "openapi: 3.0.3");
+
+        assertThat(uploaded.label()).isEqualTo("evil.yaml");
+        assertThat(uploaded.id()).isEqualTo("upload:evil.yaml");
+    }
+
+    @Test
+    void reUploadingTheSameNameOverwritesRatherThanDuplicating() {
+        service.uploadSpecification("mine.yaml", "openapi: 3.0.0");
+        service.uploadSpecification("mine.yaml", "openapi: 3.1.0");
+
+        assertThat(service.listSpecOptions().stream().filter(o -> o.label().equals("mine.yaml")).count())
+                .isEqualTo(1);
+    }
+
+    @Test
+    void bareFileNameWithNoPrefixStillResolvesLocally() {
+        // Backward compatibility for the headless CLI/CI gate (FR-026) and already-persisted runs
+        // whose stored oldSpecFile/newSpecFile predate spec sources and uploads (ADR-0012).
+        AnalysisRun run = service.createRun("x", "customer-consumer", "old.yaml", "new.yaml");
+
+        assertThat(run.oldSpecFile()).isEqualTo("old.yaml");
+        assertThat(submitted).hasSize(1);
+    }
+
+    @Test
     void listsSpecificationFiles() {
-        assertThat(service.listSpecificationFiles()).containsExactly("new.yaml", "old.yaml");
+        assertThat(service.listSpecOptions()).extracting(SpecOption::label)
+                .containsExactly("new.yaml", "old.yaml");
+        assertThat(service.listSpecOptions()).allMatch(o -> o.origin() == SpecOption.SpecOrigin.LOCAL);
         assertThat(service.listRepositories()).containsExactly("customer-consumer");
+    }
+
+    @Test
+    void combinedListingIncludesUploadedFilesTaggedWithTheirOrigin() {
+        service.uploadSpecification("extra.yaml", "openapi: 3.0.3");
+
+        List<SpecOption> options = service.listSpecOptions();
+
+        assertThat(options).extracting(SpecOption::label).contains("old.yaml", "new.yaml", "extra.yaml");
+        SpecOption uploaded = options.stream().filter(o -> o.label().equals("extra.yaml")).findFirst().orElseThrow();
+        assertThat(uploaded.origin()).isEqualTo(SpecOption.SpecOrigin.UPLOADED);
+        assertThat(uploaded.id()).isEqualTo("upload:extra.yaml");
+        assertThat(uploaded.sourceId()).isNull();
     }
 
     @Test

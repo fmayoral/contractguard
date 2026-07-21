@@ -141,10 +141,19 @@ export interface RunEvent {
   metadata: string | null;
 }
 
+// Mirrors com.contractguard.application.service.SpecOption.SpecOrigin's name().toLowerCase().
+export interface SpecOption {
+  id: string;
+  label: string;
+  origin: 'local' | 'uploaded' | 'spec_source';
+  sourceId: string | null;
+}
+
 export interface SetupOptions {
   repositories: string[];
-  specifications: string[];
+  specifications: SpecOption[];
   remoteRepositories: string[];
+  specSources: RemoteRepositorySummary[];
 }
 
 export interface RemoteRepositorySummary {

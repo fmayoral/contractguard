@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Timeline } from './Timeline';
 import { ValidationView } from './ValidationView';
@@ -9,7 +9,23 @@ import { DiffView } from './DiffView';
 import { ThemeToggle } from './ThemeToggle';
 import { PublishPanel } from './PublishPanel';
 import { RegisterRemoteRepository } from './RegisterRemoteRepository';
-import type { Patch, RunEvent, Validation } from '../types';
+import { RegisterSpecSource } from './RegisterSpecSource';
+import { RunSetup } from './RunSetup';
+import { UploadSpecification } from './UploadSpecification';
+import { WizardStepRepository } from './WizardStepRepository';
+import { WizardStepSpecs } from './WizardStepSpecs';
+import type { Patch, RunEvent, SetupOptions, Validation } from '../types';
+
+function mockRoutedFetch(handler: (url: string, init?: RequestInit) => { status?: number; body: unknown } | null) {
+  const spy = vi.fn(async (url: string, init?: RequestInit) => {
+    const result = handler(url, init);
+    if (!result) throw new Error(`unexpected fetch: ${url}`);
+    const body = typeof result.body === 'string' ? result.body : JSON.stringify(result.body);
+    return new Response(body, { status: result.status ?? 200, headers: { 'Content-Type': 'application/json' } });
+  });
+  vi.stubGlobal('fetch', spy);
+  return spy;
+}
 
 function mockJsonFetch(status: number, body: unknown) {
   const spy = vi.fn().mockResolvedValue(
@@ -398,5 +414,264 @@ describe('RegisterRemoteRepository', () => {
 
     expect(await screen.findByText(/not a supported GitHub HTTPS URL/)).toBeInTheDocument();
     expect(onRegistered).not.toHaveBeenCalled();
+  });
+});
+
+describe('RegisterSpecSource', () => {
+  it('registers a public spec source with a blank token', async () => {
+    const user = userEvent.setup();
+    const spy = mockJsonFetch(201, {
+      repositoryId: 'openapi-specs',
+      owner: 'acme',
+      name: 'openapi-specs',
+      defaultBranch: 'main',
+      registeredAt: '2026-07-21T10:00:00Z',
+    });
+    const onRegistered = vi.fn();
+    render(<RegisterSpecSource onRegistered={onRegistered} />);
+
+    await user.click(screen.getByText('+ Register a spec repository'));
+    await user.type(screen.getByPlaceholderText('openapi-specs'), 'openapi-specs');
+    await user.type(
+      screen.getByPlaceholderText('https://github.com/acme/openapi-specs'),
+      'https://github.com/acme/openapi-specs',
+    );
+    await user.click(screen.getByText('Register spec repository'));
+
+    expect(JSON.parse(spy.mock.calls[0][1].body)).toEqual({
+      repositoryId: 'openapi-specs',
+      cloneUrl: 'https://github.com/acme/openapi-specs',
+      defaultBranch: 'main',
+      token: undefined,
+    });
+    expect(onRegistered).toHaveBeenCalledWith('openapi-specs');
+  });
+
+  it('surfaces a typed error on failure', async () => {
+    const user = userEvent.setup();
+    mockJsonFetch(400, {
+      detail: 'clone URL is not a supported GitHub HTTPS URL',
+      remediation: 'Use an https://github.com URL.',
+    });
+    const onRegistered = vi.fn();
+    render(<RegisterSpecSource onRegistered={onRegistered} />);
+
+    await user.click(screen.getByText('+ Register a spec repository'));
+    await user.type(screen.getByPlaceholderText('openapi-specs'), 'openapi-specs');
+    await user.type(screen.getByPlaceholderText('https://github.com/acme/openapi-specs'), 'not-a-url');
+    await user.click(screen.getByText('Register spec repository'));
+
+    expect(await screen.findByText(/not a supported GitHub HTTPS URL/)).toBeInTheDocument();
+    expect(onRegistered).not.toHaveBeenCalled();
+  });
+});
+
+describe('UploadSpecification', () => {
+  it('uploads a selected file and notifies the parent with its qualified id', async () => {
+    const user = userEvent.setup();
+    const spy = mockJsonFetch(201, { id: 'upload:mine.yaml', label: 'mine.yaml', origin: 'uploaded', sourceId: null });
+    const onUploaded = vi.fn();
+    render(<UploadSpecification onUploaded={onUploaded} />);
+
+    const file = new File(['openapi: 3.0.3'], 'mine.yaml', { type: 'application/yaml' });
+    const input = screen.getByLabelText('Upload a specification file');
+    await user.upload(input, file);
+
+    expect(spy).toHaveBeenCalledWith('/api/specs', expect.objectContaining({ method: 'POST' }));
+    await waitFor(() => expect(onUploaded).toHaveBeenCalledWith('upload:mine.yaml'));
+  });
+
+  it('surfaces a typed error when the upload is rejected', async () => {
+    const user = userEvent.setup();
+    mockJsonFetch(413, {
+      detail: 'uploaded file exceeds the configured size limit',
+      remediation: 'Upload a smaller specification file.',
+    });
+    const onUploaded = vi.fn();
+    render(<UploadSpecification onUploaded={onUploaded} />);
+
+    // Must match the input's accept filter (.yaml/.yml/.json) or user-event silently drops the
+    // selection before it ever reaches the component -- the rejection here is a server-side one.
+    const file = new File(['not really valid'], 'huge.yaml', { type: 'application/yaml' });
+    await user.upload(screen.getByLabelText('Upload a specification file'), file);
+
+    expect(await screen.findByText(/exceeds the configured size limit/)).toBeInTheDocument();
+    expect(onUploaded).not.toHaveBeenCalled();
+  });
+});
+
+describe('WizardStepRepository', () => {
+  const options: SetupOptions = {
+    repositories: ['customer-consumer'],
+    remoteRepositories: ['acme-widgets'],
+    specifications: [],
+    specSources: [],
+  };
+
+  it('groups local and remote repositories and reports the current selection', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const { container } = render(
+      <WizardStepRepository
+        options={options}
+        repository="customer-consumer"
+        onChange={onChange}
+        onRepositoryRegistered={vi.fn()}
+      />,
+    );
+
+    // optgroup labels are an HTML attribute, not text content, so they're queried via the DOM directly.
+    const groupLabels = [...container.querySelectorAll('optgroup')].map((g) => g.label);
+    expect(groupLabels).toEqual(['Local workspace', 'Registered GitHub repositories']);
+    await user.selectOptions(screen.getByLabelText('Consumer repository'), 'acme-widgets');
+    expect(onChange).toHaveBeenCalledWith('acme-widgets');
+  });
+
+  it('hints when no repositories are available at all', () => {
+    render(
+      <WizardStepRepository
+        options={{ repositories: [], remoteRepositories: [], specifications: [], specSources: [] }}
+        repository=""
+        onChange={vi.fn()}
+        onRepositoryRegistered={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/No repositories found/)).toBeInTheDocument();
+  });
+});
+
+describe('WizardStepSpecs', () => {
+  const options: SetupOptions = {
+    repositories: [],
+    remoteRepositories: [],
+    specifications: [
+      { id: 'local:old.yaml', label: 'old.yaml', origin: 'local', sourceId: null },
+      { id: 'upload:mine.yaml', label: 'mine.yaml', origin: 'uploaded', sourceId: null },
+      { id: 'source:openapi-specs:new.yaml', label: 'new.yaml', origin: 'spec_source', sourceId: 'openapi-specs' },
+    ],
+    specSources: [
+      {
+        repositoryId: 'openapi-specs', owner: 'acme', name: 'openapi-specs',
+        defaultBranch: 'main', registeredAt: '2026-07-21T10:00:00Z',
+      },
+      {
+        repositoryId: 'silent-specs', owner: 'acme', name: 'silent-specs',
+        defaultBranch: 'main', registeredAt: '2026-07-21T10:00:00Z',
+      },
+    ],
+  };
+
+  it('groups specifications by origin into optgroups', () => {
+    const { container } = render(
+      <WizardStepSpecs
+        options={options}
+        oldSpec="local:old.yaml"
+        newSpec="source:openapi-specs:new.yaml"
+        onOldSpecChange={vi.fn()}
+        onNewSpecChange={vi.fn()}
+        onOptionsChanged={vi.fn()}
+      />,
+    );
+
+    // optgroup labels are an HTML attribute, not text content; both selects share the same groups.
+    const oldSpecSelect = screen.getByLabelText('Old specification');
+    const groupLabels = [...oldSpecSelect.querySelectorAll('optgroup')].map((g) => g.label);
+    expect(groupLabels).toEqual(['Local workspace', 'Uploaded', 'From openapi-specs']);
+    expect(container.querySelectorAll('optgroup')).toHaveLength(6);
+  });
+
+  it('reports a registered spec source that contributed no files', () => {
+    render(
+      <WizardStepSpecs
+        options={options}
+        oldSpec="local:old.yaml"
+        newSpec="source:openapi-specs:new.yaml"
+        onOldSpecChange={vi.fn()}
+        onNewSpecChange={vi.fn()}
+        onOptionsChanged={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/silent-specs/)).toBeInTheDocument();
+    expect(screen.getByText(/contributed no files/)).toBeInTheDocument();
+  });
+
+  it('propagates old/new spec selection changes', async () => {
+    const user = userEvent.setup();
+    const onOldSpecChange = vi.fn();
+    render(
+      <WizardStepSpecs
+        options={options}
+        oldSpec="local:old.yaml"
+        newSpec="source:openapi-specs:new.yaml"
+        onOldSpecChange={onOldSpecChange}
+        onNewSpecChange={vi.fn()}
+        onOptionsChanged={vi.fn()}
+      />,
+    );
+
+    await user.selectOptions(screen.getByLabelText('Old specification'), 'upload:mine.yaml');
+    expect(onOldSpecChange).toHaveBeenCalledWith('upload:mine.yaml');
+  });
+});
+
+describe('RunSetup', () => {
+  it('supports going back a step without losing the earlier selection', async () => {
+    const user = userEvent.setup();
+    mockRoutedFetch((url) => {
+      if (url === '/api/setup') {
+        return {
+          body: {
+            repositories: ['customer-consumer'],
+            remoteRepositories: [],
+            specifications: [
+              { id: 'local:old.yaml', label: 'old.yaml', origin: 'local', sourceId: null },
+              { id: 'local:new.yaml', label: 'new.yaml', origin: 'local', sourceId: null },
+            ],
+            specSources: [],
+          },
+        };
+      }
+      return null;
+    });
+    render(<RunSetup onCreated={vi.fn()} />);
+
+    await user.click(await screen.findByText('Next'));
+    expect(await screen.findByLabelText('Old specification')).toBeInTheDocument();
+
+    await user.click(screen.getByText('Back'));
+    expect(await screen.findByLabelText('Consumer repository')).toHaveValue('customer-consumer');
+  });
+
+  it('a spec uploaded during setup fills the first empty slot without overwriting a prior choice', async () => {
+    const user = userEvent.setup();
+    let uploaded = false;
+    mockRoutedFetch((url, init) => {
+      if (url === '/api/setup') {
+        return {
+          body: {
+            repositories: ['customer-consumer'],
+            remoteRepositories: [],
+            specifications: uploaded
+              ? [{ id: 'upload:mine.yaml', label: 'mine.yaml', origin: 'uploaded', sourceId: null }]
+              : [],
+            specSources: [],
+          },
+        };
+      }
+      if (url === '/api/specs' && init?.method === 'POST') {
+        uploaded = true;
+        return { status: 201, body: { id: 'upload:mine.yaml', label: 'mine.yaml', origin: 'uploaded', sourceId: null } };
+      }
+      return null;
+    });
+    render(<RunSetup onCreated={vi.fn()} />);
+
+    await user.click(await screen.findByText('Next'));
+    const file = new File(['openapi: 3.0.3'], 'mine.yaml', { type: 'application/yaml' });
+    await user.upload(await screen.findByLabelText('Upload a specification file'), file);
+
+    await waitFor(() => expect(screen.getByLabelText('Old specification')).toHaveValue('upload:mine.yaml'));
   });
 });

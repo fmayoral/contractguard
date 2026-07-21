@@ -191,6 +191,42 @@ and transport design, and
 [docs/demo-script.md §9](docs/demo-script.md#9-test-remote-repositories-and-publishing-fr-027)
 for a full walkthrough against a real GitHub repository.
 
+## Specification sources
+
+Old/new OpenAPI specs no longer have to live in a directory the server
+process can already see. The **New analysis run** setup is a 3-step wizard
+(repository → specifications → review); step 2 offers three ways to get
+specs in front of a run, all landing in the same picker:
+
+- **Bundled/local** — files already in `contractguard.specs.directory`, as before.
+- **Upload** — pick a file from your machine (`.yaml`/`.yml`/`.json`, 2 MB
+  cap); it's stored under `storage.directory/uploaded-specs/` and available
+  immediately. Re-uploading the same file name replaces it.
+- **A registered spec repository** — like remote consumer repositories, but
+  read-only and, unlike them, **the token is optional**: a public repository
+  (this project's own demo specs, for instance) needs no credential at all.
+  A registered spec source is cloned/refreshed every time setup options are
+  requested, so it always reflects the latest commit on its default branch.
+
+```bash
+# Public repository: no token, no CONTRACTGUARD_CREDENTIAL_KEY needed.
+curl -X POST http://localhost:7080/api/spec-sources \
+  -H 'Content-Type: application/json' \
+  -d '{"repositoryId":"openapi-specs",
+       "cloneUrl":"https://github.com/acme/openapi-specs","defaultBranch":"main"}'
+
+# Upload a file directly (multipart):
+curl -X POST http://localhost:7080/api/specs -F file=@customer-api-v2.yaml
+```
+
+Every spec offered at run creation carries a qualified ID
+(`local:<name>`, `upload:<name>`, `source:<repositoryId>:<name>`) so files
+with the same name from different origins never collide; a bare file name
+(what the headless CLI gate has always sent) still resolves against the
+local directory unchanged. See
+[ADR-0012](docs/adr/0012-spec-source-repositories-and-upload.md) for the
+full design.
+
 ## Audit trail
 
 Every state transition, approval decision and repository mutation is
@@ -300,7 +336,8 @@ All settings live under `contractguard.*` in
 | `validation.docker.image` / `.memory` / `.cpus` | `eclipse-temurin:21-jdk` / `2g` / `2` | Sandbox resource limits |
 | `validation.docker.network-enabled` | `false` | Off by default; see [Sandboxed validation](#sandboxed-validation) |
 | `validation.docker.maven-local-repo` | `${user.home}/.m2` | Mounted read-only so offline builds still resolve cached dependencies |
-| `remote.credential-key` | env-driven (`CONTRACTGUARD_CREDENTIAL_KEY`) | AES-256-GCM master key encrypting remote-repository tokens at rest |
+| `remote.credential-key` | env-driven (`CONTRACTGUARD_CREDENTIAL_KEY`) | AES-256-GCM master key encrypting remote-repository *and* spec-source tokens at rest; only required if you register one with a token (public spec sources need none — see [Specification sources](#specification-sources)) |
+| `spring.servlet.multipart.max-file-size` / `.max-request-size` | `2MB` / `2MB` | Uploaded specification file size cap |
 | `audit.default-principal` | `local-operator` | Attributed to every audit entry until FR-024 adds real authentication |
 | `concurrency.max-active-runs` | `10` | System-wide bound on non-terminal runs; `0` disables the limit |
 | `management.tracing.sampling.probability` | `1.0` | Fraction of spans sampled; full sampling is fine at this tool's scale |
@@ -421,6 +458,9 @@ docs/          Specification, architecture, ADRs, demo script, roadmap
   parent POM is pinned to 3.3.5 (ADR-0011). Trace export defaults to the
   application log; a real collector needs `management.otlp.tracing.endpoint`
   configured.
+- Spec sources and uploaded specifications (FR-043) have no deregister/delete
+  endpoint yet and are process-wide, not scoped to any user — the same
+  single-operator trust model as everything else pending FR-024 (ADR-0012).
 
 ## Documentation
 

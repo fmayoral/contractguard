@@ -122,8 +122,12 @@ describe('App critical journey', () => {
         return {
           body: {
             repositories: ['customer-consumer'],
-            specifications: ['customer-api-v1.yaml', 'customer-api-v2.yaml'],
+            specifications: [
+              { id: 'local:customer-api-v1.yaml', label: 'customer-api-v1.yaml', origin: 'local', sourceId: null },
+              { id: 'local:customer-api-v2.yaml', label: 'customer-api-v2.yaml', origin: 'local', sourceId: null },
+            ],
             remoteRepositories: [],
+            specSources: [],
           },
         };
       }
@@ -142,8 +146,12 @@ describe('App critical journey', () => {
 
     render(<App />);
 
-    await screen.findByText('Start analysis');
-    await user.click(screen.getByText('Start analysis'));
+    // Step 1: consumer repository (auto-selected) -> Next.
+    await user.click(await screen.findByText('Next'));
+    // Step 2: old/new specifications (auto-selected) -> Next.
+    await user.click(await screen.findByText('Next'));
+    // Step 3: review and start.
+    await user.click(await screen.findByText('Start analysis'));
 
     // Change table with classification, values and explanation.
     await screen.findByText('PROPERTY_RENAMED');

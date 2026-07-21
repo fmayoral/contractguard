@@ -7,6 +7,8 @@ import com.contractguard.application.service.RemoteRepositoryService;
 import com.contractguard.application.service.ReportService;
 import com.contractguard.application.service.RunQueryService;
 import com.contractguard.application.service.RunService;
+import com.contractguard.application.service.SpecOption;
+import com.contractguard.application.service.SpecSourceService;
 import com.contractguard.domain.AnalysisRun;
 import com.contractguard.domain.Approval;
 import com.contractguard.domain.ContractGuardException;
@@ -17,8 +19,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 
@@ -29,6 +33,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -59,6 +64,9 @@ class RunApiTest {
     private RemoteRepositoryService remoteRepositories;
 
     @MockBean
+    private SpecSourceService specSources;
+
+    @MockBean
     private ReportService reports;
 
     @MockBean
@@ -77,6 +85,34 @@ class RunApiTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(run.id()))
                 .andExpect(jsonPath("$.state").value("CREATED"));
+    }
+
+    @Test
+    void uploadingASpecificationReturns201WithItsQualifiedId() throws Exception {
+        when(runService.uploadSpecification("mine.yaml", "openapi: 3.0.3")).thenReturn(
+                new SpecOption("upload:mine.yaml", "mine.yaml", SpecOption.SpecOrigin.UPLOADED, null));
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "mine.yaml", "application/yaml", "openapi: 3.0.3".getBytes(StandardCharsets.UTF_8));
+
+        mvc.perform(multipart("/api/specs").file(file))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value("upload:mine.yaml"))
+                .andExpect(jsonPath("$.label").value("mine.yaml"))
+                .andExpect(jsonPath("$.origin").value("uploaded"));
+    }
+
+    @Test
+    void uploadingAnUnsupportedFileGets400ProblemDetail() throws Exception {
+        when(runService.uploadSpecification(anyString(), anyString())).thenThrow(
+                ContractGuardException.of(FailureCategory.INVALID_OPENAPI,
+                        "unsupported specification file name: notes.txt",
+                        "Upload a .yaml, .yml or .json OpenAPI specification."));
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "notes.txt", "text/plain", "not a spec".getBytes(StandardCharsets.UTF_8));
+
+        mvc.perform(multipart("/api/specs").file(file))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.category").value("INVALID_OPENAPI"));
     }
 
     @Test
@@ -219,8 +255,11 @@ class RunApiTest {
     @Test
     void setupListsLocalAndRemoteRepositoriesSeparately() throws Exception {
         when(runService.listRepositories()).thenReturn(List.of("customer-consumer"));
-        when(runService.listSpecificationFiles()).thenReturn(List.of("v1.yaml", "v2.yaml"));
+        when(runService.listSpecOptions()).thenReturn(List.of(
+                new SpecOption("local:v1.yaml", "v1.yaml", SpecOption.SpecOrigin.LOCAL, null),
+                new SpecOption("local:v2.yaml", "v2.yaml", SpecOption.SpecOrigin.LOCAL, null)));
         when(runService.listRemoteRepositories()).thenReturn(List.of("acme-widgets"));
+        when(specSources.listRegistered()).thenReturn(List.of());
 
         mvc.perform(get("/api/setup"))
                 .andExpect(status().isOk())

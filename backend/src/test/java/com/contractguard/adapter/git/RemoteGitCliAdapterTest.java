@@ -65,6 +65,15 @@ class RemoteGitCliAdapterTest {
     }
 
     @Test
+    void clonesWithoutACredentialForAnUnauthenticatedPublicRepository() {
+        adapter.cloneOrRefresh("customer-consumer", remote, "");
+
+        Path checkout = cacheDir.resolve("customer-consumer");
+        assertThat(checkout.resolve(".git")).isDirectory();
+        assertThat(checkout.resolve("App.java")).hasContent("class App {\n    String fullName;\n}\n");
+    }
+
+    @Test
     void refreshFetchesNewCommitsAndDiscardsLocalDrift() throws IOException {
         adapter.cloneOrRefresh("customer-consumer", remote, "unused-token");
         Path checkout = cacheDir.resolve("customer-consumer");

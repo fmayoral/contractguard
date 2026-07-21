@@ -30,6 +30,12 @@ management:
 spring:
   application:
     name: contractguard
+  servlet:
+    multipart:
+      # Bounds uploaded specification files (FR-043, ADR-0012); an OpenAPI document is normally
+      # well under this.
+      max-file-size: 2MB
+      max-request-size: 2MB
   datasource:
     url: jdbc:h2:file:./../data/contractguard;MODE=PostgreSQL
     driver-class-name: org.h2.Driver

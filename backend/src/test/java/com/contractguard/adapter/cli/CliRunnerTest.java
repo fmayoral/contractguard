@@ -22,10 +22,12 @@ import com.contractguard.application.service.RemoteRepositoryService;
 import com.contractguard.application.service.ReportService;
 import com.contractguard.application.service.RunQueryService;
 import com.contractguard.application.service.RunService;
+import com.contractguard.application.service.SpecSourceService;
 import com.contractguard.domain.RemoteRepository;
 import com.contractguard.testsupport.InMemoryAuditTrail;
 import com.contractguard.testsupport.InMemoryRunEventLog;
 import com.contractguard.testsupport.InMemoryRunRepository;
+import com.contractguard.testsupport.InMemorySpecSourceRegistry;
 import com.contractguard.testsupport.NoOpObservability;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -128,8 +130,10 @@ class CliRunnerTest {
         };
         RemoteRepositoryService remoteRepositories =
                 new RemoteRepositoryService(noRemotes, (RemoteGitPort) null, clock);
-        RunService runService = new RunService(runs, events, policy, remoteRepositories,
-                new RepositoryLock(), pipeline, SPECS_DIR, Runnable::run, 0, clock);
+        SpecSourceService specSources = new SpecSourceService(new InMemorySpecSourceRegistry(),
+                (RemoteGitPort) null, SPECS_DIR.resolve("spec-source-cache"), clock);
+        RunService runService = new RunService(runs, events, policy, remoteRepositories, specSources,
+                new RepositoryLock(), pipeline, SPECS_DIR, SPECS_DIR.resolve("uploads"), Runnable::run, 0, clock);
         cli = new CliRunner(runService,
                 new RunQueryService(runs, events, artifactStore),
                 new ReportService(runs, events, artifactStore, codec),

@@ -10,6 +10,7 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 /**
  * Consistent RFC 7807 problem-details errors (§13). Every body states what
@@ -42,6 +43,16 @@ public class ApiExceptionHandler {
         problem.setTitle("INVALID_REQUEST");
         problem.setProperty("errors", exception.getBindingResult().getFieldErrors().stream()
                 .map(error -> error.getField() + ": " + error.getDefaultMessage()).toList());
+        return problem;
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ProblemDetail handleUploadTooLarge(MaxUploadSizeExceededException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.PAYLOAD_TOO_LARGE,
+                "uploaded file exceeds the configured size limit");
+        problem.setTitle("PAYLOAD_TOO_LARGE");
+        problem.setProperty("remediation", "Upload a smaller specification file (see "
+                + "spring.servlet.multipart.max-file-size).");
         return problem;
     }
 

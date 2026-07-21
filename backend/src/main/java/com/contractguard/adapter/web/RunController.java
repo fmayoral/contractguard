@@ -9,6 +9,8 @@ import com.contractguard.application.service.RemoteRepositoryService;
 import com.contractguard.application.service.ReportService;
 import com.contractguard.application.service.RunQueryService;
 import com.contractguard.application.service.RunService;
+import com.contractguard.application.service.SpecOption;
+import com.contractguard.application.service.SpecSourceService;
 import com.contractguard.domain.AnalysisRun;
 import com.contractguard.domain.Approval;
 import com.contractguard.domain.ContractGuardException;
@@ -22,8 +24,13 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
@@ -39,18 +46,21 @@ public class RunController {
     private final ExecutionService executions;
     private final PublishService publishing;
     private final RemoteRepositoryService remoteRepositories;
+    private final SpecSourceService specSources;
     private final ReportService reports;
     private final ExecutorService executor;
 
     public RunController(RunService runService, RunQueryService queries, ApprovalService approvals,
             ExecutionService executions, PublishService publishing,
-            RemoteRepositoryService remoteRepositories, ReportService reports, ExecutorService executor) {
+            RemoteRepositoryService remoteRepositories, SpecSourceService specSources,
+            ReportService reports, ExecutorService executor) {
         this.runService = runService;
         this.queries = queries;
         this.approvals = approvals;
         this.executions = executions;
         this.publishing = publishing;
         this.remoteRepositories = remoteRepositories;
+        this.specSources = specSources;
         this.reports = reports;
         this.executor = executor;
     }
@@ -58,7 +68,9 @@ public class RunController {
     @GetMapping("/setup")
     public RunDtos.SetupOptions setup() {
         return new RunDtos.SetupOptions(runService.listRepositories(),
-                runService.listSpecificationFiles(), runService.listRemoteRepositories());
+                runService.listSpecOptions().stream().map(DtoMapper::toSpecOption).toList(),
+                runService.listRemoteRepositories(),
+                specSources.listRegistered().stream().map(DtoMapper::toSpecSourceSummary).toList());
     }
 
     @PostMapping("/runs")
@@ -66,6 +78,18 @@ public class RunController {
         AnalysisRun run = runService.createRun(request.name(), request.repositoryId(),
                 request.oldSpec(), request.newSpec());
         return ResponseEntity.status(HttpStatus.CREATED).body(toSummary(run));
+    }
+
+    @PostMapping(value = "/specs", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<RunDtos.SpecOption> uploadSpecification(@RequestParam("file") MultipartFile file) {
+        String content;
+        try {
+            content = new String(file.getBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException("cannot read uploaded specification", e);
+        }
+        SpecOption uploaded = runService.uploadSpecification(file.getOriginalFilename(), content);
+        return ResponseEntity.status(HttpStatus.CREATED).body(DtoMapper.toSpecOption(uploaded));
     }
 
     @GetMapping("/runs")

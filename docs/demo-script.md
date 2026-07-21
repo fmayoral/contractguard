@@ -155,6 +155,40 @@ open a real draft PR against it).
      section against a real repository — same file the root README's step 6
      references. -->
 
+## 10. Test specification sources and upload (FR-043)
+
+The setup wizard's step 2 offers three ways to get old/new specs in front of
+a run, no filesystem or deployment access required for any of them.
+
+1. Start a new run and reach **Specifications** (step 2 of 3).
+2. **Upload**: choose a `.yaml`/`.yml`/`.json` file under "Upload a
+   specification file" — it appears immediately in the picker under
+   "Uploaded", and whichever of old/new is still unset gets filled with it
+   automatically (never overwriting a choice you already made).
+3. **Register a spec repository**: expand **+ Register a spec repository**
+   and supply a clone URL and default branch. Unlike consumer repository
+   registration, **the token is optional** — try registering a public
+   repository (e.g. a repo containing just your OpenAPI YAML files) with the
+   token field left blank:
+
+   ```bash
+   curl -s -X POST http://127.0.0.1:7080/api/spec-sources \
+     -H 'Content-Type: application/json' \
+     -d '{"repositoryId":"openapi-specs",
+          "cloneUrl":"https://github.com/<you>/<specs-repo>",
+          "defaultBranch":"main"}' | jq
+   ```
+
+   Its files appear in the picker under "From openapi-specs" once the clone
+   completes (every subsequent load of the setup screen refreshes it, so
+   there's no separate "sync" step).
+4. Failure path worth exercising: register a spec source with a clone URL
+   that doesn't exist, or a private repo with no/an invalid token. The setup
+   screen still loads normally — that one source just contributes no files,
+   and a hint under the picker names it as having "contributed no files."
+5. Proceed through step 3 and start the run exactly as in section 5 above;
+   the analysis works identically regardless of where the specs came from.
+
 ## Troubleshooting
 
 | Symptom | Fix |
@@ -164,6 +198,7 @@ open a real draft PR against it).
 | Validation timeout on first run | The consumer's first `mvnw verify` downloads dependencies; re-run, or raise `contractguard.validation.timeout` |
 | Run failed with `REPOSITORY_BUSY` | Another run is active on the repository; wait or restart the backend |
 | Stale demo state | Re-run `scripts/reset-demo.sh` |
-| `CREDENTIAL_KEY_NOT_CONFIGURED` registering a remote repository | Set `CONTRACTGUARD_CREDENTIAL_KEY` (base64, 32 bytes — `openssl rand -base64 32`) before registering |
+| `CREDENTIAL_KEY_NOT_CONFIGURED` registering a remote repository | Set `CONTRACTGUARD_CREDENTIAL_KEY` (base64, 32 bytes — `openssl rand -base64 32`) before registering. Not needed for a spec source with no token (ADR-0012) |
 | `REMOTE_REPOSITORY_NOT_REGISTERED` on publish | The run's `repositoryId` was never registered via `POST /api/repositories/remote`; local-workspace runs cannot be published |
 | Publish fails with `REMOTE_GIT_FAILURE` | Check the token has `repo` scope and the default branch name is correct; the run moves to `PUBLISH_FAILED` and can be retried with `POST .../publish` once fixed |
+| A registered spec source shows no files | Check the clone URL, default branch and (if private) token; the setup screen names sources that contributed nothing rather than failing outright |

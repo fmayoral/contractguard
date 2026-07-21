@@ -116,8 +116,10 @@ cd backend && ./mvnw spring-boot:run        # backend
 cd frontend && npm install && npm run dev   # dashboard
 ```
 
-Containerised alternative: `docker compose up --build`, then open
-<http://localhost:5173>.
+Containerised alternative — no Java/Node/Maven needed, just Docker:
+`docker compose up --build`, then open <http://localhost:5173>. See
+[docs/deployment.md](docs/deployment.md) for configuration (all optional)
+and troubleshooting.
 
 Follow [docs/demo-script.md](docs/demo-script.md) for the guided walkthrough
 of the bundled scenario (endpoint rename, field rename, enum value removal,
@@ -409,6 +411,7 @@ docs/          Specification, architecture, ADRs, demo script, roadmap
 ## Documentation
 
 - [Architecture](docs/architecture.md) · [ADRs](docs/adr/)
+- [Docker deployment](docs/deployment.md)
 - [Demo script & troubleshooting](docs/demo-script.md)
 - [Specification](docs/specification.md)
 - [Roadmap](docs/roadmap.md)

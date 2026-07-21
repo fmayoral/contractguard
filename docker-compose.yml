@@ -1,16 +1,29 @@
 # Containerised demo: `docker compose up --build`, then open http://localhost:5173.
 # The demo repository is materialised inside the backend container on startup;
-# state (runs, artifacts, Maven cache) persists in named volumes.
+# state (runs, artifacts, Maven cache) persists in named volumes. Every
+# environment value below is optional and read from a .env file next to this
+# one (see .env.example) -- the demo works with none of them set. Full
+# walkthrough: docs/deployment.md.
 services:
   backend:
     build:
       context: .
       dockerfile: backend/Dockerfile
+    ports:
+      - "127.0.0.1:7080:7080"
+    environment:
+      CONTRACTGUARD_LLM_PROVIDER: ${CONTRACTGUARD_LLM_PROVIDER:-mock}
+      CONTRACTGUARD_LLM_API_KEY: ${CONTRACTGUARD_LLM_API_KEY:-}
+      CONTRACTGUARD_LLM_BASE_URL: ${CONTRACTGUARD_LLM_BASE_URL:-https://api.openai.com/v1}
+      CONTRACTGUARD_LLM_MODEL: ${CONTRACTGUARD_LLM_MODEL:-gpt-4o-mini}
+      CONTRACTGUARD_CREDENTIAL_KEY: ${CONTRACTGUARD_CREDENTIAL_KEY:-}
+      CONTRACTGUARD_AUDIT_PRINCIPAL: ${CONTRACTGUARD_AUDIT_PRINCIPAL:-local-operator}
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:-}
     volumes:
       - contractguard-data:/app/data
       - maven-cache:/root/.m2
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:7080/api/runs || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:7080/actuator/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 12

@@ -4,7 +4,9 @@ import { isTerminal, stateTone } from './format';
 import { useRunEvents } from './useRunEvents';
 import { Badge } from './components/Badge';
 import { ChangeTable } from './components/ChangeTable';
+import { HelpModal } from './components/HelpModal';
 import { ImpactView } from './components/ImpactView';
+import { OnboardingBanner } from './components/OnboardingBanner';
 import { PlanApproval } from './components/PlanApproval';
 import { PublishPanel } from './components/PublishPanel';
 import { ReportView } from './components/ReportView';
@@ -20,6 +22,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [run, setRun] = useState<RunDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const refreshRuns = useCallback(() => {
     api.listRuns().then(setRuns).catch(() => setRuns([]));
@@ -55,9 +58,16 @@ export default function App() {
       <aside className="sidebar">
         <div className="sidebar-header">
           <h1>ContractGuard AI</h1>
-          <ThemeToggle />
+          <div className="sidebar-header-actions">
+            <button type="button" className="secondary small" onClick={() => setHelpOpen(true)}>
+              Help
+            </button>
+            <ThemeToggle />
+          </div>
         </div>
+        <OnboardingBanner />
         <RunSetup onCreated={onCreated} />
+        {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
         <section className="card">
           <h2>Run history</h2>
           <RunList runs={runs} selectedId={selectedId} onSelect={setSelectedId} />

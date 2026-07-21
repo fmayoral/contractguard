@@ -20,6 +20,7 @@ import com.contractguard.domain.RunState;
 import com.contractguard.testsupport.InMemoryAuditTrail;
 import com.contractguard.testsupport.InMemoryRunEventLog;
 import com.contractguard.testsupport.InMemoryRunRepository;
+import com.contractguard.testsupport.NoOpObservability;
 import com.contractguard.testsupport.QueuedLlmGateway;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -140,9 +141,9 @@ class ExecutionServiceTest {
             }
         };
         service = new ExecutionService(runs, events, fakeGit, fakePatch, builds, reader,
-                new ImplementationAgent(new LlmJsonClient(gateway, codec), new PromptLibrary(), codec),
+                new ImplementationAgent(new LlmJsonClient(gateway, codec, new NoOpObservability()), new PromptLibrary(), codec),
                 artifacts, "maven-verify",
-                new AuditTrailService(audit, "test-operator", Clock.systemUTC()), Clock.systemUTC());
+                new AuditTrailService(audit, "test-operator", Clock.systemUTC()), new NoOpObservability(), Clock.systemUTC());
     }
 
     private AnalysisRun approvedRun() {

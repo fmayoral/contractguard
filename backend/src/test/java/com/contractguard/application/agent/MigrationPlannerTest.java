@@ -12,6 +12,7 @@ import com.contractguard.domain.ImpactEvidence;
 import com.contractguard.domain.MigrationPlan;
 import com.contractguard.domain.PlanHasher;
 import com.contractguard.domain.RunState;
+import com.contractguard.testsupport.NoOpObservability;
 import com.contractguard.testsupport.QueuedLlmGateway;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -40,7 +41,7 @@ class MigrationPlannerTest {
 
     private MigrationPlanner planner(QueuedLlmGateway gateway) throws Exception {
         Files.createDirectories(workspace.resolve("any/.git"));
-        return new MigrationPlanner(new LlmJsonClient(gateway, codec), prompts, codec,
+        return new MigrationPlanner(new LlmJsonClient(gateway, codec, new NoOpObservability()), prompts, codec,
                 new WorkspacePolicy(List.of(workspace)), List.of("maven-verify"), Clock.systemUTC());
     }
 

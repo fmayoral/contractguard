@@ -5,6 +5,7 @@ import com.contractguard.application.agent.ImpactInvestigator;
 import com.contractguard.application.agent.MigrationPlanner;
 import com.contractguard.application.policy.WorkspacePolicy;
 import com.contractguard.application.port.JsonCodec;
+import com.contractguard.application.port.ObservabilityPort;
 import com.contractguard.application.port.OpenApiDiffPort;
 import com.contractguard.application.port.RunEventLog;
 import com.contractguard.application.port.RunRepository;
@@ -40,12 +41,13 @@ public class AnalysisPipeline {
     private final MigrationPlanner planner;
     private final JsonCodec codec;
     private final AuditTrailService audit;
+    private final ObservabilityPort observability;
     private final Clock clock;
 
     public AnalysisPipeline(RunRepository runs, RunEventLog events, WorkspacePolicy workspacePolicy,
             OpenApiDiffPort diffPort, EvidenceCollector evidenceCollector, ChangeExplainer changeExplainer,
             ImpactInvestigator investigator, MigrationPlanner planner, JsonCodec codec,
-            AuditTrailService audit, Clock clock) {
+            AuditTrailService audit, ObservabilityPort observability, Clock clock) {
         this.runs = runs;
         this.events = events;
         this.workspacePolicy = workspacePolicy;
@@ -56,106 +58,127 @@ public class AnalysisPipeline {
         this.planner = planner;
         this.codec = codec;
         this.audit = audit;
+        this.observability = observability;
         this.clock = clock;
     }
 
     public void analyse(String runId, Path oldSpec, Path newSpec) {
         AnalysisRun run = runs.findById(runId).orElseThrow(
                 () -> new IllegalArgumentException("unknown run " + runId));
-        try {
-            validateInputs(run, oldSpec, newSpec);
-            diffAndExplain(run, oldSpec, newSpec);
-            collectEvidence(run);
-            assess(run);
-            plan(run);
-        } catch (ContractGuardException e) {
-            fail(run, e.failure());
-        } catch (RuntimeException e) {
-            fail(run, new RunFailure(FailureCategory.INTERNAL_ERROR,
-                    "unexpected analysis error: " + e.getMessage(), false, null,
-                    "Inspect the application logs for the stack trace."));
+        try (ObservabilityPort.SpanHandle span = startSpan(run, "analyse")) {
+            try {
+                validateInputs(run, oldSpec, newSpec);
+                diffAndExplain(run, oldSpec, newSpec);
+                collectEvidence(run);
+                assess(run);
+                plan(run);
+            } catch (ContractGuardException e) {
+                span.recordError(e.getMessage());
+                fail(run, e.failure());
+            } catch (RuntimeException e) {
+                span.recordError(e.getMessage());
+                fail(run, new RunFailure(FailureCategory.INTERNAL_ERROR,
+                        "unexpected analysis error: " + e.getMessage(), false, null,
+                        "Inspect the application logs for the stack trace."));
+            }
         }
     }
 
     private void validateInputs(AnalysisRun run, Path oldSpec, Path newSpec) {
-        transition(run, RunState.VALIDATING_INPUT, "input-validation", "Validating inputs");
-        if (!Files.isRegularFile(oldSpec) || !Files.isRegularFile(newSpec)) {
-            throw ContractGuardException.of(FailureCategory.INVALID_OPENAPI,
-                    "one or both specification files do not exist",
-                    "Select specifications from the configured directory.");
+        try (ObservabilityPort.SpanHandle span = startSpan(run, "input-validation")) {
+            transition(run, RunState.VALIDATING_INPUT, "input-validation", "Validating inputs");
+            if (!Files.isRegularFile(oldSpec) || !Files.isRegularFile(newSpec)) {
+                throw ContractGuardException.of(FailureCategory.INVALID_OPENAPI,
+                        "one or both specification files do not exist",
+                        "Select specifications from the configured directory.");
+            }
+            Path repoRoot = workspacePolicy.resolveRepository(run.repositoryId());
+            if (!Files.isDirectory(repoRoot.resolve(".git"))) {
+                throw ContractGuardException.of(FailureCategory.REPOSITORY_OUTSIDE_WORKSPACE,
+                        "repository '%s' is not a Git repository".formatted(run.repositoryId()),
+                        "Run the demo reset script to materialise the repository.");
+            }
+            if (!Files.exists(repoRoot.resolve("mvnw")) && !Files.exists(repoRoot.resolve("mvnw.cmd"))) {
+                throw ContractGuardException.of(FailureCategory.UNSUPPORTED_FEATURE,
+                        "repository '%s' has no Maven wrapper".formatted(run.repositoryId()),
+                        "Only Maven-wrapper builds are supported in the MVP.");
+            }
+            List<AnalysisRun> active = runs.findActiveByRepository(run.repositoryId());
+            boolean busy = active.stream().anyMatch(other -> !other.id().equals(run.id()));
+            if (busy) {
+                throw ContractGuardException.of(FailureCategory.REPOSITORY_BUSY,
+                        "repository '%s' is used by another active run".formatted(run.repositoryId()),
+                        "Wait for the other run to finish or cancel it.");
+            }
+            complete(run, "input-validation", "Inputs validated", null);
         }
-        Path repoRoot = workspacePolicy.resolveRepository(run.repositoryId());
-        if (!Files.isDirectory(repoRoot.resolve(".git"))) {
-            throw ContractGuardException.of(FailureCategory.REPOSITORY_OUTSIDE_WORKSPACE,
-                    "repository '%s' is not a Git repository".formatted(run.repositoryId()),
-                    "Run the demo reset script to materialise the repository.");
-        }
-        if (!Files.exists(repoRoot.resolve("mvnw")) && !Files.exists(repoRoot.resolve("mvnw.cmd"))) {
-            throw ContractGuardException.of(FailureCategory.UNSUPPORTED_FEATURE,
-                    "repository '%s' has no Maven wrapper".formatted(run.repositoryId()),
-                    "Only Maven-wrapper builds are supported in the MVP.");
-        }
-        List<AnalysisRun> active = runs.findActiveByRepository(run.repositoryId());
-        boolean busy = active.stream().anyMatch(other -> !other.id().equals(run.id()));
-        if (busy) {
-            throw ContractGuardException.of(FailureCategory.REPOSITORY_BUSY,
-                    "repository '%s' is used by another active run".formatted(run.repositoryId()),
-                    "Wait for the other run to finish or cancel it.");
-        }
-        complete(run, "input-validation", "Inputs validated", null);
     }
 
     private void diffAndExplain(AnalysisRun run, Path oldSpec, Path newSpec) {
-        transition(run, RunState.DIFFING, "diff", "Comparing specifications");
-        OpenApiDiffPort.DiffResult result = diffPort.diff(oldSpec, newSpec);
-        run.recordSpecs(fileName(oldSpec), fileName(newSpec),
-                result.oldSpecHash(), result.newSpecHash(), clock.instant());
-        run.recordChanges(result.changes(), clock.instant());
-        runs.save(run);
-        complete(run, "diff", "%d change(s) detected".formatted(result.changes().size()),
-                Map.of("changes", result.changes().size(), "warnings", result.warnings()));
+        try (ObservabilityPort.SpanHandle span = startSpan(run, "diff")) {
+            transition(run, RunState.DIFFING, "diff", "Comparing specifications");
+            OpenApiDiffPort.DiffResult result = diffPort.diff(oldSpec, newSpec);
+            run.recordSpecs(fileName(oldSpec), fileName(newSpec),
+                    result.oldSpecHash(), result.newSpecHash(), clock.instant());
+            run.recordChanges(result.changes(), clock.instant());
+            runs.save(run);
+            complete(run, "diff", "%d change(s) detected".formatted(result.changes().size()),
+                    Map.of("changes", result.changes().size(), "warnings", result.warnings()));
+        }
 
-        events.append(run.id(), "change-explainer", "STARTED",
-                "Explaining changes", "{\"kind\":\"llm\"}");
-        Map<String, String> explanations = changeExplainer.explain(run.changes());
-        explanations.forEach((changeId, text) -> run.attachExplanation(changeId, text, clock.instant()));
-        runs.save(run);
-        events.append(run.id(), "change-explainer", "COMPLETED",
-                "%d change(s) explained".formatted(explanations.size()), "{\"kind\":\"llm\"}");
+        try (ObservabilityPort.SpanHandle span = startSpan(run, "change-explainer")) {
+            events.append(run.id(), "change-explainer", "STARTED",
+                    "Explaining changes", "{\"kind\":\"llm\"}");
+            Map<String, String> explanations = changeExplainer.explain(run.changes());
+            explanations.forEach((changeId, text) -> run.attachExplanation(changeId, text, clock.instant()));
+            runs.save(run);
+            events.append(run.id(), "change-explainer", "COMPLETED",
+                    "%d change(s) explained".formatted(explanations.size()), "{\"kind\":\"llm\"}");
+        }
     }
 
     private void collectEvidence(AnalysisRun run) {
-        transition(run, RunState.SEARCHING, "search", "Searching consumer repository");
-        List<ImpactEvidence> evidence = evidenceCollector.collect(run.repositoryId(), run.changes());
-        run.recordEvidence(evidence, clock.instant());
-        runs.save(run);
-        complete(run, "search", "%d evidence match(es) collected".formatted(evidence.size()),
-                Map.of("evidence", evidence.size()));
+        try (ObservabilityPort.SpanHandle span = startSpan(run, "search")) {
+            transition(run, RunState.SEARCHING, "search", "Searching consumer repository");
+            List<ImpactEvidence> evidence = evidenceCollector.collect(run.repositoryId(), run.changes());
+            run.recordEvidence(evidence, clock.instant());
+            runs.save(run);
+            complete(run, "search", "%d evidence match(es) collected".formatted(evidence.size()),
+                    Map.of("evidence", evidence.size()));
+        }
     }
 
     private void assess(AnalysisRun run) {
-        transition(run, RunState.ASSESSING, "assessment", "Assessing impact");
-        List<ImpactAssessment> assessments = investigator.investigate(
-                run.id(), run.repositoryId(), run.changes(), run.evidence(), events);
-        run.recordAssessments(assessments, clock.instant());
-        runs.save(run);
-        complete(run, "assessment", "%d impact assessment(s) produced".formatted(assessments.size()),
-                Map.of("assessments", assessments.size(), "kind", "llm"));
+        try (ObservabilityPort.SpanHandle span = startSpan(run, "assessment")) {
+            transition(run, RunState.ASSESSING, "assessment", "Assessing impact");
+            List<ImpactAssessment> assessments = investigator.investigate(
+                    run.id(), run.repositoryId(), run.changes(), run.evidence(), events);
+            run.recordAssessments(assessments, clock.instant());
+            runs.save(run);
+            complete(run, "assessment", "%d impact assessment(s) produced".formatted(assessments.size()),
+                    Map.of("assessments", assessments.size(), "kind", "llm"));
+        }
     }
 
     private void plan(AnalysisRun run) {
-        transition(run, RunState.PLANNING, "planning", "Generating migration plan");
-        MigrationPlan plan = planner.plan(run);
-        run.attachPlan(plan, clock.instant());
-        run.transitionTo(RunState.AWAITING_APPROVAL, clock.instant());
-        runs.save(run);
-        audit.recordTransition(run, RunState.PLANNING, RunState.AWAITING_APPROVAL);
-        complete(run, "planning", "Plan v%d with %d item(s) ready".formatted(
-                plan.version(), plan.items().size()),
-                Map.of("planHash", plan.hash(), "items", plan.items().size(), "kind", "llm"));
-        events.append(run.id(), "approval", "WAITING",
-                "Awaiting human approval; no modification will happen before an approval is recorded",
-                "{\"kind\":\"system\"}");
+        try (ObservabilityPort.SpanHandle span = startSpan(run, "planning")) {
+            transition(run, RunState.PLANNING, "planning", "Generating migration plan");
+            MigrationPlan plan = planner.plan(run);
+            run.attachPlan(plan, clock.instant());
+            run.transitionTo(RunState.AWAITING_APPROVAL, clock.instant());
+            runs.save(run);
+            audit.recordTransition(run, RunState.PLANNING, RunState.AWAITING_APPROVAL);
+            complete(run, "planning", "Plan v%d with %d item(s) ready".formatted(
+                    plan.version(), plan.items().size()),
+                    Map.of("planHash", plan.hash(), "items", plan.items().size(), "kind", "llm"));
+            events.append(run.id(), "approval", "WAITING",
+                    "Awaiting human approval; no modification will happen before an approval is recorded",
+                    "{\"kind\":\"system\"}");
+        }
+    }
+
+    private ObservabilityPort.SpanHandle startSpan(AnalysisRun run, String name) {
+        return observability.startSpan(name, Map.of("runId", run.id(), "repositoryId", run.repositoryId()));
     }
 
     private static String fileName(Path path) {

@@ -13,6 +13,7 @@ import com.contractguard.domain.FailureCategory;
 import com.contractguard.domain.ImpactAssessment;
 import com.contractguard.domain.ImpactEvidence;
 import com.contractguard.testsupport.InMemoryRunEventLog;
+import com.contractguard.testsupport.NoOpObservability;
 import com.contractguard.testsupport.QueuedLlmGateway;
 import org.junit.jupiter.api.Test;
 
@@ -39,7 +40,7 @@ class ImpactInvestigatorTest {
             new SourceReaderPort.FileContent(path, "file body of " + path, 1, 3, 3, false);
 
     private ImpactInvestigator investigator(QueuedLlmGateway gateway, int maxSteps) {
-        return new ImpactInvestigator(new LlmJsonClient(gateway, codec), prompts, codec,
+        return new ImpactInvestigator(new LlmJsonClient(gateway, codec, new NoOpObservability()), prompts, codec,
                 searchPort, readerPort, maxSteps);
     }
 

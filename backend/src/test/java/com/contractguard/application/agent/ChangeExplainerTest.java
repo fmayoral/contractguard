@@ -7,6 +7,7 @@ import com.contractguard.domain.ApiChange;
 import com.contractguard.domain.ChangeType;
 import com.contractguard.domain.Classification;
 import com.contractguard.domain.ContractGuardException;
+import com.contractguard.testsupport.NoOpObservability;
 import com.contractguard.testsupport.QueuedLlmGateway;
 import org.junit.jupiter.api.Test;
 
@@ -32,7 +33,7 @@ class ChangeExplainerTest {
         QueuedLlmGateway gateway = new QueuedLlmGateway().enqueue("""
                 {"explanations":[{"changeId":"c1","explanation":"breaks readers","uncertainty":""}]}""");
         ChangeExplainer explainer = new ChangeExplainer(
-                new LlmJsonClient(gateway, codec), prompts, codec);
+                new LlmJsonClient(gateway, codec, new NoOpObservability()), prompts, codec);
 
         Map<String, String> result = explainer.explain(List.of(change("c1")));
 
@@ -46,7 +47,7 @@ class ChangeExplainerTest {
                 {"explanations":[{"changeId":"c1","explanation":"breaks readers",
                   "uncertainty":"unsure about dead code"}]}""");
         ChangeExplainer explainer = new ChangeExplainer(
-                new LlmJsonClient(gateway, codec), prompts, codec);
+                new LlmJsonClient(gateway, codec, new NoOpObservability()), prompts, codec);
 
         Map<String, String> result = explainer.explain(List.of(change("c1")));
 
@@ -59,7 +60,7 @@ class ChangeExplainerTest {
                 "{\"explanations\":[{\"changeId\":\"ghost\",\"explanation\":\"x\",\"uncertainty\":\"\"}]}",
                 "{\"explanations\":[]}");
         ChangeExplainer explainer = new ChangeExplainer(
-                new LlmJsonClient(gateway, codec), prompts, codec);
+                new LlmJsonClient(gateway, codec, new NoOpObservability()), prompts, codec);
 
         assertThatThrownBy(() -> explainer.explain(List.of(change("c1"))))
                 .isInstanceOf(ContractGuardException.class);

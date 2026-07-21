@@ -12,6 +12,8 @@ import com.contractguard.adapter.json.JacksonJsonCodec;
 import com.contractguard.adapter.llm.LlmSettings;
 import com.contractguard.adapter.llm.OpenAiCompatibleLlmGateway;
 import com.contractguard.adapter.llm.ScriptedLlmGateway;
+import com.contractguard.adapter.observability.MetricsRecordingAuditTrail;
+import com.contractguard.adapter.observability.MicrometerObservability;
 import com.contractguard.adapter.persistence.JdbcAuditTrail;
 import com.contractguard.adapter.persistence.JdbcRemoteRepositoryRegistry;
 import com.contractguard.adapter.persistence.JdbcRunEventLog;
@@ -34,6 +36,7 @@ import com.contractguard.application.port.GitWorkspacePort;
 import com.contractguard.application.port.JsonCodec;
 import com.contractguard.application.port.PatchPort;
 import com.contractguard.application.port.LlmGateway;
+import com.contractguard.application.port.ObservabilityPort;
 import com.contractguard.application.port.OpenApiDiffPort;
 import com.contractguard.application.port.PullRequestPort;
 import com.contractguard.application.port.RemoteGitPort;
@@ -53,6 +56,10 @@ import com.contractguard.application.service.ReportService;
 import com.contractguard.application.service.RetentionService;
 import com.contractguard.application.service.RunQueryService;
 import com.contractguard.application.service.RunService;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.observation.ObservationRegistry;
+import io.opentelemetry.exporter.logging.LoggingSpanExporter;
+import io.opentelemetry.sdk.trace.export.SpanExporter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationRunner;
@@ -133,8 +140,19 @@ public class ApplicationConfiguration {
     }
 
     @Bean
-    public LlmJsonClient llmJsonClient(LlmGateway gateway, JsonCodec codec) {
-        return new LlmJsonClient(gateway, codec);
+    public LlmJsonClient llmJsonClient(LlmGateway gateway, JsonCodec codec, ObservabilityPort observability) {
+        return new LlmJsonClient(gateway, codec, observability);
+    }
+
+    /** Spans are exported to the log by default (ADR-0011); set an OTLP endpoint for real tracing infra. */
+    @Bean
+    public SpanExporter otelSpanExporter() {
+        return LoggingSpanExporter.create();
+    }
+
+    @Bean
+    public ObservabilityPort observabilityPort(ObservationRegistry observations, MeterRegistry meters) {
+        return new MicrometerObservability(observations, meters);
     }
 
     @Bean
@@ -178,8 +196,8 @@ public class ApplicationConfiguration {
     }
 
     @Bean
-    public AuditTrailPort auditTrailPort(JdbcTemplate jdbc) {
-        return new JdbcAuditTrail(jdbc);
+    public AuditTrailPort auditTrailPort(JdbcTemplate jdbc, MeterRegistry meters) {
+        return new MetricsRecordingAuditTrail(new JdbcAuditTrail(jdbc), meters);
     }
 
     @Bean
@@ -192,9 +210,10 @@ public class ApplicationConfiguration {
     public AnalysisPipeline analysisPipeline(RunRepository runs, RunEventLog events,
             WorkspacePolicy policy, OpenApiDiffPort diffPort, EvidenceCollector evidenceCollector,
             ChangeExplainer changeExplainer, ImpactInvestigator investigator,
-            MigrationPlanner planner, JsonCodec codec, AuditTrailService audit, Clock clock) {
+            MigrationPlanner planner, JsonCodec codec, AuditTrailService audit,
+            ObservabilityPort observability, Clock clock) {
         return new AnalysisPipeline(runs, events, policy, diffPort, evidenceCollector,
-                changeExplainer, investigator, planner, codec, audit, clock);
+                changeExplainer, investigator, planner, codec, audit, observability, clock);
     }
 
     @Bean(destroyMethod = "shutdown")
@@ -246,8 +265,9 @@ public class ApplicationConfiguration {
     @Bean
     public PublishService publishService(RunRepository runs, RunEventLog events, GitWorkspacePort git,
             RemoteGitPort remoteGit, PullRequestPort pullRequests, RemoteRepositoryRegistry remoteRepositories,
-            AuditTrailService audit, Clock clock) {
-        return new PublishService(runs, events, git, remoteGit, pullRequests, remoteRepositories, audit, clock);
+            AuditTrailService audit, ObservabilityPort observability, Clock clock) {
+        return new PublishService(runs, events, git, remoteGit, pullRequests, remoteRepositories, audit,
+                observability, clock);
     }
 
     @Bean
@@ -315,9 +335,10 @@ public class ApplicationConfiguration {
     public ExecutionService executionService(RunRepository runs, RunEventLog events,
             GitWorkspacePort git, PatchPort patches, BuildValidationPort builds,
             SourceReaderPort sourceReader, ImplementationAgent agent, ArtifactStore artifacts,
-            ContractGuardProperties properties, AuditTrailService audit, Clock clock) {
+            ContractGuardProperties properties, AuditTrailService audit,
+            ObservabilityPort observability, Clock clock) {
         return new ExecutionService(runs, events, git, patches, builds, sourceReader, agent,
-                artifacts, properties.validation().commandKey(), audit, clock);
+                artifacts, properties.validation().commandKey(), audit, observability, clock);
     }
 
     @Bean

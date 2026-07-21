@@ -3,10 +3,12 @@ package com.contractguard.application.llm;
 import com.contractguard.application.policy.SecretRedactor;
 import com.contractguard.application.port.JsonCodec;
 import com.contractguard.application.port.LlmGateway;
+import com.contractguard.application.port.ObservabilityPort;
 import com.contractguard.domain.ContractGuardException;
 import com.contractguard.domain.FailureCategory;
 
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 
 /**
@@ -19,10 +21,12 @@ public class LlmJsonClient {
 
     private final LlmGateway gateway;
     private final JsonCodec codec;
+    private final ObservabilityPort observability;
 
-    public LlmJsonClient(LlmGateway gateway, JsonCodec codec) {
+    public LlmJsonClient(LlmGateway gateway, JsonCodec codec, ObservabilityPort observability) {
         this.gateway = gateway;
         this.codec = codec;
+        this.observability = observability;
     }
 
     /**
@@ -37,8 +41,13 @@ public class LlmJsonClient {
             String payload = feedback == null ? redactedPayload
                     : redactedPayload + "\n\nYour previous response was invalid: " + feedback
                             + "\nRespond again with corrected JSON only.";
-            LlmGateway.LlmResponse response = gateway.complete(new LlmGateway.LlmRequest(
-                    prompt.name(), prompt.version(), prompt.text(), payload));
+            LlmGateway.LlmResponse response;
+            try (ObservabilityPort.SpanHandle span = observability.startSpan("llm." + prompt.name(),
+                    Map.of("promptVersion", prompt.version(), "attempt", String.valueOf(attempt)))) {
+                response = gateway.complete(new LlmGateway.LlmRequest(
+                        prompt.name(), prompt.version(), prompt.text(), payload));
+                observability.recordLlmUsage(prompt.name(), response.promptTokens(), response.completionTokens());
+            }
             String content = stripCodeFences(response.content());
             JsonCodec.DecodeResult<T> decoded = codec.decode(content, type);
             if (!decoded.ok()) {

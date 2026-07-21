@@ -5,6 +5,28 @@ server:
   address: 127.0.0.1
   port: 7080
 
+management:
+  # Observability (FR-029, ADR-0011): Prometheus scrape target, health/readiness probes for
+  # orchestration, and full-sampling OpenTelemetry tracing (Micrometer Observation), acceptable
+  # at this tool's single-operator scale. No OTLP endpoint is configured by default, so spans are
+  # exported to the log only; set management.otlp.tracing.endpoint to point at a real collector.
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
+
 spring:
   application:
     name: contractguard

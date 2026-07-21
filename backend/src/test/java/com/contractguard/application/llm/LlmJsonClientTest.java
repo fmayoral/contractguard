@@ -3,6 +3,7 @@ package com.contractguard.application.llm;
 import com.contractguard.adapter.json.JacksonJsonCodec;
 import com.contractguard.domain.ContractGuardException;
 import com.contractguard.domain.FailureCategory;
+import com.contractguard.testsupport.NoOpObservability;
 import com.contractguard.testsupport.QueuedLlmGateway;
 import org.junit.jupiter.api.Test;
 
@@ -21,7 +22,7 @@ class LlmJsonClientTest {
     @Test
     void returnsDecodedValueOnFirstValidResponse() {
         QueuedLlmGateway gateway = new QueuedLlmGateway().enqueue("{\"value\":\"ok\"}");
-        LlmJsonClient client = new LlmJsonClient(gateway, new JacksonJsonCodec());
+        LlmJsonClient client = new LlmJsonClient(gateway, new JacksonJsonCodec(), new NoOpObservability());
 
         Answer answer = client.request(prompt, "{}", Answer.class, a -> List.of());
 
@@ -34,7 +35,7 @@ class LlmJsonClientTest {
     void retriesOnceWithValidationFeedbackThenSucceeds() {
         QueuedLlmGateway gateway = new QueuedLlmGateway()
                 .enqueue("not json at all", "{\"value\":\"fixed\"}");
-        LlmJsonClient client = new LlmJsonClient(gateway, new JacksonJsonCodec());
+        LlmJsonClient client = new LlmJsonClient(gateway, new JacksonJsonCodec(), new NoOpObservability());
 
         Answer answer = client.request(prompt, "{}", Answer.class, a -> List.of());
 
@@ -47,7 +48,7 @@ class LlmJsonClientTest {
     void semanticViolationsTriggerRetryAndFeedback() {
         QueuedLlmGateway gateway = new QueuedLlmGateway()
                 .enqueue("{\"value\":\"bad\"}", "{\"value\":\"good\"}");
-        LlmJsonClient client = new LlmJsonClient(gateway, new JacksonJsonCodec());
+        LlmJsonClient client = new LlmJsonClient(gateway, new JacksonJsonCodec(), new NoOpObservability());
 
         Answer answer = client.request(prompt, "{}", Answer.class,
                 a -> a.value().equals("bad") ? List.of("value must not be 'bad'") : List.of());
@@ -59,7 +60,7 @@ class LlmJsonClientTest {
     @Test
     void failsTypedAfterSecondInvalidResponse() {
         QueuedLlmGateway gateway = new QueuedLlmGateway().enqueue("garbage", "still garbage");
-        LlmJsonClient client = new LlmJsonClient(gateway, new JacksonJsonCodec());
+        LlmJsonClient client = new LlmJsonClient(gateway, new JacksonJsonCodec(), new NoOpObservability());
 
         assertThatThrownBy(() -> client.request(prompt, "{}", Answer.class, a -> List.of()))
                 .isInstanceOf(ContractGuardException.class)
@@ -72,7 +73,7 @@ class LlmJsonClientTest {
     void unknownFieldsAreASchemaViolation() {
         QueuedLlmGateway gateway = new QueuedLlmGateway()
                 .enqueue("{\"value\":\"ok\",\"extra\":\"nope\"}", "{\"value\":\"ok\"}");
-        LlmJsonClient client = new LlmJsonClient(gateway, new JacksonJsonCodec());
+        LlmJsonClient client = new LlmJsonClient(gateway, new JacksonJsonCodec(), new NoOpObservability());
 
         Answer answer = client.request(prompt, "{}", Answer.class, a -> List.of());
 
@@ -83,7 +84,7 @@ class LlmJsonClientTest {
     @Test
     void payloadIsRedactedBeforeSubmission() {
         QueuedLlmGateway gateway = new QueuedLlmGateway().enqueue("{\"value\":\"ok\"}");
-        LlmJsonClient client = new LlmJsonClient(gateway, new JacksonJsonCodec());
+        LlmJsonClient client = new LlmJsonClient(gateway, new JacksonJsonCodec(), new NoOpObservability());
 
         client.request(prompt, "{\"config\":\"password=topsecret99\"}", Answer.class, a -> List.of());
 
@@ -96,7 +97,7 @@ class LlmJsonClientTest {
     void markdownFencesAreTolerated() {
         QueuedLlmGateway gateway = new QueuedLlmGateway()
                 .enqueue("```json\n{\"value\":\"fenced\"}\n```");
-        LlmJsonClient client = new LlmJsonClient(gateway, new JacksonJsonCodec());
+        LlmJsonClient client = new LlmJsonClient(gateway, new JacksonJsonCodec(), new NoOpObservability());
 
         Answer answer = client.request(prompt, "{}", Answer.class, a -> List.of());
 

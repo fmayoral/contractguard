@@ -5,6 +5,7 @@ import com.contractguard.application.policy.SecretRedactor;
 import com.contractguard.application.port.ArtifactStore;
 import com.contractguard.application.port.BuildValidationPort;
 import com.contractguard.application.port.GitWorkspacePort;
+import com.contractguard.application.port.ObservabilityPort;
 import com.contractguard.application.port.PatchPort;
 import com.contractguard.application.port.RunEventLog;
 import com.contractguard.application.port.RunRepository;
@@ -44,12 +45,13 @@ public class ExecutionService {
     private final ArtifactStore artifacts;
     private final String validationCommandKey;
     private final AuditTrailService audit;
+    private final ObservabilityPort observability;
     private final Clock clock;
 
     public ExecutionService(RunRepository runs, RunEventLog events, GitWorkspacePort git,
             PatchPort patches, BuildValidationPort builds, SourceReaderPort sourceReader,
             ImplementationAgent agent, ArtifactStore artifacts, String validationCommandKey,
-            AuditTrailService audit, Clock clock) {
+            AuditTrailService audit, ObservabilityPort observability, Clock clock) {
         this.runs = runs;
         this.events = events;
         this.git = git;
@@ -60,6 +62,7 @@ public class ExecutionService {
         this.artifacts = artifacts;
         this.validationCommandKey = validationCommandKey;
         this.audit = audit;
+        this.observability = observability;
         this.clock = clock;
     }
 
@@ -80,44 +83,50 @@ public class ExecutionService {
 
     public void execute(String runId) {
         AnalysisRun run = RunLookup.require(runs, runId);
-        try {
-            prepareBranch(run);
-            patchAndValidate(run);
-        } catch (ContractGuardException e) {
-            // Typed failures carry their own mutation flag (set where the mutation happened).
-            fail(run, e.failure());
-        } catch (RuntimeException e) {
-            boolean patchWasApplied = run.patches().stream()
-                    .anyMatch(p -> p.checkStatus() == PatchArtifact.CheckStatus.APPLIED);
-            fail(run, new RunFailure(FailureCategory.INTERNAL_ERROR,
-                    "unexpected execution error: " + e.getMessage(), patchWasApplied, null,
-                    "Inspect the application logs; the working branch may need manual cleanup."));
+        try (ObservabilityPort.SpanHandle span = startSpan(run, "execute")) {
+            try {
+                prepareBranch(run);
+                patchAndValidate(run);
+            } catch (ContractGuardException e) {
+                // Typed failures carry their own mutation flag (set where the mutation happened).
+                span.recordError(e.getMessage());
+                fail(run, e.failure());
+            } catch (RuntimeException e) {
+                span.recordError(e.getMessage());
+                boolean patchWasApplied = run.patches().stream()
+                        .anyMatch(p -> p.checkStatus() == PatchArtifact.CheckStatus.APPLIED);
+                fail(run, new RunFailure(FailureCategory.INTERNAL_ERROR,
+                        "unexpected execution error: " + e.getMessage(), patchWasApplied, null,
+                        "Inspect the application logs; the working branch may need manual cleanup."));
+            }
         }
     }
 
     private void prepareBranch(AnalysisRun run) {
-        events.append(run.id(), "branch", "STARTED", "Checking repository safety", "{\"kind\":\"tool\"}");
-        GitWorkspacePort.GitStatus status = git.status(run.repositoryId());
-        if (!status.clean()) {
-            throw ContractGuardException.of(FailureCategory.DIRTY_REPOSITORY,
-                    "repository has uncommitted changes: %s".formatted(
-                            String.join(", ", status.dirtyEntries())),
-                    "Commit, stash or reset the repository, then execute again.");
+        try (ObservabilityPort.SpanHandle span = startSpan(run, "branch")) {
+            events.append(run.id(), "branch", "STARTED", "Checking repository safety", "{\"kind\":\"tool\"}");
+            GitWorkspacePort.GitStatus status = git.status(run.repositoryId());
+            if (!status.clean()) {
+                throw ContractGuardException.of(FailureCategory.DIRTY_REPOSITORY,
+                        "repository has uncommitted changes: %s".formatted(
+                                String.join(", ", status.dirtyEntries())),
+                        "Commit, stash or reset the repository, then execute again.");
+            }
+            String branchName = "contractguard/run-" + Ids.shortId(run.id());
+            if (git.branchExists(run.repositoryId(), branchName)) {
+                throw ContractGuardException.of(FailureCategory.POLICY_VIOLATION,
+                        "target branch %s already exists".formatted(branchName),
+                        "Delete or rename the conflicting branch manually, then execute again.");
+            }
+            git.createBranch(run.repositoryId(), branchName);
+            run.recordBranches(status.currentBranch(), branchName, clock.instant());
+            runs.save(run);
+            events.append(run.id(), "branch", "COMPLETED",
+                    "Working branch %s created from %s".formatted(branchName, status.currentBranch()),
+                    "{\"kind\":\"tool\"}");
+            audit.recordRepositoryMutation(run, "Branch %s created from %s"
+                    .formatted(branchName, status.currentBranch()));
         }
-        String branchName = "contractguard/run-" + Ids.shortId(run.id());
-        if (git.branchExists(run.repositoryId(), branchName)) {
-            throw ContractGuardException.of(FailureCategory.POLICY_VIOLATION,
-                    "target branch %s already exists".formatted(branchName),
-                    "Delete or rename the conflicting branch manually, then execute again.");
-        }
-        git.createBranch(run.repositoryId(), branchName);
-        run.recordBranches(status.currentBranch(), branchName, clock.instant());
-        runs.save(run);
-        events.append(run.id(), "branch", "COMPLETED",
-                "Working branch %s created from %s".formatted(branchName, status.currentBranch()),
-                "{\"kind\":\"tool\"}");
-        audit.recordRepositoryMutation(run, "Branch %s created from %s"
-                .formatted(branchName, status.currentBranch()));
     }
 
     private void patchAndValidate(AnalysisRun run) {
@@ -154,35 +163,38 @@ public class ExecutionService {
 
     private void applyPatch(AnalysisRun run, MigrationPlan plan, String promptName,
             String failureOutput, int attempt) {
-        Set<String> approvedFiles = plan.approvedFiles();
-        Map<String, String> currentFiles = readApprovedFiles(run, approvedFiles);
-        events.append(run.id(), "patch", "STARTED",
-                "Attempt %d: generating file changes for %d approved file(s)"
-                        .formatted(attempt, approvedFiles.size()), "{\"kind\":\"llm\"}");
-        Map<String, String> rewrites = agent.propose(promptName, run.changes(), plan,
-                currentFiles, failureOutput);
+        try (ObservabilityPort.SpanHandle span = observability.startSpan("patch",
+                Map.of("runId", run.id(), "repositoryId", run.repositoryId(), "attempt", String.valueOf(attempt)))) {
+            Set<String> approvedFiles = plan.approvedFiles();
+            Map<String, String> currentFiles = readApprovedFiles(run, approvedFiles);
+            events.append(run.id(), "patch", "STARTED",
+                    "Attempt %d: generating file changes for %d approved file(s)"
+                            .formatted(attempt, approvedFiles.size()), "{\"kind\":\"llm\"}");
+            Map<String, String> rewrites = agent.propose(promptName, run.changes(), plan,
+                    currentFiles, failureOutput);
 
-        String unifiedDiff = patches.buildUnifiedDiff(run.repositoryId(), rewrites);
-        // Stored before any verdict so a rejected patch remains inspectable.
-        String patchArtifactId = artifacts.save(run.id(), "patch-attempt-%d.diff".formatted(attempt),
-                unifiedDiff);
-        PatchPort.PatchCheck check = requireSafePatch(run, approvedFiles, unifiedDiff, patchArtifactId);
-        PatchArtifact artifact = new PatchArtifact(Ids.newId(), run.id(), attempt, unifiedDiff,
-                check.changedPaths(), PatchArtifact.CheckStatus.VALID, null);
-        run.recordPatch(artifact, clock.instant());
-        runs.save(run);
-        events.append(run.id(), "patch", "CHECKED",
-                "Patch verified with git apply --check (+%d/-%d lines across %d file(s))"
-                        .formatted(check.addedLines(), check.removedLines(), check.changedPaths().size()),
-                "{\"kind\":\"tool\"}");
+            String unifiedDiff = patches.buildUnifiedDiff(run.repositoryId(), rewrites);
+            // Stored before any verdict so a rejected patch remains inspectable.
+            String patchArtifactId = artifacts.save(run.id(), "patch-attempt-%d.diff".formatted(attempt),
+                    unifiedDiff);
+            PatchPort.PatchCheck check = requireSafePatch(run, approvedFiles, unifiedDiff, patchArtifactId);
+            PatchArtifact artifact = new PatchArtifact(Ids.newId(), run.id(), attempt, unifiedDiff,
+                    check.changedPaths(), PatchArtifact.CheckStatus.VALID, null);
+            run.recordPatch(artifact, clock.instant());
+            runs.save(run);
+            events.append(run.id(), "patch", "CHECKED",
+                    "Patch verified with git apply --check (+%d/-%d lines across %d file(s))"
+                            .formatted(check.addedLines(), check.removedLines(), check.changedPaths().size()),
+                    "{\"kind\":\"tool\"}");
 
-        patches.apply(run.repositoryId(), unifiedDiff);
-        run.markPatchApplied(artifact.id(), clock.instant());
-        runs.save(run);
-        events.append(run.id(), "patch", "APPLIED",
-                "Patch applied to %s".formatted(run.workingBranch()), "{\"kind\":\"tool\"}");
-        audit.recordRepositoryMutation(run, "Patch attempt %d applied to %s (%d file(s))"
-                .formatted(attempt, run.workingBranch(), check.changedPaths().size()));
+            patches.apply(run.repositoryId(), unifiedDiff);
+            run.markPatchApplied(artifact.id(), clock.instant());
+            runs.save(run);
+            events.append(run.id(), "patch", "APPLIED",
+                    "Patch applied to %s".formatted(run.workingBranch()), "{\"kind\":\"tool\"}");
+            audit.recordRepositoryMutation(run, "Patch attempt %d applied to %s (%d file(s))"
+                    .formatted(attempt, run.workingBranch(), check.changedPaths().size()));
+        }
     }
 
     private Map<String, String> readApprovedFiles(AnalysisRun run, Set<String> approvedFiles) {
@@ -226,30 +238,41 @@ public class ExecutionService {
     }
 
     private ValidationResult validate(AnalysisRun run, int attempt) {
-        RunState from = run.state();
-        run.transitionTo(RunState.VALIDATING, clock.instant());
-        runs.save(run);
-        audit.recordTransition(run, from, RunState.VALIDATING);
-        events.append(run.id(), "validation", "STARTED",
-                "Attempt %d: running %s".formatted(attempt, validationCommandKey), "{\"kind\":\"tool\"}");
-        BuildValidationPort.BuildResult result = builds.run(run.repositoryId(), validationCommandKey);
-        String artifactId = artifacts.save(run.id(), "validation-attempt-%d.log".formatted(attempt),
-                SecretRedactor.redact(result.output()));
-        if (result.timedOut()) {
-            throw new ContractGuardException(new RunFailure(FailureCategory.BUILD_TIMEOUT,
-                    "validation exceeded the configured timeout", true, artifactId,
-                    "Increase contractguard.validation.timeout or inspect the build log artifact."));
+        try (ObservabilityPort.SpanHandle span = observability.startSpan("validation",
+                Map.of("runId", run.id(), "repositoryId", run.repositoryId(), "attempt", String.valueOf(attempt)))) {
+            RunState from = run.state();
+            run.transitionTo(RunState.VALIDATING, clock.instant());
+            runs.save(run);
+            audit.recordTransition(run, from, RunState.VALIDATING);
+            events.append(run.id(), "validation", "STARTED",
+                    "Attempt %d: running %s".formatted(attempt, validationCommandKey), "{\"kind\":\"tool\"}");
+            BuildValidationPort.BuildResult result = builds.run(run.repositoryId(), validationCommandKey);
+            String artifactId = artifacts.save(run.id(), "validation-attempt-%d.log".formatted(attempt),
+                    SecretRedactor.redact(result.output()));
+            if (result.timedOut()) {
+                span.recordError("validation timed out");
+                throw new ContractGuardException(new RunFailure(FailureCategory.BUILD_TIMEOUT,
+                        "validation exceeded the configured timeout", true, artifactId,
+                        "Increase contractguard.validation.timeout or inspect the build log artifact."));
+            }
+            ValidationResult validation = new ValidationResult(attempt, validationCommandKey,
+                    result.exitCode(), clock.instant().minus(result.duration()), result.duration(),
+                    summarise(result), artifactId, result.exitCode() == 0);
+            run.recordValidation(validation, clock.instant());
+            runs.save(run);
+            events.append(run.id(), "validation", validation.successful() ? "PASSED" : "FAILED",
+                    "Attempt %d: %s (%d ms)".formatted(attempt, validation.summary(),
+                            result.duration().toMillis()),
+                    "{\"kind\":\"tool\"}");
+            if (!validation.successful()) {
+                span.recordError(validation.summary());
+            }
+            return validation;
         }
-        ValidationResult validation = new ValidationResult(attempt, validationCommandKey,
-                result.exitCode(), clock.instant().minus(result.duration()), result.duration(),
-                summarise(result), artifactId, result.exitCode() == 0);
-        run.recordValidation(validation, clock.instant());
-        runs.save(run);
-        events.append(run.id(), "validation", validation.successful() ? "PASSED" : "FAILED",
-                "Attempt %d: %s (%d ms)".formatted(attempt, validation.summary(),
-                        result.duration().toMillis()),
-                "{\"kind\":\"tool\"}");
-        return validation;
+    }
+
+    private ObservabilityPort.SpanHandle startSpan(AnalysisRun run, String name) {
+        return observability.startSpan(name, Map.of("runId", run.id(), "repositoryId", run.repositoryId()));
     }
 
     private void succeed(AnalysisRun run) {

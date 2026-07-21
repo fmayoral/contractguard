@@ -19,6 +19,7 @@ import com.contractguard.domain.RunState;
 import com.contractguard.testsupport.InMemoryAuditTrail;
 import com.contractguard.testsupport.InMemoryRunEventLog;
 import com.contractguard.testsupport.InMemoryRunRepository;
+import com.contractguard.testsupport.NoOpObservability;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -64,7 +65,7 @@ class AnalysisPipelineTest {
         WorkspacePolicy policy = new WorkspacePolicy(List.of(workspace));
         JacksonJsonCodec codec = new JacksonJsonCodec();
         PromptLibrary prompts = new PromptLibrary();
-        LlmJsonClient client = new LlmJsonClient(new ScriptedLlmGateway(), codec);
+        LlmJsonClient client = new LlmJsonClient(new ScriptedLlmGateway(), codec, new NoOpObservability());
         FilesystemRepositorySearchAdapter search = new FilesystemRepositorySearchAdapter(policy);
         Clock clock = Clock.systemUTC();
         pipeline = new AnalysisPipeline(runs, events, policy, new SwaggerOpenApiDiffAdapter(),
@@ -73,7 +74,7 @@ class AnalysisPipelineTest {
                 new ImpactInvestigator(client, prompts, codec, search,
                         new BoundedSourceReaderAdapter(policy), 10),
                 new MigrationPlanner(client, prompts, codec, policy, List.of("maven-verify"), clock),
-                codec, new AuditTrailService(audit, "test-operator", clock), clock);
+                codec, new AuditTrailService(audit, "test-operator", clock), new NoOpObservability(), clock);
     }
 
     private AnalysisRun newRun() {

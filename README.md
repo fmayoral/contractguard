@@ -223,6 +223,35 @@ See [ADR-0010](docs/adr/0010-sandboxed-validation.md) for the full design,
 including a `ProcessRunner` timeout bug this work found and fixed along the
 way.
 
+## Observability
+
+Every named pipeline step (`diff`, `search`, `assessment`, `planning`,
+`branch`, `patch`, `validation`, `publish-*`, each LLM call) is wrapped in a
+[Micrometer `Observation`](https://docs.micrometer.io/micrometer/reference/observation.html),
+which produces both an OpenTelemetry span and a Prometheus timer metric from
+the same instrumentation point — see
+[ADR-0011](docs/adr/0011-observability.md).
+
+```bash
+curl 'http://localhost:7080/actuator/health'            # overall status
+curl 'http://localhost:7080/actuator/health/readiness'   # orchestration probe
+curl 'http://localhost:7080/actuator/prometheus'         # scrape target
+```
+
+Spans are exported to the application log by default — no collector needed
+to see tracing working. Point at a real backend (Jaeger, Tempo, etc.) with:
+
+```bash
+export MANAGEMENT_OTLP_TRACING_ENDPOINT=http://localhost:4318/v1/traces
+```
+
+`contractguard.runs.transitions{to_state=...}` counts runs by state, derived
+from the audit trail; `contractguard.llm.tokens{prompt=...,type=...}`
+tracks prompt/completion token volume per prompt. Structured JSON logging
+(correlating log lines to the same trace ID) is not yet built — it needs
+Spring Boot 3.4, and this project is pinned to 3.3.5; see ADR-0011 for why
+that was deferred rather than half-built.
+
 ## Using a real LLM
 
 Automated tests and the default demo never call a live model. To run the
@@ -258,6 +287,8 @@ All settings live under `contractguard.*` in
 | `remote.credential-key` | env-driven (`CONTRACTGUARD_CREDENTIAL_KEY`) | AES-256-GCM master key encrypting remote-repository tokens at rest |
 | `audit.default-principal` | `local-operator` | Attributed to every audit entry until FR-024 adds real authentication |
 | `concurrency.max-active-runs` | `10` | System-wide bound on non-terminal runs; `0` disables the limit |
+| `management.tracing.sampling.probability` | `1.0` | Fraction of spans sampled; full sampling is fine at this tool's scale |
+| `management.otlp.tracing.endpoint` | unset (log export only) | Point at a real OpenTelemetry collector; see [Observability](#observability) |
 
 ### Database
 
@@ -369,6 +400,11 @@ docs/          Specification, architecture, ADRs, demo script, roadmap
   so build output may end up root-owned on a Linux host; and network access
   is genuinely off by default, so a repository whose dependencies were
   never resolved on the host will fail rather than fetch them.
+- Observability (FR-029) ships tracing, metrics and health endpoints, but
+  not structured JSON logs — that needs Spring Boot 3.4, and this project's
+  parent POM is pinned to 3.3.5 (ADR-0011). Trace export defaults to the
+  application log; a real collector needs `management.otlp.tracing.endpoint`
+  configured.
 
 ## Documentation
 

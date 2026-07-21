@@ -14,6 +14,7 @@ import com.contractguard.domain.RunState;
 import com.contractguard.testsupport.InMemoryAuditTrail;
 import com.contractguard.testsupport.InMemoryRunEventLog;
 import com.contractguard.testsupport.InMemoryRunRepository;
+import com.contractguard.testsupport.NoOpObservability;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -122,7 +123,7 @@ class PublishServiceTest {
             }
         };
         service = new PublishService(runs, events, git, pushingRemoteGit, pullRequests, registry,
-                new AuditTrailService(audit, "test-operator", CLOCK), CLOCK);
+                new AuditTrailService(audit, "test-operator", CLOCK), new NoOpObservability(), CLOCK);
     }
 
     @Test

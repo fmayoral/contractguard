@@ -26,6 +26,7 @@ import com.contractguard.domain.RemoteRepository;
 import com.contractguard.testsupport.InMemoryAuditTrail;
 import com.contractguard.testsupport.InMemoryRunEventLog;
 import com.contractguard.testsupport.InMemoryRunRepository;
+import com.contractguard.testsupport.NoOpObservability;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -74,7 +75,7 @@ class CliRunnerTest {
         WorkspacePolicy policy = new WorkspacePolicy(List.of(workspace));
         JacksonJsonCodec codec = new JacksonJsonCodec();
         PromptLibrary prompts = new PromptLibrary();
-        LlmJsonClient client = new LlmJsonClient(new ScriptedLlmGateway(), codec);
+        LlmJsonClient client = new LlmJsonClient(new ScriptedLlmGateway(), codec, new NoOpObservability());
         FilesystemRepositorySearchAdapter search = new FilesystemRepositorySearchAdapter(policy);
         Clock clock = Clock.systemUTC();
         AuditTrailService audit = new AuditTrailService(new InMemoryAuditTrail(), "test-operator", clock);
@@ -85,7 +86,7 @@ class CliRunnerTest {
                 new ImpactInvestigator(client, prompts, codec, search,
                         new BoundedSourceReaderAdapter(policy), 10),
                 new MigrationPlanner(client, prompts, codec, policy, List.of("maven-verify"), clock),
-                codec, audit, clock);
+                codec, audit, new NoOpObservability(), clock);
 
         ArtifactStore artifactStore = new ArtifactStore() {
             @Override

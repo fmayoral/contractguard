@@ -6,6 +6,7 @@ import com.contractguard.application.llm.PromptLibrary;
 import com.contractguard.domain.ContractGuardException;
 import com.contractguard.domain.Fixtures;
 import com.contractguard.domain.MigrationPlan;
+import com.contractguard.testsupport.NoOpObservability;
 import com.contractguard.testsupport.QueuedLlmGateway;
 import org.junit.jupiter.api.Test;
 
@@ -22,7 +23,7 @@ class ImplementationAgentTest {
     private final Map<String, String> files = Map.of("src/main/java/App.java", "String fullName;");
 
     private ImplementationAgent agent(QueuedLlmGateway gateway) {
-        return new ImplementationAgent(new LlmJsonClient(gateway, codec), new PromptLibrary(), codec);
+        return new ImplementationAgent(new LlmJsonClient(gateway, codec, new NoOpObservability()), new PromptLibrary(), codec);
     }
 
     @Test

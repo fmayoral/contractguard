@@ -78,7 +78,7 @@ class RunServiceTest {
         final List<String> analysed = new ArrayList<>();
 
         TrackingPipeline() {
-            super(null, null, null, null, null, null, null, null, null, null, null);
+            super(null, null, null, null, null, null, null, null, null, null, null, null);
         }
 
         @Override

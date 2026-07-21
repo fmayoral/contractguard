@@ -27,7 +27,7 @@ application
                 GitWorkspacePort, PatchPort, BuildValidationPort,
                 LlmGateway, JsonCodec, RunRepository, RunEventLog, ArtifactStore,
                 RemoteGitPort, PullRequestPort, RemoteRepositoryRegistry  (FR-027),
-                AuditTrailPort  (FR-025)
+                AuditTrailPort  (FR-025), ObservabilityPort  (FR-029)
   │
 domain          AnalysisRun (aggregate + state machine), ApiChange,
                 ImpactEvidence, ImpactAssessment, MigrationPlan, Approval,
@@ -43,7 +43,9 @@ adapters        diff (swagger-parser), search (filesystem), git (CLI: local +
                 persistence (H2/PostgreSQL, Flyway-managed; includes the
                 audit_log table, FR-025), security (AES-GCM credential
                 cipher), artifacts (files), json (Jackson), web (Spring MVC),
-                cli (headless CI gate)
+                cli (headless CI gate), observability (Micrometer
+                Observation → OpenTelemetry spans + Prometheus metrics,
+                FR-029, ADR-0011)
 ```
 
 ## Workflow state machine
@@ -134,5 +136,19 @@ Every run has a trace ID; every step, tool call, LLM call (with prompt
 name/version), approval and mutation appends a structured event. The event
 log powers the SSE stream (with `Last-Event-ID` replay), the UI trace
 timeline, and the report's trace section.
+
+External observability (FR-029, ADR-0011) sits behind `ObservabilityPort`:
+`AnalysisPipeline`, `ExecutionService`, `PublishService` and `LlmJsonClient`
+wrap each named step in a span via the port, kept framework-free like every
+other application-layer dependency; `adapter.observability.
+MicrometerObservability` turns those spans into both OpenTelemetry traces
+and Prometheus `Timer` metrics from the same instrumentation call
+(Micrometer's `Observation` API). `MetricsRecordingAuditTrail` decorates the
+FR-025 audit trail to derive a `runs by state` counter from the existing
+state-transition record, without any application-service change. Spans
+export to the log by default (no external collector required); Prometheus
+scraping and Kubernetes-style health/readiness probes are exposed via Spring
+Boot Actuator (`/actuator/prometheus`, `/actuator/health/{liveness,
+readiness}`). Structured JSON logging is not yet built — see ADR-0011.
 
 See the ADRs in [docs/adr](adr/) for the reasoning behind the major choices.

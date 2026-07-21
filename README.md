@@ -249,12 +249,17 @@ curl 'http://localhost:7080/actuator/health/readiness'   # orchestration probe
 curl 'http://localhost:7080/actuator/prometheus'         # scrape target
 ```
 
-Spans are exported to the application log by default — no collector needed
-to see tracing working. Point at a real backend (Jaeger, Tempo, etc.) with:
+Spans are exported to the application log by default when run this way — no
+collector needed to see tracing working. Point at a real backend (Jaeger,
+Tempo, etc.) with:
 
 ```bash
 export MANAGEMENT_OTLP_TRACING_ENDPOINT=http://localhost:4318/v1/traces
 ```
+
+The [Docker deployment](docs/deployment.md#4-viewing-traces-metrics-and-health-fr-029)
+bundles a Jaeger UI and points traces at it by default — nothing to
+configure there; open <http://localhost:16686> after running an analysis.
 
 `contractguard.runs.transitions{to_state=...}` counts runs by state, derived
 from the audit trail; `contractguard.llm.tokens{prompt=...,type=...}`

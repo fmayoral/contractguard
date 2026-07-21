@@ -28,7 +28,10 @@ public class MicrometerObservability implements ObservabilityPort {
         Observation observation = Observation.createNotStarted(name, observations);
         tags.forEach(observation::highCardinalityKeyValue);
         observation.start();
-        return new MicrometerSpanHandle(observation);
+        // Opening the scope is what makes this the "current" observation, which is how a nested
+        // startSpan() call picks it up as a parent -- without it every span is its own root trace.
+        Observation.Scope scope = observation.openScope();
+        return new MicrometerSpanHandle(observation, scope);
     }
 
     @Override
@@ -43,7 +46,7 @@ public class MicrometerObservability implements ObservabilityPort {
         }
     }
 
-    private record MicrometerSpanHandle(Observation observation) implements SpanHandle {
+    private record MicrometerSpanHandle(Observation observation, Observation.Scope scope) implements SpanHandle {
 
         @Override
         public void recordError(String message) {
@@ -52,6 +55,7 @@ public class MicrometerObservability implements ObservabilityPort {
 
         @Override
         public void close() {
+            scope.close();
             observation.stop();
         }
     }

@@ -5,6 +5,11 @@
 # one (see .env.example) -- the demo works with none of them set. Full
 # walkthrough: docs/deployment.md.
 services:
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    ports:
+      - "127.0.0.1:16686:16686"   # trace viewer UI
+
   backend:
     build:
       context: .
@@ -18,7 +23,11 @@ services:
       CONTRACTGUARD_LLM_MODEL: ${CONTRACTGUARD_LLM_MODEL:-gpt-4o-mini}
       CONTRACTGUARD_CREDENTIAL_KEY: ${CONTRACTGUARD_CREDENTIAL_KEY:-}
       CONTRACTGUARD_AUDIT_PRINCIPAL: ${CONTRACTGUARD_AUDIT_PRINCIPAL:-local-operator}
-      MANAGEMENT_OTLP_TRACING_ENDPOINT: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:-}
+      # Bundled Jaeger is the default trace viewer for this compose setup;
+      # point elsewhere (or unset to fall back to log-only export) via .env.
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:-http://jaeger:4318/v1/traces}
+    depends_on:
+      - jaeger
     volumes:
       - contractguard-data:/app/data
       - maven-cache:/root/.m2

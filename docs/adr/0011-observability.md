@@ -111,13 +111,54 @@ a rushed version bolted onto this one — `docs/roadmap.md` marks FR-029
 built, following the precedent FR-027 already set for its own GitHub-only
 scope cut.
 
+### 8. A real bug this surfaced: spans were created but never actually nested
+
+Requested as a follow-up ("I'd like to view the tracing... can this be
+demonstrated with ease?"), verifying the nesting claimed in decision #4
+against a real trace viewer (see #9 below) showed every span landing as its
+*own* root trace — `analyse`, `diff`, `llm.migration-planner` and so on each
+one span, one trace, with no parent/child relationship between them at all.
+`MicrometerObservability.startSpan` called `observation.start()` but never
+`observation.openScope()` — without an open scope, Micrometer never marks an
+`Observation` as "current," so a nested `startSpan()` call has no parent to
+find. Fixed by opening the scope when the span starts and closing it (before
+stopping the observation) when the `SpanHandle` closes; a regression test
+(`MicrometerObservabilityTest.nestedSpansAreParentedToTheCurrentlyOpenSpan`)
+asserts the current-observation stack pushes and pops correctly across a
+nested `try`. Confirmed against a real trace afterward: one `analyse` trace
+with 11 correctly-nested spans instead of 11 disconnected traces. This is
+exactly the kind of gap that a design description can pass through
+uncaught — the code compiled, the unit tests for tagging/error/close all
+passed, and nothing failed until someone actually looked at a rendered
+trace tree.
+
+### 9. Docker Compose bundles a real trace viewer (Jaeger) by default
+
+Decision #6 keeps the bare `application.yml` default at log-export only, no
+infrastructure assumed. The Docker Compose demo path is a different
+context — it already trades some of that zero-infrastructure minimalism for
+convenience (it always builds and runs two containers) — so a third,
+lightweight `jaegertracing/all-in-one` container is added there, with
+`MANAGEMENT_OTLP_TRACING_ENDPOINT` defaulted to it
+(`http://jaeger:4318/v1/traces`) rather than left unset. This needed
+`io.opentelemetry:opentelemetry-exporter-otlp` added alongside the existing
+`opentelemetry-exporter-logging` dependency — Spring Boot's
+`management.otlp.tracing.endpoint` autoconfiguration is conditional on that
+exporter class being on the classpath, and it silently does nothing without
+it (no error, no export — this was caught by testing the actual endpoint,
+not by inspection). The bare (non-Docker) default is unchanged: run the jar
+directly and spans still only go to the log unless
+`MANAGEMENT_OTLP_TRACING_ENDPOINT` is set by hand.
+
 ## Consequences
 
 - Prometheus metrics (`/actuator/prometheus`) and health/readiness
   (`/actuator/health/{liveness,readiness}`) work with zero external
   infrastructure, matching this project's local-first default; distributed
-  trace *viewing* (as opposed to trace *creation*, which always happens)
-  requires either reading the log or configuring a real OTLP endpoint.
+  trace *viewing* when running the jar directly (as opposed to trace
+  *creation*, which always happens) requires either reading the log or
+  configuring a real OTLP endpoint. The Docker Compose path (see
+  [docs/deployment.md](../deployment.md)) bundles Jaeger and needs neither.
 - Per-step spans do not currently record errors for every failure path —
   only the phase-level spans (`analyse`/`execute`/`publish`) and a couple of
   validation-specific cases do. Duration and existence are still captured

@@ -46,6 +46,19 @@ class MicrometerObservabilityTest {
     }
 
     @Test
+    void nestedSpansAreParentedToTheCurrentlyOpenSpan() {
+        try (ObservabilityPort.SpanHandle outer = observability.startSpan("analyse", Map.of())) {
+            assertThat(observations.getCurrentObservation().getContext().getName()).isEqualTo("analyse");
+            try (ObservabilityPort.SpanHandle inner = observability.startSpan("diff", Map.of())) {
+                assertThat(observations.getCurrentObservation().getContext().getName()).isEqualTo("diff");
+            }
+            // Closing the inner span's scope must restore the outer span as current.
+            assertThat(observations.getCurrentObservation().getContext().getName()).isEqualTo("analyse");
+        }
+        assertThat(observations.getCurrentObservation()).isNull();
+    }
+
+    @Test
     void llmUsageIsRecordedAsTokenDistributions() {
         observability.recordLlmUsage("migration-planner", 120, 45);
 

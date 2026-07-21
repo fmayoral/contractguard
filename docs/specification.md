@@ -521,44 +521,39 @@ The domain and application layers must not depend directly on:
 
 ### Component View
 
-```text
-Web UI
-  |
-REST API + SSE
-  |
-Application Layer
-  |-- Orchestration
-  |-- Approval
-  |-- Reporting
-  |
-Domain Layer
-  |-- AnalysisRun
-  |-- ApiChange
-  |-- ImpactEvidence
-  |-- MigrationPlan
-  |-- ValidationResult
-  |-- State machine
-  |
-Ports
-  |-- OpenApiDiffPort
-  |-- RepositorySearchPort
-  |-- SourceReaderPort
-  |-- GitWorkspacePort
-  |-- PatchPort
-  |-- BuildValidationPort
-  |-- LlmGateway
-  |-- RunRepository
-  |-- EventPublisher
-  |
-Adapters
-  |-- OpenAPI diff
-  |-- Repository search
-  |-- Git
-  |-- Process execution
-  |-- LLM provider
-  |-- Embedded database
-  |-- Filesystem artifacts
+```mermaid
+flowchart TD
+    UI["Web UI"] -->|"REST API + SSE"| APP
+
+    subgraph APP["Application Layer"]
+        ORCH["Orchestration"]
+        APPR["Approval"]
+        REPORT["Reporting"]
+    end
+
+    APP --> DOMAIN
+
+    subgraph DOMAIN["Domain Layer"]
+        DM["AnalysisRun · ApiChange · ImpactEvidence ·<br/>MigrationPlan · ValidationResult · State machine"]
+    end
+
+    APP --> PORTS
+
+    subgraph PORTS["Ports"]
+        P["OpenApiDiffPort · RepositorySearchPort · SourceReaderPort ·<br/>GitWorkspacePort · PatchPort · BuildValidationPort ·<br/>LlmGateway · RunRepository · EventPublisher"]
+    end
+
+    PORTS -. implemented by .-> ADAPTERS
+
+    subgraph ADAPTERS["Adapters"]
+        AD["OpenAPI diff · Repository search · Git ·<br/>Process execution · LLM provider ·<br/>Embedded database · Filesystem artifacts"]
+    end
 ```
+
+*(This is the original MVP-era component view; see
+[docs/architecture.md](architecture.md) for the current layering, which has
+grown several ports and adapters since — remote repositories, audit trail,
+observability — while keeping this same hexagonal shape.)*
 
 ### Appropriate Patterns
 

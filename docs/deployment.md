@@ -22,6 +22,15 @@ Two containers come up:
 | `backend` | Spring Boot API, mock LLM, demo repository materialised on start | <http://localhost:7080> |
 | `frontend` | Static dashboard behind nginx, proxies `/api/*` to the backend | <http://localhost:5173> |
 
+```mermaid
+flowchart LR
+    Browser -->|":5173"| FE["frontend container<br/>nginx + static dashboard"]
+    FE -->|"/api/* proxy, SSE"| BE["backend container<br/>Spring Boot :7080"]
+    Browser -.->|"direct: /actuator/*"| BE
+    BE --> DATA[("contractguard-data<br/>volume — runs, artifacts, H2")]
+    BE --> M2[("maven-cache<br/>volume — consumer build deps")]
+```
+
 Open <http://localhost:5173> and follow
 [docs/demo-script.md](demo-script.md) from section 5 onward (sections 1-4
 are the non-Docker setup; the containers already did that part). The first

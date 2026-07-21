@@ -6,47 +6,56 @@ ContractGuard is a modular monolith with hexagonal architecture: a
 framework-free domain core, an application layer that orchestrates through
 ports, and adapters that hold every technology detail (Spring, H2,
 swagger-parser, java-diff-utils, the git CLI, process execution, the LLM
-HTTP API). The layering is enforced by a build-breaking ArchUnit suite
-(`HexagonalArchitectureTest`).
+HTTP API).
 
+```mermaid
+flowchart TD
+    UI["Web UI<br/>(React / Vite)"] -->|"REST + SSE"| WEBADAPTER["adapter.web<br/>(reaches the rest of the system<br/>only through application services)"]
+    WEBADAPTER --> SVC
+
+    subgraph APP["application (framework-free)"]
+        direction TB
+        SVC["service<br/>AnalysisPipeline, ExecutionService, ApprovalService,<br/>RunService, RunQueryService, ReportService, EvidenceCollector,<br/>RemoteRepositoryService, PublishService (FR-027),<br/>AuditTrailService (FR-025)"]
+        AGENT["agent<br/>ChangeExplainer, ImpactInvestigator,<br/>MigrationPlanner, ImplementationAgent<br/>(LLM-assisted, schema-validated)"]
+        LLMC["llm<br/>PromptLibrary, LlmJsonClient<br/>(retry-once validation)"]
+        POLICY["policy<br/>WorkspacePolicy, SecretRedactor,<br/>RepositoryLock (FR-032)"]
+        PORT["port (interfaces only)<br/>OpenApiDiffPort, RepositorySearchPort, SourceReaderPort,<br/>GitWorkspacePort, PatchPort, BuildValidationPort, LlmGateway,<br/>JsonCodec, RunRepository, RunEventLog, ArtifactStore,<br/>RemoteGitPort, PullRequestPort, RemoteRepositoryRegistry (FR-027),<br/>AuditTrailPort (FR-025), ObservabilityPort (FR-029)"]
+        SVC --> AGENT
+        AGENT --> LLMC
+        SVC --> POLICY
+        SVC --> PORT
+    end
+
+    SVC --> DOMAIN
+    PORT -. implemented by .-> ADAPTERS
+
+    subgraph DOMAIN["domain (no dependencies but the JDK)"]
+        D["AnalysisRun (aggregate + state machine), ApiChange,<br/>ImpactEvidence, ImpactAssessment, MigrationPlan, Approval,<br/>PatchArtifact, ValidationResult, ClassificationPolicy,<br/>PlanHasher, RemoteRepository, AuditEntry,<br/>typed failures (ContractGuardException / RunFailure)"]
+    end
+
+    subgraph ADAPTERS["adapters (every technology detail lives here)"]
+        A1["diff<br/>(swagger-parser)"]
+        A2["search<br/>(filesystem)"]
+        A3["git<br/>(CLI: local + credentialed remote)"]
+        A4["github<br/>(PR creation, HTTP)"]
+        A5["process<br/>(host Maven, or opt-in<br/>sandboxed docker run — FR-030)"]
+        A6["llm<br/>(OpenAI-compatible HTTP<br/>+ deterministic scripted)"]
+        A7["persistence<br/>(H2 / PostgreSQL, Flyway-managed,<br/>incl. audit_log — FR-025)"]
+        A8["security<br/>(AES-GCM credential cipher)"]
+        A9["artifacts / json<br/>(files, Jackson)"]
+        A10["web / cli<br/>(Spring MVC, headless CI gate)"]
+        A11["observability<br/>(Micrometer Observation →<br/>OTel + Prometheus — FR-029)"]
+    end
+
+    ADAPTERS --> DOMAIN
 ```
-Web UI (React/Vite)
-  │  REST + SSE
-adapter.web ──────────────► application services only
-  │
-application
-  ├── service   AnalysisPipeline, ExecutionService, ApprovalService,
-  │             RunService, RunQueryService, ReportService, EvidenceCollector,
-  │             RemoteRepositoryService, PublishService  (FR-027),
-  │             AuditTrailService  (FR-025)
-  ├── agent     ChangeExplainer, ImpactInvestigator, MigrationPlanner,
-  │             ImplementationAgent  (LLM-assisted, schema-validated)
-  ├── llm       PromptLibrary, LlmJsonClient (retry-once validation)
-  ├── policy    WorkspacePolicy, SecretRedactor, RepositoryLock  (FR-032)
-  └── port      OpenApiDiffPort, RepositorySearchPort, SourceReaderPort,
-                GitWorkspacePort, PatchPort, BuildValidationPort,
-                LlmGateway, JsonCodec, RunRepository, RunEventLog, ArtifactStore,
-                RemoteGitPort, PullRequestPort, RemoteRepositoryRegistry  (FR-027),
-                AuditTrailPort  (FR-025), ObservabilityPort  (FR-029)
-  │
-domain          AnalysisRun (aggregate + state machine), ApiChange,
-                ImpactEvidence, ImpactAssessment, MigrationPlan, Approval,
-                PatchArtifact, ValidationResult, ClassificationPolicy,
-                PlanHasher, RemoteRepository, AuditEntry, typed failures
-                (ContractGuardException/RunFailure)
-  │
-adapters        diff (swagger-parser), search (filesystem), git (CLI: local +
-                credentialed remote clone/fetch/push), github (PR creation,
-                HTTP), process (allow-listed argv: host Maven or, opt-in,
-                a resource-limited `docker run` sandbox — FR-030, ADR-0010),
-                llm (OpenAI-compatible HTTP + deterministic scripted),
-                persistence (H2/PostgreSQL, Flyway-managed; includes the
-                audit_log table, FR-025), security (AES-GCM credential
-                cipher), artifacts (files), json (Jackson), web (Spring MVC),
-                cli (headless CI gate), observability (Micrometer
-                Observation → OpenTelemetry spans + Prometheus metrics,
-                FR-029, ADR-0011)
-```
+
+Layering is enforced by a build-breaking ArchUnit suite
+(`HexagonalArchitectureTest`): domain depends on nothing but the JDK,
+application depends only on domain and its own ports, and the web adapter
+reaches the rest of the system exclusively through application services —
+the dotted "implemented by" edge above is the only place adapters and
+application ever meet.
 
 ## Workflow state machine
 
@@ -56,13 +65,39 @@ rejects everything else. The single entry into any mutating state
 only accepts a decision whose plan hash matches the current plan — the
 approval gate is a backend invariant, not UI behaviour.
 
-```
-CREATED → VALIDATING_INPUT → DIFFING → SEARCHING → ASSESSING → PLANNING → AWAITING_APPROVAL
-AWAITING_APPROVAL → REJECTED | PREPARING_BRANCH
-PREPARING_BRANCH → PATCHING → VALIDATING → SUCCEEDED | REPAIRING | FAILED
-REPAIRING → VALIDATING   (structurally at most once)
-any active state → FAILED | CANCELLED
-SUCCEEDED | PUBLISH_FAILED → PUBLISHING → PUBLISHED | PUBLISH_FAILED   (FR-027, human-triggered, retryable)
+```mermaid
+stateDiagram-v2
+    [*] --> CREATED
+    CREATED --> VALIDATING_INPUT
+    VALIDATING_INPUT --> DIFFING
+    DIFFING --> SEARCHING
+    SEARCHING --> ASSESSING
+    ASSESSING --> PLANNING
+    PLANNING --> AWAITING_APPROVAL
+    AWAITING_APPROVAL --> REJECTED : rejected
+    AWAITING_APPROVAL --> PREPARING_BRANCH : approved
+    PREPARING_BRANCH --> PATCHING
+    PATCHING --> VALIDATING
+    VALIDATING --> SUCCEEDED
+    VALIDATING --> REPAIRING : first attempt failed
+    REPAIRING --> VALIDATING : one repair attempt only
+    VALIDATING --> FAILED : repair also failed
+    SUCCEEDED --> PUBLISHING : POST /runs/{id}/publish
+    PUBLISH_FAILED --> PUBLISHING : retry, corrected credential
+    PUBLISHING --> PUBLISHED
+    PUBLISHING --> PUBLISH_FAILED
+
+    REJECTED --> [*]
+    FAILED --> [*]
+    CANCELLED --> [*]
+    PUBLISHED --> [*]
+
+    note right of PLANNING
+        Every non-terminal state above may also
+        transition directly to FAILED or CANCELLED
+        (omitted here for clarity — see
+        RunState.successors() for the exact set).
+    end note
 ```
 
 `SUCCEEDED` and `PUBLISH_FAILED` are terminal for the analysis/execution
@@ -77,6 +112,66 @@ interrupted run's recovery safe rather than a design gap. A run still
 `AWAITING_APPROVAL` is left untouched (nothing was in flight); every other
 non-terminal state is finalised as `FAILED` with a clean remediation
 message — deliberately not resumed mid-mutation.
+
+## Actors and integration
+
+One full cycle — analysis through an optional publish — and every actor it
+touches. The dashboard never talks to the LLM, Git or GitHub directly; it
+only ever calls the backend, which is the sole point of contact for every
+external system.
+
+```mermaid
+sequenceDiagram
+    actor Operator
+    participant Dashboard as Dashboard (Web UI)
+    participant Backend as ContractGuard Backend
+    participant LLM as LLM Provider
+    participant Repo as Consumer Repository
+    participant GitHub
+
+    Operator->>Dashboard: pick repository + old/new specs
+    Dashboard->>Backend: POST /api/runs
+    Backend-->>Dashboard: SSE timeline (streamed throughout)
+
+    Backend->>Backend: deterministic diff + classification
+    Backend->>LLM: explain each change
+    LLM-->>Backend: explanations (schema-validated)
+    Backend->>Repo: search for evidence (file + line)
+    Repo-->>Backend: matches
+    Backend->>LLM: assess impact (bounded tool loop)
+    LLM-->>Backend: assessments (evidence-cited)
+    Backend->>LLM: propose migration plan
+    LLM-->>Backend: plan (files, tests, risk, rollback)
+    Backend-->>Dashboard: AWAITING_APPROVAL
+
+    Operator->>Dashboard: review plan, Approve
+    Dashboard->>Backend: POST /approval (exact plan hash)
+    Operator->>Dashboard: Execute remediation
+    Dashboard->>Backend: POST /execute
+
+    Backend->>Repo: verify clean, create working branch
+    Backend->>LLM: propose file changes
+    LLM-->>Backend: rewritten files (approved files only)
+    Backend->>Repo: git apply --check, then apply
+    Backend->>Repo: run consumer build/tests
+    Repo-->>Backend: BUILD SUCCESS / FAILURE
+    Backend-->>Dashboard: SUCCEEDED (or one repair attempt, then FAILED)
+
+    Operator->>Dashboard: Publish (only for a registered remote repository)
+    Dashboard->>Backend: POST /publish
+    Backend->>Repo: commit working branch
+    Backend->>GitHub: push branch
+    Backend->>GitHub: open draft pull request
+    GitHub-->>Backend: pull request URL
+    Backend-->>Dashboard: PUBLISHED (PR link)
+```
+
+Every arrow above is also an audited fact: the deterministic steps (diff,
+search, patch, build) are authoritative and never revised by the LLM; the
+LLM-assisted steps are always schema-validated with one retry before a typed
+failure; and every state transition, approval decision and repository
+mutation is written to the append-only audit log (FR-025) regardless of
+which actor triggered it.
 
 ## Determinism vs. agency
 

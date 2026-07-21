@@ -20,6 +20,15 @@ step is streamed live to the dashboard timeline and persisted for the final
 report. The dashboard ships with dark and light themes (toggle in the
 sidebar).
 
+```mermaid
+flowchart LR
+    A["1 · Analyse<br/>diff, classify, explain"] --> B["2 · Investigate<br/>evidence-backed impact"]
+    B --> C["3 · Plan & Approve<br/>the human gate"]
+    C --> D["4 · Remediate & Validate<br/>isolated branch, checked patch"]
+    D --> E["5 · Report<br/>the audit trail"]
+    E -.->|"registered GitHub repo only"| F["6 · Publish<br/>draft pull request"]
+```
+
 ### 1 — Analyse: diff, classify, explain
 
 Pick the consumer repository and the old/new specifications, then start the

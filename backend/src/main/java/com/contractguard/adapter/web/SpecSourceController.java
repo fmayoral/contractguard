@@ -7,12 +7,17 @@ import com.contractguard.domain.RemoteRepository;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Spec-source repository registration (FR-043, ADR-0012). Thin by design, like {@link RemoteRepositoryController}. */
+/**
+ * Spec-source repository registration and deregistration (FR-043/FR-044, ADR-0012). Thin by
+ * design, like {@link RemoteRepositoryController}.
+ */
 @RestController
 @RequestMapping("/api/spec-sources")
 public class SpecSourceController {
@@ -29,5 +34,11 @@ public class SpecSourceController {
         RemoteRepository registered = service.register(request.repositoryId(), request.cloneUrl(),
                 request.defaultBranch(), request.token());
         return ResponseEntity.status(HttpStatus.CREATED).body(DtoMapper.toSpecSourceSummary(registered));
+    }
+
+    @DeleteMapping("/{repositoryId}")
+    public ResponseEntity<Void> deregister(@PathVariable String repositoryId) {
+        service.deregister(repositoryId);
+        return ResponseEntity.noContent().build();
     }
 }

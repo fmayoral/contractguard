@@ -80,4 +80,9 @@ public class JdbcSpecSourceRegistry implements SpecSourceRegistry {
                 repositoryId);
         return found.stream().findFirst();
     }
+
+    @Override
+    public void deregister(String repositoryId) {
+        jdbc.update("DELETE FROM spec_source_repositories WHERE repository_id = ?", repositoryId);
+    }
 }

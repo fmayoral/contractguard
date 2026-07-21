@@ -146,12 +146,8 @@ describe('App critical journey', () => {
 
     render(<App />);
 
-    // Step 1: consumer repository (auto-selected) -> Next.
-    await user.click(await screen.findByText('Next'));
-    // Step 2: old/new specifications (auto-selected) -> Next.
-    await user.click(await screen.findByText('Next'));
-    // Step 3: review and start.
-    await user.click(await screen.findByText('Start analysis'));
+    await screen.findByText('Start analysis');
+    await user.click(screen.getByText('Start analysis'));
 
     // Change table with classification, values and explanation.
     await screen.findByText('PROPERTY_RENAMED');
@@ -174,7 +170,7 @@ describe('App critical journey', () => {
     let approved = false;
     const spy = installFetch((url, init) => {
       if (url === '/api/setup') {
-        return { body: { repositories: [], specifications: [], remoteRepositories: [] } };
+        return { body: { repositories: [], specifications: [], remoteRepositories: [], specSources: [] } };
       }
       if (url === '/api/runs' && !init?.method) {
         return { body: [{ id: 'run-1', name: 'demo', state: 'AWAITING_APPROVAL' }] };
@@ -224,7 +220,7 @@ describe('App critical journey', () => {
     const user = userEvent.setup();
     let detailFetches = 0;
     installFetch((url, init) => {
-      if (url === '/api/setup') return { body: { repositories: [], specifications: [], remoteRepositories: [] } };
+      if (url === '/api/setup') return { body: { repositories: [], specifications: [], remoteRepositories: [], specSources: [] } };
       if (url === '/api/runs' && !init?.method) {
         return { body: [{ id: 'run-1', name: 'demo', state: 'DIFFING' }] };
       }
@@ -258,7 +254,7 @@ describe('App critical journey', () => {
   it('shows the failure card with mutation state for failed runs', async () => {
     const user = userEvent.setup();
     installFetch((url, init) => {
-      if (url === '/api/setup') return { body: { repositories: [], specifications: [], remoteRepositories: [] } };
+      if (url === '/api/setup') return { body: { repositories: [], specifications: [], remoteRepositories: [], specSources: [] } };
       if (url === '/api/runs' && !init?.method) {
         return { body: [{ id: 'run-1', name: 'demo', state: 'FAILED' }] };
       }

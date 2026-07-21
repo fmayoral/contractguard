@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Timeline } from './Timeline';
@@ -8,12 +8,13 @@ import { RunList } from './RunList';
 import { DiffView } from './DiffView';
 import { ThemeToggle } from './ThemeToggle';
 import { PublishPanel } from './PublishPanel';
+import { HelpModal } from './HelpModal';
+import { ManageSourcesModal } from './ManageSourcesModal';
+import { OnboardingBanner } from './OnboardingBanner';
 import { RegisterRemoteRepository } from './RegisterRemoteRepository';
 import { RegisterSpecSource } from './RegisterSpecSource';
 import { RunSetup } from './RunSetup';
 import { UploadSpecification } from './UploadSpecification';
-import { WizardStepRepository } from './WizardStepRepository';
-import { WizardStepSpecs } from './WizardStepSpecs';
 import type { Patch, RunEvent, SetupOptions, Validation } from '../types';
 
 function mockRoutedFetch(handler: (url: string, init?: RequestInit) => { status?: number; body: unknown } | null) {
@@ -28,8 +29,11 @@ function mockRoutedFetch(handler: (url: string, init?: RequestInit) => { status?
 }
 
 function mockJsonFetch(status: number, body: unknown) {
+  // A 204 must have a null body -- the Response constructor throws otherwise, matching the
+  // real fetch spec that DELETE endpoints (204 No Content) rely on.
+  const responseBody = status === 204 ? null : JSON.stringify(body);
   const spy = vi.fn().mockResolvedValue(
-    new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }),
+    new Response(responseBody, { status, headers: { 'Content-Type': 'application/json' } }),
   );
   vi.stubGlobal('fetch', spy);
   return spy;
@@ -500,151 +504,130 @@ describe('UploadSpecification', () => {
   });
 });
 
-describe('WizardStepRepository', () => {
+describe('ManageSourcesModal', () => {
   const options: SetupOptions = {
     repositories: ['customer-consumer'],
-    remoteRepositories: ['acme-widgets'],
-    specifications: [],
-    specSources: [],
+    remoteRepositories: [
+      { repositoryId: 'acme-widgets', owner: 'acme', name: 'widgets', defaultBranch: 'main', registeredAt: '2026-07-21T10:00:00Z' },
+    ],
+    specifications: [
+      { id: 'upload:mine.yaml', label: 'mine.yaml', origin: 'uploaded', sourceId: null },
+    ],
+    specSources: [
+      { repositoryId: 'openapi-specs', owner: 'acme', name: 'openapi-specs', defaultBranch: 'main', registeredAt: '2026-07-21T10:00:00Z' },
+    ],
   };
 
-  it('groups local and remote repositories and reports the current selection', async () => {
+  it('removes a registered repository after confirmation and notifies the parent', async () => {
     const user = userEvent.setup();
-    const onChange = vi.fn();
-    const { container } = render(
-      <WizardStepRepository
-        options={options}
-        repository="customer-consumer"
-        onChange={onChange}
-        onRepositoryRegistered={vi.fn()}
-      />,
-    );
+    const spy = mockJsonFetch(204, '');
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const onChanged = vi.fn();
 
-    // optgroup labels are an HTML attribute, not text content, so they're queried via the DOM directly.
-    const groupLabels = [...container.querySelectorAll('optgroup')].map((g) => g.label);
-    expect(groupLabels).toEqual(['Local workspace', 'Registered GitHub repositories']);
-    await user.selectOptions(screen.getByLabelText('Consumer repository'), 'acme-widgets');
-    expect(onChange).toHaveBeenCalledWith('acme-widgets');
+    render(<ManageSourcesModal options={options} onClose={vi.fn()} onChanged={onChanged} />);
+    // Both the remote-repository and spec-source lists render a "Remove" button; the
+    // remote-repository one is first (Consumer repositories section comes before
+    // Specification repositories).
+    await user.click(screen.getAllByRole('button', { name: 'Remove' })[0]);
+
+    expect(spy).toHaveBeenCalledWith('/api/repositories/remote/acme-widgets', expect.objectContaining({ method: 'DELETE' }));
+    expect(onChanged).toHaveBeenCalled();
   });
 
-  it('hints when no repositories are available at all', () => {
-    render(
-      <WizardStepRepository
-        options={{ repositories: [], remoteRepositories: [], specifications: [], specSources: [] }}
-        repository=""
-        onChange={vi.fn()}
-        onRepositoryRegistered={vi.fn()}
-      />,
-    );
+  it('does nothing when the removal confirmation is declined', async () => {
+    const user = userEvent.setup();
+    const spy = mockJsonFetch(204, '');
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const onChanged = vi.fn();
 
-    expect(screen.getByText(/No repositories found/)).toBeInTheDocument();
+    render(<ManageSourcesModal options={options} onClose={vi.fn()} onChanged={onChanged} />);
+    await user.click(screen.getAllByRole('button', { name: 'Remove' })[0]);
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(onChanged).not.toHaveBeenCalled();
+  });
+
+  it('removes a spec source and an uploaded specification after confirmation', async () => {
+    const user = userEvent.setup();
+    const spy = mockJsonFetch(204, '');
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const onChanged = vi.fn();
+
+    render(<ManageSourcesModal options={options} onClose={vi.fn()} onChanged={onChanged} />);
+
+    await user.click(screen.getAllByRole('button', { name: 'Remove' })[1]);
+    expect(spy).toHaveBeenCalledWith('/api/spec-sources/openapi-specs', expect.objectContaining({ method: 'DELETE' }));
+
+    await user.click(screen.getAllByRole('button', { name: 'Remove' })[2]);
+    expect(spy).toHaveBeenCalledWith('/api/specs/mine.yaml', expect.objectContaining({ method: 'DELETE' }));
+
+    expect(onChanged).toHaveBeenCalledTimes(2);
+  });
+
+  it('surfaces the error and does not notify the parent when removal fails', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{"message":"boom"}', { status: 500 })));
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const onChanged = vi.fn();
+
+    render(<ManageSourcesModal options={options} onClose={vi.fn()} onChanged={onChanged} />);
+    await user.click(screen.getAllByRole('button', { name: 'Remove' })[0]);
+
+    expect(await screen.findByText(/Could not remove acme-widgets/)).toBeInTheDocument();
+    expect(onChanged).not.toHaveBeenCalled();
+  });
+
+  it('closes on Escape and on clicking Done', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(<ManageSourcesModal options={options} onClose={onClose} onChanged={vi.fn()} />);
+
+    await user.click(screen.getByText('Done'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    await user.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(2);
   });
 });
 
-describe('WizardStepSpecs', () => {
-  const options: SetupOptions = {
-    repositories: [],
-    remoteRepositories: [],
-    specifications: [
-      { id: 'local:old.yaml', label: 'old.yaml', origin: 'local', sourceId: null },
-      { id: 'upload:mine.yaml', label: 'mine.yaml', origin: 'uploaded', sourceId: null },
-      { id: 'source:openapi-specs:new.yaml', label: 'new.yaml', origin: 'spec_source', sourceId: 'openapi-specs' },
-    ],
-    specSources: [
-      {
-        repositoryId: 'openapi-specs', owner: 'acme', name: 'openapi-specs',
-        defaultBranch: 'main', registeredAt: '2026-07-21T10:00:00Z',
-      },
-      {
-        repositoryId: 'silent-specs', owner: 'acme', name: 'silent-specs',
-        defaultBranch: 'main', registeredAt: '2026-07-21T10:00:00Z',
-      },
-    ],
-  };
-
-  it('groups specifications by origin into optgroups', () => {
-    const { container } = render(
-      <WizardStepSpecs
-        options={options}
-        oldSpec="local:old.yaml"
-        newSpec="source:openapi-specs:new.yaml"
-        onOldSpecChange={vi.fn()}
-        onNewSpecChange={vi.fn()}
-        onOptionsChanged={vi.fn()}
-      />,
-    );
-
-    // optgroup labels are an HTML attribute, not text content; both selects share the same groups.
-    const oldSpecSelect = screen.getByLabelText('Old specification');
-    const groupLabels = [...oldSpecSelect.querySelectorAll('optgroup')].map((g) => g.label);
-    expect(groupLabels).toEqual(['Local workspace', 'Uploaded', 'From openapi-specs']);
-    expect(container.querySelectorAll('optgroup')).toHaveLength(6);
+describe('OnboardingBanner', () => {
+  beforeEach(() => {
+    localStorage.clear();
   });
 
-  it('reports a registered spec source that contributed no files', () => {
-    render(
-      <WizardStepSpecs
-        options={options}
-        oldSpec="local:old.yaml"
-        newSpec="source:openapi-specs:new.yaml"
-        onOldSpecChange={vi.fn()}
-        onNewSpecChange={vi.fn()}
-        onOptionsChanged={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByText(/silent-specs/)).toBeInTheDocument();
-    expect(screen.getByText(/contributed no files/)).toBeInTheDocument();
-  });
-
-  it('propagates old/new spec selection changes', async () => {
+  it('shows the quick guide and hides it once dismissed, remembering the choice', async () => {
     const user = userEvent.setup();
-    const onOldSpecChange = vi.fn();
-    render(
-      <WizardStepSpecs
-        options={options}
-        oldSpec="local:old.yaml"
-        newSpec="source:openapi-specs:new.yaml"
-        onOldSpecChange={onOldSpecChange}
-        onNewSpecChange={vi.fn()}
-        onOptionsChanged={vi.fn()}
-      />,
-    );
+    const { unmount } = render(<OnboardingBanner />);
 
-    await user.selectOptions(screen.getByLabelText('Old specification'), 'upload:mine.yaml');
-    expect(onOldSpecChange).toHaveBeenCalledWith('upload:mine.yaml');
+    expect(screen.getByText('New here? Start in three steps')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Dismiss the quick guide' }));
+    expect(screen.queryByText('New here? Start in three steps')).not.toBeInTheDocument();
+
+    unmount();
+    render(<OnboardingBanner />);
+    expect(screen.queryByText('New here? Start in three steps')).not.toBeInTheDocument();
+  });
+});
+
+describe('HelpModal', () => {
+  it('shows quick reference content and closes on Escape and on clicking Done', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(<HelpModal onClose={onClose} />);
+
+    expect(screen.getByText('Quick reference')).toBeInTheDocument();
+    expect(screen.getByText(/DIRTY_REPOSITORY/)).toBeInTheDocument();
+
+    await user.click(screen.getByText('Done'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    await user.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(2);
   });
 });
 
 describe('RunSetup', () => {
-  it('supports going back a step without losing the earlier selection', async () => {
-    const user = userEvent.setup();
-    mockRoutedFetch((url) => {
-      if (url === '/api/setup') {
-        return {
-          body: {
-            repositories: ['customer-consumer'],
-            remoteRepositories: [],
-            specifications: [
-              { id: 'local:old.yaml', label: 'old.yaml', origin: 'local', sourceId: null },
-              { id: 'local:new.yaml', label: 'new.yaml', origin: 'local', sourceId: null },
-            ],
-            specSources: [],
-          },
-        };
-      }
-      return null;
-    });
-    render(<RunSetup onCreated={vi.fn()} />);
-
-    await user.click(await screen.findByText('Next'));
-    expect(await screen.findByLabelText('Old specification')).toBeInTheDocument();
-
-    await user.click(screen.getByText('Back'));
-    expect(await screen.findByLabelText('Consumer repository')).toHaveValue('customer-consumer');
-  });
-
-  it('a spec uploaded during setup fills the first empty slot without overwriting a prior choice', async () => {
+  it('opens Manage sources without disturbing the current selection, and refreshes on change', async () => {
     const user = userEvent.setup();
     let uploaded = false;
     mockRoutedFetch((url, init) => {
@@ -668,10 +651,54 @@ describe('RunSetup', () => {
     });
     render(<RunSetup onCreated={vi.fn()} />);
 
-    await user.click(await screen.findByText('Next'));
+    await user.click(await screen.findByRole('button', { name: 'Manage sources' }));
     const file = new File(['openapi: 3.0.3'], 'mine.yaml', { type: 'application/yaml' });
     await user.upload(await screen.findByLabelText('Upload a specification file'), file);
 
+    // The newly uploaded spec fills the still-empty "Old specification" slot on the underlying form.
     await waitFor(() => expect(screen.getByLabelText('Old specification')).toHaveValue('upload:mine.yaml'));
+  });
+
+  it('hints when no repositories are registered yet', async () => {
+    mockRoutedFetch((url) => {
+      if (url === '/api/setup') {
+        return { body: { repositories: [], remoteRepositories: [], specifications: [], specSources: [] } };
+      }
+      return null;
+    });
+    render(<RunSetup onCreated={vi.fn()} />);
+
+    expect(await screen.findByText(/No repositories available yet/)).toBeInTheDocument();
+    expect(screen.getByText('Start analysis')).toBeDisabled();
+  });
+
+  it('groups registered GitHub repositories and spec-source specifications into their own optgroups', async () => {
+    mockRoutedFetch((url) => {
+      if (url === '/api/setup') {
+        return {
+          body: {
+            repositories: [],
+            remoteRepositories: [
+              { repositoryId: 'acme-widgets', owner: 'acme', name: 'widgets', defaultBranch: 'main', registeredAt: '2026-07-21T10:00:00Z' },
+            ],
+            specifications: [
+              { id: 'source:openapi-specs:widgets.yaml', label: 'widgets.yaml', origin: 'spec_source', sourceId: 'openapi-specs' },
+            ],
+            specSources: [
+              { repositoryId: 'openapi-specs', owner: 'acme', name: 'openapi-specs', defaultBranch: 'main', registeredAt: '2026-07-21T10:00:00Z' },
+            ],
+          },
+        };
+      }
+      return null;
+    });
+    render(<RunSetup onCreated={vi.fn()} />);
+
+    await screen.findByText('Start analysis');
+    const groupLabels = [...document.querySelectorAll('optgroup')].map((g) => g.label);
+    expect(groupLabels).toContain('Registered GitHub repositories');
+    expect(groupLabels).toContain('From openapi-specs');
+    expect(screen.getByRole('option', { name: 'acme-widgets' })).toBeInTheDocument();
+    expect(screen.getAllByRole('option', { name: 'widgets.yaml' }).length).toBe(2);
   });
 });

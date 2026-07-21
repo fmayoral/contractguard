@@ -14,7 +14,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.Instant;
 
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -87,5 +89,13 @@ class SpecSourceControllerTest {
                         .content("{\"repositoryId\":\"\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.title").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    void deregistersASourceAndReturns204() throws Exception {
+        mvc.perform(delete("/api/spec-sources/openapi-specs"))
+                .andExpect(status().isNoContent());
+
+        verify(service).deregister("openapi-specs");
     }
 }

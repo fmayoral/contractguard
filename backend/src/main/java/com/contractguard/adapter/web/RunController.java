@@ -19,6 +19,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -69,7 +70,7 @@ public class RunController {
     public RunDtos.SetupOptions setup() {
         return new RunDtos.SetupOptions(runService.listRepositories(),
                 runService.listSpecOptions().stream().map(DtoMapper::toSpecOption).toList(),
-                runService.listRemoteRepositories(),
+                remoteRepositories.listRegistered().stream().map(DtoMapper::toRemoteRepositorySummary).toList(),
                 specSources.listRegistered().stream().map(DtoMapper::toSpecSourceSummary).toList());
     }
 
@@ -90,6 +91,12 @@ public class RunController {
         }
         SpecOption uploaded = runService.uploadSpecification(file.getOriginalFilename(), content);
         return ResponseEntity.status(HttpStatus.CREATED).body(DtoMapper.toSpecOption(uploaded));
+    }
+
+    @DeleteMapping("/specs/{fileName}")
+    public ResponseEntity<Void> deleteSpecification(@PathVariable String fileName) {
+        runService.deleteUploadedSpecification(fileName);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/runs")

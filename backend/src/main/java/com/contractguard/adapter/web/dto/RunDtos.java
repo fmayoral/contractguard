@@ -107,6 +107,6 @@ public final class RunDtos {
     }
 
     public record SetupOptions(List<String> repositories, List<SpecOption> specifications,
-            List<String> remoteRepositories, List<SpecSourceSummary> specSources) {
+            List<RemoteRepositorySummary> remoteRepositories, List<SpecSourceSummary> specSources) {
     }
 }

@@ -94,6 +94,11 @@ class PublishServiceTest {
                 }
                 pushedBranches.add(branchName);
             }
+
+            @Override
+            public void deleteLocalClone(String repositoryId) {
+                throw new UnsupportedOperationException();
+            }
         };
         PullRequestPort pullRequests = request -> {
             if (prFailure != null) {
@@ -120,6 +125,11 @@ class PublishServiceTest {
             @Override
             public List<RemoteRepository> findAll() {
                 return List.copyOf(registrations.values());
+            }
+
+            @Override
+            public void deregister(String repositoryId) {
+                registrations.remove(repositoryId);
             }
         };
         service = new PublishService(runs, events, git, pushingRemoteGit, pullRequests, registry,

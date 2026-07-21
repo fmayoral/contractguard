@@ -111,11 +111,11 @@ open a real draft PR against it).
    export CONTRACTGUARD_CREDENTIAL_KEY=$(openssl rand -base64 32)
    ```
 
-2. In the dashboard, under **New analysis run**, expand **+ Register a
-   GitHub repository** and fill in a repository ID, the clone URL, default
-   branch and your token, then press **Register repository**. It now
-   appears in the **Consumer repository** picker under "Registered GitHub
-   repositories" — select it.
+2. In the dashboard, press **Manage sources** (next to **New analysis
+   run**), then under "Consumer repositories" fill in a repository ID, the
+   clone URL, default branch and your token, and press **Register
+   repository**. Close the modal — it now appears in the **Consumer
+   repository** picker under "Registered GitHub repositories" — select it.
 
    Equivalently, over the API:
 
@@ -157,16 +157,18 @@ open a real draft PR against it).
 
 ## 10. Test specification sources and upload (FR-043)
 
-The setup wizard's step 2 offers three ways to get old/new specs in front of
-a run, no filesystem or deployment access required for any of them.
+The **Manage sources** modal offers three ways to get old/new specs in
+front of a run, no filesystem or deployment access required for any of
+them; the **New analysis run** form itself only ever picks from what's
+already registered.
 
-1. Start a new run and reach **Specifications** (step 2 of 3).
-2. **Upload**: choose a `.yaml`/`.yml`/`.json` file under "Upload a
-   specification file" — it appears immediately in the picker under
-   "Uploaded", and whichever of old/new is still unset gets filled with it
-   automatically (never overwriting a choice you already made).
-3. **Register a spec repository**: expand **+ Register a spec repository**
-   and supply a clone URL and default branch. Unlike consumer repository
+1. Press **Manage sources**.
+2. **Upload**: under "Uploaded specifications", choose a `.yaml`/`.yml`/
+   `.json` file — it appears immediately in that list. Close the modal and
+   whichever of old/new is still unset on the underlying form gets filled
+   with it automatically (never overwriting a choice you already made).
+3. **Register a spec repository**: under "Specification repositories",
+   supply a clone URL and default branch. Unlike consumer repository
    registration, **the token is optional** — try registering a public
    repository (e.g. a repo containing just your OpenAPI YAML files) with the
    token field left blank:
@@ -186,8 +188,31 @@ a run, no filesystem or deployment access required for any of them.
    that doesn't exist, or a private repo with no/an invalid token. The setup
    screen still loads normally — that one source just contributes no files,
    and a hint under the picker names it as having "contributed no files."
-5. Proceed through step 3 and start the run exactly as in section 5 above;
-   the analysis works identically regardless of where the specs came from.
+5. Close the modal and start the run exactly as in section 5 above; the
+   analysis works identically regardless of where the specs came from.
+
+## 11. Test deregistration (FR-044)
+
+1. Press **Manage sources**. Each registered remote repository and spec
+   source, and each uploaded specification, has a **Remove** button next to
+   it (local workspace repositories and bundled specs don't — they aren't
+   registrations).
+2. Remove the repository registered in section 9: press **Remove** next to
+   it, confirm the dialog. It disappears from the list and from the
+   **Consumer repository** picker; its local clone cache
+   (`storage.directory/remote-cache/<repositoryId>/`) is deleted too, so
+   re-registering the same ID with a corrected URL or token never reuses a
+   stale checkout.
+3. Equivalently, over the API:
+
+   ```bash
+   curl -s -X DELETE http://127.0.0.1:7080/api/repositories/remote/my-remote-consumer -w '%{http_code}\n'
+   curl -s -X DELETE http://127.0.0.1:7080/api/spec-sources/openapi-specs -w '%{http_code}\n'
+   curl -s -X DELETE http://127.0.0.1:7080/api/specs/customer-api-v2.yaml -w '%{http_code}\n'
+   ```
+
+   Each returns `204` on success and is a no-op (also `204`) if the ID was
+   never registered.
 
 ## Troubleshooting
 

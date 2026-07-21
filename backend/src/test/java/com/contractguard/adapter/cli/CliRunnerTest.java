@@ -127,6 +127,11 @@ class CliRunnerTest {
             public List<RemoteRepository> findAll() {
                 return List.of();
             }
+
+            @Override
+            public void deregister(String repositoryId) {
+                throw new UnsupportedOperationException();
+            }
         };
         RemoteRepositoryService remoteRepositories =
                 new RemoteRepositoryService(noRemotes, (RemoteGitPort) null, clock);

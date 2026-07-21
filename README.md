@@ -161,14 +161,17 @@ consumer checkout must be a Git repository with a Maven wrapper.
 
 ## Remote repositories
 
-Consumers do not need a pre-existing local checkout. In the dashboard,
-expand **+ Register a GitHub repository** under **New analysis run**, and
-supply a clone URL, default branch and a personal access token (`repo`
-scope) — the server needs `CONTRACTGUARD_CREDENTIAL_KEY` set (a base64
-256-bit key, e.g. `openssl rand -base64 32`) before it will accept one. The
-registered repository then appears in the **Consumer repository** picker
-under "Registered GitHub repositories", alongside any local workspace repos.
-Or register it directly over the API:
+Consumers do not need a pre-existing local checkout. In the dashboard, open
+**Manage sources** (next to **New analysis run**) and register a GitHub
+repository there, supplying a clone URL, default branch and a personal
+access token (`repo` scope) — the server needs `CONTRACTGUARD_CREDENTIAL_KEY`
+set (a base64 256-bit key, e.g. `openssl rand -base64 32`) before it will
+accept one. The registered repository then appears in the **Consumer
+repository** picker under "Registered GitHub repositories", alongside any
+local workspace repos, and can be removed again from the same **Manage
+sources** modal (which also deletes its local clone cache) if it was
+registered with the wrong URL or an under-scoped token. Or register it
+directly over the API:
 
 ```bash
 export CONTRACTGUARD_CREDENTIAL_KEY=$(openssl rand -base64 32)  # server-side master key
@@ -194,9 +197,9 @@ for a full walkthrough against a real GitHub repository.
 ## Specification sources
 
 Old/new OpenAPI specs no longer have to live in a directory the server
-process can already see. The **New analysis run** setup is a 3-step wizard
-(repository → specifications → review); step 2 offers three ways to get
-specs in front of a run, all landing in the same picker:
+process can already see. The **Manage sources** modal offers three ways to
+get specs in front of a run, all landing in the same picker on the **New
+analysis run** form:
 
 - **Bundled/local** — files already in `contractguard.specs.directory`, as before.
 - **Upload** — pick a file from your machine (`.yaml`/`.yml`/`.json`, 2 MB
@@ -458,9 +461,10 @@ docs/          Specification, architecture, ADRs, demo script, roadmap
   parent POM is pinned to 3.3.5 (ADR-0011). Trace export defaults to the
   application log; a real collector needs `management.otlp.tracing.endpoint`
   configured.
-- Spec sources and uploaded specifications (FR-043) have no deregister/delete
-  endpoint yet and are process-wide, not scoped to any user — the same
-  single-operator trust model as everything else pending FR-024 (ADR-0012).
+- Registered repositories, spec sources and uploaded specifications (FR-044)
+  can be deregistered/deleted, but the registry is still process-wide, not
+  scoped to any user — the same single-operator trust model as everything
+  else pending FR-024 (ADR-0012).
 
 ## Documentation
 

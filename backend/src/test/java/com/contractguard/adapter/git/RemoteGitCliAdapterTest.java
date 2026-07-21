@@ -114,6 +114,22 @@ class RemoteGitCliAdapterTest {
     }
 
     @Test
+    void deleteLocalCloneRemovesTheCacheDirectory() {
+        adapter.cloneOrRefresh("customer-consumer", remote, "unused-token");
+        Path checkout = cacheDir.resolve("customer-consumer");
+        assertThat(checkout).isDirectory();
+
+        adapter.deleteLocalClone("customer-consumer");
+
+        assertThat(checkout).doesNotExist();
+    }
+
+    @Test
+    void deleteLocalCloneIsANoOpWhenNothingWasEverCloned() {
+        adapter.deleteLocalClone("never-cloned");
+    }
+
+    @Test
     void unreachableRemoteFailsTyped() {
         RemoteRepository broken = new RemoteRepository("customer-consumer",
                 cacheDir.resolve("does-not-exist").toString(), "acme", "widgets", "main",

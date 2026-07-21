@@ -73,4 +73,9 @@ public class JdbcRemoteRepositoryRegistry implements RemoteRepositoryRegistry {
                 repositoryId);
         return found.stream().findFirst();
     }
+
+    @Override
+    public void deregister(String repositoryId) {
+        jdbc.update("DELETE FROM remote_repositories WHERE repository_id = ?", repositoryId);
+    }
 }

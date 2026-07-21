@@ -38,4 +38,10 @@ public class InMemorySpecSourceRegistry implements SpecSourceRegistry {
     public List<RemoteRepository> findAll() {
         return List.copyOf(sources.values());
     }
+
+    @Override
+    public void deregister(String repositoryId) {
+        sources.remove(repositoryId);
+        credentials.remove(repositoryId);
+    }
 }

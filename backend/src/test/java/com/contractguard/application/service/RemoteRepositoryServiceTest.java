@@ -54,6 +54,12 @@ class RemoteRepositoryServiceTest {
             public List<RemoteRepository> findAll() {
                 return List.copyOf(registered.values());
             }
+
+            @Override
+            public void deregister(String repositoryId) {
+                registered.remove(repositoryId);
+                tokens.remove(repositoryId);
+            }
         };
         remoteGit = new RemoteGitPort() {
             @Override
@@ -64,6 +70,11 @@ class RemoteRepositoryServiceTest {
             @Override
             public void push(String repositoryId, String branchName, RemoteRepository remote, String credential) {
                 throw new UnsupportedOperationException("push not used by RemoteRepositoryService");
+            }
+
+            @Override
+            public void deleteLocalClone(String repositoryId) {
+                cloneCalls.remove(repositoryId);
             }
         };
         service = new RemoteRepositoryService(registry, remoteGit, CLOCK);
@@ -87,6 +98,26 @@ class RemoteRepositoryServiceTest {
                 .isInstanceOf(ContractGuardException.class)
                 .satisfies(e -> assertThat(((ContractGuardException) e).failure().category())
                         .isEqualTo(FailureCategory.POLICY_VIOLATION));
+    }
+
+    @Test
+    void deregisterRemovesTheRegistrationAndTheLocalCloneCache() {
+        service.register("customer-consumer", "https://github.com/acme/widgets", "main", "gh-token");
+        service.ensureLocalClone("customer-consumer");
+        assertThat(cloneCalls).containsKey("customer-consumer");
+
+        service.deregister("customer-consumer");
+
+        assertThat(registered).doesNotContainKey("customer-consumer");
+        assertThat(cloneCalls).doesNotContainKey("customer-consumer");
+        assertThat(service.isRemote("customer-consumer")).isFalse();
+    }
+
+    @Test
+    void deregisterIsANoOpForARepositoryThatWasNeverRegistered() {
+        service.deregister("never-registered");
+
+        assertThat(registered).isEmpty();
     }
 
     @Test

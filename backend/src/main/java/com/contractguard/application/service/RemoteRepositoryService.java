@@ -61,4 +61,15 @@ public class RemoteRepositoryService {
     public List<RemoteRepository> listRegistered() {
         return registry.findAll();
     }
+
+    /**
+     * Removes the registration and its local clone cache (FR-044) — e.g. to replace a credential
+     * that turned out to lack the required scope. A no-op if never registered. Does not check for
+     * runs still in flight against this repository; deregistering out from under an active run is
+     * the operator's call, not one this method second-guesses.
+     */
+    public void deregister(String repositoryId) {
+        registry.deregister(repositoryId);
+        remoteGit.deleteLocalClone(repositoryId);
+    }
 }

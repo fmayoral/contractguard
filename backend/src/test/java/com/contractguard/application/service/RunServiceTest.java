@@ -73,6 +73,11 @@ class RunServiceTest {
             public List<RemoteRepository> findAll() {
                 return List.of();
             }
+
+            @Override
+            public void deregister(String repositoryId) {
+                throw new UnsupportedOperationException();
+            }
         };
     }
 
@@ -147,6 +152,11 @@ class RunServiceTest {
             @Override
             public List<RemoteRepository> findAll() {
                 return List.of(registered);
+            }
+
+            @Override
+            public void deregister(String repositoryId) {
+                throw new UnsupportedOperationException();
             }
         };
         RunService withRemote = newService(oneRemote, new WorkspacePolicy(List.of(workspace)),
@@ -281,6 +291,20 @@ class RunServiceTest {
 
         assertThat(service.listSpecOptions().stream().filter(o -> o.label().equals("mine.yaml")).count())
                 .isEqualTo(1);
+    }
+
+    @Test
+    void deletingAnUploadedSpecificationRemovesItFromTheListing() {
+        service.uploadSpecification("mine.yaml", "openapi: 3.0.0");
+
+        service.deleteUploadedSpecification("mine.yaml");
+
+        assertThat(service.listSpecOptions().stream().noneMatch(o -> o.label().equals("mine.yaml"))).isTrue();
+    }
+
+    @Test
+    void deletingAnUploadThatNeverExistedIsANoOp() {
+        service.deleteUploadedSpecification("ghost.yaml");
     }
 
     @Test

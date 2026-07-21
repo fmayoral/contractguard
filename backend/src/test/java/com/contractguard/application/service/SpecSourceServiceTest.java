@@ -42,6 +42,34 @@ class SpecSourceServiceTest {
     }
 
     @Test
+    void deregisterRemovesTheRegistrationAndTheLocalCloneCache() throws IOException {
+        List<String> deletedClones = new ArrayList<>();
+        RemoteGitPort git = new RemoteGitPort() {
+            @Override
+            public void cloneOrRefresh(String repositoryId, RemoteRepository remote, String credential) {
+                // not exercised here
+            }
+
+            @Override
+            public void push(String repositoryId, String branchName, RemoteRepository remote, String credential) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void deleteLocalClone(String repositoryId) {
+                deletedClones.add(repositoryId);
+            }
+        };
+        SpecSourceService service = new SpecSourceService(registry, git, cacheRoot, CLOCK);
+        service.register("openapi-specs", "https://github.com/acme/openapi-specs", "main", "tok");
+
+        service.deregister("openapi-specs");
+
+        assertThat(registry.find("openapi-specs")).isEmpty();
+        assertThat(deletedClones).containsExactly("openapi-specs");
+    }
+
+    @Test
     void registerRejectsAnInvalidRepositoryId() {
         SpecSourceService service = new SpecSourceService(registry, (RemoteGitPort) null, cacheRoot, CLOCK);
 
@@ -71,6 +99,11 @@ class SpecSourceServiceTest {
             public void push(String repositoryId, String branchName, RemoteRepository remote, String credential) {
                 throw new UnsupportedOperationException("spec sources are never pushed to");
             }
+
+            @Override
+            public void deleteLocalClone(String repositoryId) {
+                throw new UnsupportedOperationException();
+            }
         };
         SpecSourceService service = new SpecSourceService(registry, cloningGit, cacheRoot, CLOCK);
         service.register("openapi-specs", "https://github.com/acme/openapi-specs", "main", "tok");
@@ -92,6 +125,11 @@ class SpecSourceServiceTest {
 
             @Override
             public void push(String repositoryId, String branchName, RemoteRepository remote, String credential) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void deleteLocalClone(String repositoryId) {
                 throw new UnsupportedOperationException();
             }
         };

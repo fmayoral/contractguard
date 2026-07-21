@@ -152,7 +152,7 @@ export interface SpecOption {
 export interface SetupOptions {
   repositories: string[];
   specifications: SpecOption[];
-  remoteRepositories: string[];
+  remoteRepositories: RemoteRepositorySummary[];
   specSources: RemoteRepositorySummary[];
 }
 

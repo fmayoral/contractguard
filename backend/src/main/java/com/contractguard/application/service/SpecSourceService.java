@@ -51,6 +51,12 @@ public class SpecSourceService {
         return registry.findAll();
     }
 
+    /** Removes the registration and its local clone cache (FR-044). A no-op if never registered. */
+    public void deregister(String repositoryId) {
+        registry.deregister(repositoryId);
+        remoteGit.deleteLocalClone(repositoryId);
+    }
+
     /**
      * Clone-or-refreshes every registered source (mirrors
      * {@code RemoteRepositoryService.ensureLocalClone}'s lazy-refresh pattern

@@ -95,6 +95,12 @@ code {
   letter-spacing: 0.03em;
 }
 
+.sidebar-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .theme-toggle {
   background: var(--panel-2);
   color: var(--text);
@@ -495,36 +501,122 @@ button.reject {
   padding-top: 0.75rem;
 }
 
-.wizard-steps {
-  display: flex;
-  gap: 0.75rem;
-  list-style: none;
-  margin: 0 0 1rem;
-  padding: 0;
-  font-size: 0.8rem;
-  color: var(--muted);
-  flex-wrap: wrap;
-}
-
-.wizard-steps li.active {
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.wizard-steps li.done {
-  color: var(--ok);
-}
-
-.wizard-nav {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 1rem;
-}
-
 button.secondary {
   background: var(--panel-2);
   color: var(--text);
   border: 1px solid var(--border);
+}
+
+button.small {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.8rem;
+}
+
+.card-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.card-header-row h2 {
+  margin: 0;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 3rem 1rem;
+  z-index: 100;
+  overflow-y: auto;
+}
+
+.modal {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  max-width: 640px;
+  width: 100%;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.modal-close {
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  font-size: 1.3rem;
+  line-height: 1;
+  padding: 0.2rem 0.5rem;
+}
+
+.modal-section {
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.modal-section h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.modal-footer {
+  margin-top: 1.25rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.source-list {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.source-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  background: var(--panel-2);
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+}
+
+.onboarding-steps {
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.onboarding-steps li + li {
+  margin-top: 0.4rem;
 }
 
 .publish-panel {

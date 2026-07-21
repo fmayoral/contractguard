@@ -140,6 +140,16 @@ public class RunService {
         return new SpecOption("upload:" + safeName, safeName, SpecOption.SpecOrigin.UPLOADED, null);
     }
 
+    /** Removes a previously uploaded specification (FR-044). A no-op if it was never uploaded. */
+    public void deleteUploadedSpecification(String fileName) {
+        String safeName = sanitiseUploadFileName(fileName);
+        try {
+            Files.deleteIfExists(uploadedSpecsDirectory.resolve(safeName));
+        } catch (IOException e) {
+            throw new UncheckedIOException("cannot delete uploaded specification " + safeName, e);
+        }
+    }
+
     private static String sanitiseUploadFileName(String fileName) {
         String name = "";
         if (fileName != null) {

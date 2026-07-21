@@ -14,6 +14,7 @@ import com.contractguard.domain.Approval;
 import com.contractguard.domain.ContractGuardException;
 import com.contractguard.domain.FailureCategory;
 import com.contractguard.domain.Fixtures;
+import com.contractguard.domain.RemoteRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -32,6 +33,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -99,6 +101,14 @@ class RunApiTest {
                 .andExpect(jsonPath("$.id").value("upload:mine.yaml"))
                 .andExpect(jsonPath("$.label").value("mine.yaml"))
                 .andExpect(jsonPath("$.origin").value("uploaded"));
+    }
+
+    @Test
+    void deletingAnUploadedSpecificationReturns204() throws Exception {
+        mvc.perform(delete("/api/specs/mine.yaml"))
+                .andExpect(status().isNoContent());
+
+        verify(runService).deleteUploadedSpecification("mine.yaml");
     }
 
     @Test
@@ -258,14 +268,16 @@ class RunApiTest {
         when(runService.listSpecOptions()).thenReturn(List.of(
                 new SpecOption("local:v1.yaml", "v1.yaml", SpecOption.SpecOrigin.LOCAL, null),
                 new SpecOption("local:v2.yaml", "v2.yaml", SpecOption.SpecOrigin.LOCAL, null)));
-        when(runService.listRemoteRepositories()).thenReturn(List.of("acme-widgets"));
+        when(remoteRepositories.listRegistered()).thenReturn(List.of(RemoteRepository.forGitHub(
+                "acme-widgets", "https://github.com/acme/widgets", "main", java.time.Instant.parse("2026-07-20T10:00:00Z"))));
         when(specSources.listRegistered()).thenReturn(List.of());
 
         mvc.perform(get("/api/setup"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.repositories[0]").value("customer-consumer"))
                 .andExpect(jsonPath("$.specifications", org.hamcrest.Matchers.hasSize(2)))
-                .andExpect(jsonPath("$.remoteRepositories[0]").value("acme-widgets"));
+                .andExpect(jsonPath("$.remoteRepositories[0].repositoryId").value("acme-widgets"))
+                .andExpect(jsonPath("$.remoteRepositories[0].owner").value("acme"));
     }
 
     @Test

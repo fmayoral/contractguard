@@ -25,6 +25,11 @@ public final class DtoMapper {
                 source.defaultBranch(), source.registeredAt());
     }
 
+    public static RunDtos.RemoteRepositorySummary toRemoteRepositorySummary(RemoteRepository repository) {
+        return new RunDtos.RemoteRepositorySummary(repository.repositoryId(), repository.owner(),
+                repository.name(), repository.defaultBranch(), repository.registeredAt());
+    }
+
     public static RunDtos.RunSummary toSummary(AnalysisRun run, boolean remoteRepository) {
         return new RunDtos.RunSummary(run.id(), run.name(), run.state().name(), run.repositoryId(),
                 run.createdAt(), run.updatedAt(), run.workingBranch(),

@@ -13,6 +13,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
@@ -64,6 +65,24 @@ public class RemoteGitCliAdapter implements RemoteGitPort {
     public void push(String repositoryId, String branchName, RemoteRepository remote, String credential) {
         Path dest = destinationFor(repositoryId);
         run(dest, credential, "git", "push", "-u", "origin", branchName);
+    }
+
+    @Override
+    public void deleteLocalClone(String repositoryId) {
+        Path dest = destinationFor(repositoryId);
+        if (!dest.startsWith(cacheRoot) || !Files.isDirectory(dest)) {
+            return;
+        }
+        try (var paths = Files.walk(dest)) {
+            for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
+                // Git marks loose object files read-only; on Windows (unlike POSIX, where a
+                // writable parent directory is enough) that attribute blocks deletion outright.
+                path.toFile().setWritable(true);
+                Files.deleteIfExists(path);
+            }
+        } catch (IOException e) {
+            log.warn("could not fully delete local clone cache {}: {}", dest, e.getMessage());
+        }
     }
 
     private Path destinationFor(String repositoryId) {

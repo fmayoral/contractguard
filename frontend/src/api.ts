@@ -86,6 +86,9 @@ export const api = {
       body: JSON.stringify({ repositoryId, cloneUrl, defaultBranch, token }),
     });
   },
+  deregisterRemoteRepository(repositoryId: string): Promise<void> {
+    return request(`/api/repositories/remote/${encodeURIComponent(repositoryId)}`, { method: 'DELETE' });
+  },
   registerSpecSource(
     repositoryId: string,
     cloneUrl: string,
@@ -97,6 +100,12 @@ export const api = {
       // A blank token registers an unauthenticated (public-repository) spec source (ADR-0012).
       body: JSON.stringify({ repositoryId, cloneUrl, defaultBranch, token: token || undefined }),
     });
+  },
+  deregisterSpecSource(repositoryId: string): Promise<void> {
+    return request(`/api/spec-sources/${encodeURIComponent(repositoryId)}`, { method: 'DELETE' });
+  },
+  deleteUploadedSpecification(fileName: string): Promise<void> {
+    return request(`/api/specs/${encodeURIComponent(fileName)}`, { method: 'DELETE' });
   },
   async uploadSpecification(file: File): Promise<SpecOption> {
     const formData = new FormData();

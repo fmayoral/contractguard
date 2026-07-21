@@ -17,4 +17,12 @@ public interface RemoteGitPort {
 
     /** Pushes {@code branchName} to {@code origin}, creating it on the remote if needed. */
     void push(String repositoryId, String branchName, RemoteRepository remote, String credential);
+
+    /**
+     * Removes the local clone cache for {@code repositoryId}, if any (FR-044). Called on
+     * deregistration so a future re-registration under the same ID (e.g. with a corrected
+     * credential or a different clone URL) starts from a fresh clone rather than reusing one
+     * that may point at the wrong remote.
+     */
+    void deleteLocalClone(String repositoryId);
 }

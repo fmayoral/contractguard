@@ -18,4 +18,7 @@ public interface RemoteRepositoryRegistry {
 
     /** All registrations, ordered by repository ID; credentials are never included. */
     List<RemoteRepository> findAll();
+
+    /** Removes the registration and its credential; a no-op if it was never registered (FR-044). */
+    void deregister(String repositoryId);
 }

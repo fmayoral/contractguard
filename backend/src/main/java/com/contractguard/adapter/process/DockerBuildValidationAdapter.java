@@ -60,11 +60,15 @@ public class DockerBuildValidationAdapter implements BuildValidationPort {
                     "Only 'maven-verify' is supported in the MVP.");
         }
         Path repo = policy.resolveRepository(repositoryId);
-        if (!Files.exists(repo.resolve("mvnw"))) {
+        Path wrapper = repo.resolve("mvnw");
+        if (!Files.exists(wrapper)) {
             throw ContractGuardException.of(FailureCategory.UNSUPPORTED_FEATURE,
                     "repository has no Maven wrapper: " + repo.getFileName(),
                     "Only Maven-wrapper builds are supported in the MVP.");
         }
+        // The bind mount below exposes this same file (and its permission bits) inside the
+        // sandbox container, so it needs the executable bit here too, not just for the host path.
+        MavenWrapperSupport.ensureExecutable(wrapper);
         String containerName = "contractguard-validate-" + Ids.shortId(Ids.newId());
         ProcessRunner.ProcessResult result = processRunner.run(
                 dockerRunCommand(containerName, repo), repo, Map.of(), timeout, maxOutputBytes);

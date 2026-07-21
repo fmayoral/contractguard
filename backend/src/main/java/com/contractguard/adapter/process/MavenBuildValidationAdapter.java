@@ -64,6 +64,7 @@ public class MavenBuildValidationAdapter implements BuildValidationPort {
         if (!Files.exists(wrapper)) {
             throw missingWrapper(repo);
         }
+        MavenWrapperSupport.ensureExecutable(wrapper);
         return List.of(wrapper.toAbsolutePath().toString(), "-B", "-ntp", "verify");
     }
 

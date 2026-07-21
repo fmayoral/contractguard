@@ -206,7 +206,7 @@ public class GitCliAdapter implements GitWorkspacePort, PatchPort {
         if (!Files.isRegularFile(file)) {
             throw ContractGuardException.of(FailureCategory.PATCH_REJECTED,
                     "patched file does not exist: " + relativePath,
-                    "The MVP patches existing files only.");
+                    "Patches modify existing files only; file creation is not supported.");
         }
         try {
             return Files.readString(file, StandardCharsets.UTF_8);

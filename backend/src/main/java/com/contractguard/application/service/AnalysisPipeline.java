@@ -101,7 +101,7 @@ public class AnalysisPipeline {
             if (!Files.exists(repoRoot.resolve("mvnw")) && !Files.exists(repoRoot.resolve("mvnw.cmd"))) {
                 throw ContractGuardException.of(FailureCategory.UNSUPPORTED_FEATURE,
                         "repository '%s' has no Maven wrapper".formatted(run.repositoryId()),
-                        "Only Maven-wrapper builds are supported in the MVP.");
+                        "Only Maven-wrapper builds are supported.");
             }
             List<AnalysisRun> active = runs.findActiveByRepository(run.repositoryId());
             boolean busy = active.stream().anyMatch(other -> !other.id().equals(run.id()));

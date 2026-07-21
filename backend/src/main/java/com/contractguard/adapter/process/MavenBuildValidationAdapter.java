@@ -13,9 +13,10 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * The only build validation the MVP supports: the repository's own Maven
- * wrapper with a fixed argument array (FR-016). The command allow-list is
- * this map — an unknown key is a typed policy violation, never an execution.
+ * The default (host) build validation: the repository's own Maven wrapper
+ * with a fixed argument array (FR-016). The command allow-list is this
+ * map — an unknown key is a typed policy violation, never an execution.
+ * The opt-in sandboxed alternative is {@link DockerBuildValidationAdapter} (FR-030).
  */
 public class MavenBuildValidationAdapter implements BuildValidationPort {
 
@@ -51,7 +52,7 @@ public class MavenBuildValidationAdapter implements BuildValidationPort {
         if (!"maven-verify".equals(commandKey)) {
             throw ContractGuardException.of(FailureCategory.POLICY_VIOLATION,
                     "validation command key '%s' is not allow-listed".formatted(commandKey),
-                    "Only 'maven-verify' is supported in the MVP.");
+                    "Only 'maven-verify' is allow-listed.");
         }
         if (WINDOWS) {
             Path wrapper = repo.resolve("mvnw.cmd");
@@ -71,6 +72,6 @@ public class MavenBuildValidationAdapter implements BuildValidationPort {
     private static ContractGuardException missingWrapper(Path repo) {
         return ContractGuardException.of(FailureCategory.UNSUPPORTED_FEATURE,
                 "repository has no Maven wrapper: " + repo.getFileName(),
-                "Only Maven-wrapper builds are supported in the MVP.");
+                "Only Maven-wrapper builds are supported.");
     }
 }

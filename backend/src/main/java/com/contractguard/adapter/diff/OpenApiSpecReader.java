@@ -46,7 +46,7 @@ public class OpenApiSpecReader {
         if (api.getOpenapi() == null || !api.getOpenapi().startsWith("3.")) {
             throw ContractGuardException.of(FailureCategory.UNSUPPORTED_FEATURE,
                     "unsupported OpenAPI version '%s' in %s".formatted(api.getOpenapi(), specPath.getFileName()),
-                    "Only OpenAPI 3.x is supported in the MVP.");
+                    "Only OpenAPI 3.x is supported.");
         }
         return toModel(api);
     }

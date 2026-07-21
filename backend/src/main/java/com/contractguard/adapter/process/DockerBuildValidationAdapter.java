@@ -57,14 +57,14 @@ public class DockerBuildValidationAdapter implements BuildValidationPort {
         if (!"maven-verify".equals(commandKey)) {
             throw ContractGuardException.of(FailureCategory.POLICY_VIOLATION,
                     "validation command key '%s' is not allow-listed".formatted(commandKey),
-                    "Only 'maven-verify' is supported in the MVP.");
+                    "Only 'maven-verify' is allow-listed.");
         }
         Path repo = policy.resolveRepository(repositoryId);
         Path wrapper = repo.resolve("mvnw");
         if (!Files.exists(wrapper)) {
             throw ContractGuardException.of(FailureCategory.UNSUPPORTED_FEATURE,
                     "repository has no Maven wrapper: " + repo.getFileName(),
-                    "Only Maven-wrapper builds are supported in the MVP.");
+                    "Only Maven-wrapper builds are supported.");
         }
         // The bind mount below exposes this same file (and its permission bits) inside the
         // sandbox container, so it needs the executable bit here too, not just for the host path.

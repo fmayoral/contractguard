@@ -204,7 +204,7 @@ public class ExecutionService {
             if (content.truncated()) {
                 throw ContractGuardException.of(FailureCategory.POLICY_VIOLATION,
                         "approved file %s exceeds the remediation size limit".formatted(path),
-                        "The MVP remediates bounded text files only.");
+                        "Remediation is limited to bounded text files.");
             }
             currentFiles.put(path, content.content());
         }

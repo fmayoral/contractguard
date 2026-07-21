@@ -96,7 +96,7 @@ contractguard:
   audit:
     # Attributed to every audit entry until FR-024 adds real authenticated
     # principals; not a security boundary, just the compliance record's
-    # "who" field for this single-operator MVP.
+    # "who" field for this single-operator tool.
     default-principal: ${CONTRACTGUARD_AUDIT_PRINCIPAL:local-operator}
   concurrency:
     # Bounds the system-wide run queue (FR-032); creation is rejected with a

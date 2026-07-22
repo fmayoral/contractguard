@@ -37,4 +37,7 @@ class StubEventSource {
 // Direct assignment so per-test vi.unstubAllGlobals() calls never remove it.
 (globalThis as { EventSource: unknown }).EventSource = StubEventSource;
 
+// jsdom does not implement scrolling; the auto-scroll hook calls this directly.
+window.scrollTo = () => {};
+
 export { StubEventSource };

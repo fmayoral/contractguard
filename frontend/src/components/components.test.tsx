@@ -66,12 +66,17 @@ describe('AnalysisProgress', () => {
       'Search evidence',
       'Assess impact',
       'Draft plan',
+      'Prepare branch',
+      'Apply patch',
+      'Build & test',
+      'Repair & retry',
     ]);
     expect(steps[0]).toHaveClass('done');
     expect(steps[1]).toHaveClass('done');
     expect(steps[2]).toHaveClass('done');
     expect(steps[3]).toHaveClass('current');
     expect(steps[4]).toHaveClass('pending');
+    expect(steps[8]).toHaveClass('pending');
 
     act(() => {
       vi.advanceTimersByTime(60_000);
@@ -79,16 +84,27 @@ describe('AnalysisProgress', () => {
     expect(screen.getByText('1:15')).toBeInTheDocument();
   });
 
-  it('shows the execution-phase steps once patching or validating', () => {
+  it('keeps earlier analysis steps marked done once the run reaches the execution phase', () => {
     render(<AnalysisProgress state="VALIDATING" since="2026-07-22T10:00:00Z" />);
 
     expect(screen.getByText('Running the consumer build & tests…')).toBeInTheDocument();
-    expect(screen.getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-      'Prepare branch',
-      'Apply patch',
-      'Build & test',
-      'Repair & retry',
+    const steps = screen.getAllByRole('listitem');
+    // All five analysis steps stay in the list, marked done -- not swapped out
+    // for a separate execution-only list.
+    expect(steps.slice(0, 5).map((li) => li.textContent)).toEqual([
+      'Validate',
+      'Compare specs',
+      'Search evidence',
+      'Assess impact',
+      'Draft plan',
     ]);
+    for (const step of steps.slice(0, 5)) {
+      expect(step).toHaveClass('done');
+    }
+    expect(steps[5]).toHaveClass('done'); // Prepare branch
+    expect(steps[6]).toHaveClass('done'); // Apply patch
+    expect(steps[7]).toHaveClass('current'); // Build & test
+    expect(steps[8]).toHaveClass('pending'); // Repair & retry
   });
 });
 

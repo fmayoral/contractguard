@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 
-const ANALYSIS_STEPS = [
+// One combined pipeline, in order -- unlike two separate per-phase lists, a
+// step from the analysis phase stays visible (and marked done) once the run
+// moves into the execution phase instead of being swapped out.
+const PIPELINE_STEPS = [
   { state: 'VALIDATING_INPUT', label: 'Validate' },
   { state: 'DIFFING', label: 'Compare specs' },
   { state: 'SEARCHING', label: 'Search evidence' },
   { state: 'ASSESSING', label: 'Assess impact' },
   { state: 'PLANNING', label: 'Draft plan' },
-];
-
-const EXECUTION_STEPS = [
   { state: 'PREPARING_BRANCH', label: 'Prepare branch' },
   { state: 'PATCHING', label: 'Apply patch' },
   { state: 'VALIDATING', label: 'Build & test' },
@@ -51,16 +51,15 @@ interface AnalysisProgressProps {
 }
 
 /**
- * A live "the platform is working" indicator for the run's active pipeline
- * steps -- only rendered while genuinely busy (App gates on stateTone ===
- * 'busy'), never during AWAITING_APPROVAL, which is waiting on the human,
- * not the system.
+ * A live "the platform is working" indicator, pinned to the top of the
+ * viewport (see .progress-card's position: sticky) so it stays visible on a
+ * long run page -- only rendered while genuinely busy (App gates on
+ * stateTone === 'busy'), never during AWAITING_APPROVAL, which is waiting on
+ * the human, not the system.
  */
 export function AnalysisProgress({ state, since }: AnalysisProgressProps) {
   const elapsed = useElapsed(since);
-  const isExecution = EXECUTION_STEPS.some((step) => step.state === state);
-  const steps = isExecution ? EXECUTION_STEPS : ANALYSIS_STEPS;
-  const currentIndex = steps.findIndex((step) => step.state === state);
+  const currentIndex = PIPELINE_STEPS.findIndex((step) => step.state === state);
 
   return (
     <section className="card progress-card" aria-live="polite">
@@ -73,7 +72,7 @@ export function AnalysisProgress({ state, since }: AnalysisProgressProps) {
         <div className="progress-bar-fill" />
       </div>
       <ol className="progress-steps">
-        {steps.map((step, index) => (
+        {PIPELINE_STEPS.map((step, index) => (
           <li key={step.state} className={index < currentIndex ? 'done' : index === currentIndex ? 'current' : 'pending'}>
             {step.label}
           </li>

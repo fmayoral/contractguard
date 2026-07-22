@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from './api';
 import { isTerminal, stateTone } from './format';
+import { useAutoScrollToBottom } from './useAutoScrollToBottom';
 import { useRunEvents } from './useRunEvents';
 import { AnalysisProgress } from './components/AnalysisProgress';
 import { Badge } from './components/Badge';
@@ -48,6 +49,8 @@ export default function App() {
     refreshRun();
     refreshRuns();
   });
+
+  useAutoScrollToBottom(selectedId, `${events.length}:${run?.updatedAt ?? ''}`);
 
   const onCreated = (runId: string) => {
     setSelectedId(runId);

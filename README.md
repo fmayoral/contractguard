@@ -37,9 +37,9 @@ see [Remote repositories](#remote-repositories) below). The backend
 validates inputs, computes a deterministic diff of the two specs, classifies
 each change (`BREAKING` / `NON_BREAKING` / `POTENTIALLY_BREAKING` /
 `UNKNOWN`) by fixed policy, and has the LLM explain the consumer consequences
-of each fact it is given — it cannot add or remove changes. The timeline
-shows each step as it happens, tagged by who acted (tool, LLM, human,
-system).
+of each fact it is given — it cannot add or remove changes. A pinned progress
+indicator tracks the run's whole lifecycle and expands to a full timeline of
+every step, tagged by who acted (tool, LLM, human, system).
 
 ![Timeline and classified contract changes](docs/screenshots/1-timeline-and-contract-changes.png)
 
@@ -94,10 +94,7 @@ target repository — a distinct, explicit action from Execute, never
 automatic. The PR link then shows directly in the card; a failed publish can
 be retried once the underlying issue (e.g. an expired token) is fixed.
 
-<!-- TODO(fernando): capture docs/screenshots/6-publish-and-pull-request.png
-     (Publish card + resulting draft-PR link) once you have a registered
-     repository to publish against — see the "Remote repositories" section
-     and docs/demo-script.md §9 for the walkthrough. -->
+![Publish card with the resulting draft pull request link](docs/screenshots/6-publish-and-pull-request.png)
 
 ## Prerequisites
 

@@ -81,4 +81,14 @@ class RemoteRepositoryControllerTest {
 
         verify(service).deregister("customer-consumer");
     }
+
+    @Test
+    void deregistrationIsReachableFromTheDashboardOriginWhereBrowsersSendACorsOrigin() throws Exception {
+        // A bare MockMvc/curl DELETE never carries an Origin header, so it can't catch a CORS
+        // misconfiguration -- browsers attach Origin to every unsafe-method request, and Spring's
+        // CorsInterceptor rejects the actual request (not just the preflight) with 403 if the
+        // method isn't in WebConfiguration's allowedMethods.
+        mvc.perform(delete("/api/repositories/remote/customer-consumer").header("Origin", "http://localhost:5173"))
+                .andExpect(status().isNoContent());
+    }
 }

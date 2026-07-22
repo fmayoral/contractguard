@@ -112,6 +112,16 @@ class RunApiTest {
     }
 
     @Test
+    void deletingAnUploadIsReachableFromTheDashboardOriginWhereBrowsersSendACorsOrigin() throws Exception {
+        // A bare MockMvc/curl DELETE never carries an Origin header, so it can't catch a CORS
+        // misconfiguration -- browsers attach Origin to every unsafe-method request, and Spring's
+        // CorsInterceptor rejects the actual request (not just the preflight) with 403 if the
+        // method isn't in WebConfiguration's allowedMethods.
+        mvc.perform(delete("/api/specs/mine.yaml").header("Origin", "http://localhost:5173"))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
     void uploadingAnUnsupportedFileGets400ProblemDetail() throws Exception {
         when(runService.uploadSpecification(anyString(), anyString())).thenThrow(
                 ContractGuardException.of(FailureCategory.INVALID_OPENAPI,

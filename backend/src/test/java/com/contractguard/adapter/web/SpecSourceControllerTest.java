@@ -98,4 +98,15 @@ class SpecSourceControllerTest {
 
         verify(service).deregister("openapi-specs");
     }
+
+    @Test
+    void deregistrationIsReachableFromTheDashboardOriginWhereBrowsersSendACorsOrigin() throws Exception {
+        // A plain MockMvc DELETE (as above) never carries an Origin header, so it can't catch a
+        // CORS misconfiguration -- browsers attach Origin to every unsafe-method request, and
+        // Spring's CorsInterceptor rejects the actual request (not just the preflight) with 403
+        // if the method isn't in WebConfiguration's allowedMethods. This reproduces that exact
+        // condition, the one a bare curl/MockMvc call can't.
+        mvc.perform(delete("/api/spec-sources/openapi-specs").header("Origin", "http://localhost:5173"))
+                .andExpect(status().isNoContent());
+    }
 }

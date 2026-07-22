@@ -15,7 +15,8 @@ public record ContractGuardProperties(
         Validation validation,
         Remote remote,
         Audit audit,
-        Concurrency concurrency) {
+        Concurrency concurrency,
+        Cors cors) {
 
     public record Workspace(List<String> roots) {
     }
@@ -53,5 +54,12 @@ public record ContractGuardProperties(
 
     /** {@code maxActiveRuns} bounds the system-wide run queue (FR-032, ADR-0009). */
     public record Concurrency(int maxActiveRuns) {
+    }
+
+    /**
+     * {@code extraOrigins} adds to (never replaces) the built-in localhost/127.0.0.1
+     * origins -- e.g. a LAN IP so the dashboard is reachable from another device.
+     */
+    public record Cors(List<String> extraOrigins) {
     }
 }

@@ -27,6 +27,10 @@ services:
       CONTRACTGUARD_LLM_MODEL: ${CONTRACTGUARD_LLM_MODEL:-gpt-4o-mini}
       CONTRACTGUARD_CREDENTIAL_KEY: ${CONTRACTGUARD_CREDENTIAL_KEY:-}
       CONTRACTGUARD_AUDIT_PRINCIPAL: ${CONTRACTGUARD_AUDIT_PRINCIPAL:-local-operator}
+      # Extra frontend origins allowed to call the API cross-origin, on top of
+      # the always-allowed localhost/127.0.0.1 -- needed to reach the dashboard
+      # from another device on the LAN (see .env.example).
+      CONTRACTGUARD_CORS_EXTRA_ORIGINS: ${CONTRACTGUARD_CORS_EXTRA_ORIGINS:-}
       # Bundled Jaeger is the default trace viewer for this compose setup;
       # point elsewhere (or unset to fall back to log-only export) via .env.
       MANAGEMENT_OTLP_TRACING_ENDPOINT: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:-http://jaeger:4318/v1/traces}
@@ -46,7 +50,10 @@ services:
       context: .
       dockerfile: frontend/Dockerfile
     ports:
-      - "127.0.0.1:5173:80"
+      # Bound to all interfaces (not 127.0.0.1) so other devices on the LAN
+      # can reach the demo; /api/ is proxied to the backend in-network (see
+      # nginx.conf), so the backend/Jaeger ports don't need to be exposed too.
+      - "5173:80"
     depends_on:
       backend:
         condition: service_healthy

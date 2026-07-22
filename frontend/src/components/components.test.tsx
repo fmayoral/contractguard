@@ -49,34 +49,37 @@ describe('AnalysisProgress', () => {
     vi.useRealTimers();
   });
 
-  it('labels the current step, marks earlier steps done, and counts elapsed time live', () => {
+  const STEP_LABELS = [
+    'Validate',
+    'Compare specs',
+    'Search evidence',
+    'Assess impact',
+    'Draft plan',
+    'Prepare branch',
+    'Apply patch',
+    'Build & test',
+    'Repair & retry',
+    'Publish',
+  ];
+
+  it('labels the current step, marks earlier steps done, and counts elapsed time live while busy', () => {
     const now = new Date('2026-07-22T10:00:20Z').getTime();
     vi.useFakeTimers();
     vi.setSystemTime(now);
 
-    render(<AnalysisProgress state="ASSESSING" since="2026-07-22T10:00:05Z" />);
+    render(<AnalysisProgress state="ASSESSING" since="2026-07-22T10:00:05Z" until="2026-07-22T10:00:05Z" />);
 
     expect(screen.getByText('Assessing consumer impact…')).toBeInTheDocument();
     expect(screen.getByText('0:15')).toBeInTheDocument();
 
     const steps = screen.getAllByRole('listitem');
-    expect(steps.map((li) => li.textContent)).toEqual([
-      'Validate',
-      'Compare specs',
-      'Search evidence',
-      'Assess impact',
-      'Draft plan',
-      'Prepare branch',
-      'Apply patch',
-      'Build & test',
-      'Repair & retry',
-    ]);
+    expect(steps.map((li) => li.textContent)).toEqual(STEP_LABELS);
     expect(steps[0]).toHaveClass('done');
     expect(steps[1]).toHaveClass('done');
     expect(steps[2]).toHaveClass('done');
     expect(steps[3]).toHaveClass('current');
     expect(steps[4]).toHaveClass('pending');
-    expect(steps[8]).toHaveClass('pending');
+    expect(steps[9]).toHaveClass('pending');
 
     act(() => {
       vi.advanceTimersByTime(60_000);
@@ -85,19 +88,10 @@ describe('AnalysisProgress', () => {
   });
 
   it('keeps earlier analysis steps marked done once the run reaches the execution phase', () => {
-    render(<AnalysisProgress state="VALIDATING" since="2026-07-22T10:00:00Z" />);
+    render(<AnalysisProgress state="VALIDATING" since="2026-07-22T10:00:00Z" until="2026-07-22T10:00:00Z" />);
 
     expect(screen.getByText('Running the consumer build & tests…')).toBeInTheDocument();
     const steps = screen.getAllByRole('listitem');
-    // All five analysis steps stay in the list, marked done -- not swapped out
-    // for a separate execution-only list.
-    expect(steps.slice(0, 5).map((li) => li.textContent)).toEqual([
-      'Validate',
-      'Compare specs',
-      'Search evidence',
-      'Assess impact',
-      'Draft plan',
-    ]);
     for (const step of steps.slice(0, 5)) {
       expect(step).toHaveClass('done');
     }
@@ -105,6 +99,112 @@ describe('AnalysisProgress', () => {
     expect(steps[6]).toHaveClass('done'); // Apply patch
     expect(steps[7]).toHaveClass('current'); // Build & test
     expect(steps[8]).toHaveClass('pending'); // Repair & retry
+    expect(steps[9]).toHaveClass('pending'); // Publish
+  });
+
+  it('stays visible and shows every analysis step done while awaiting approval, with a frozen non-ticking timer', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-22T10:05:00Z'));
+
+    render(
+      <AnalysisProgress state="AWAITING_APPROVAL" since="2026-07-22T10:00:00Z" until="2026-07-22T10:03:00Z" />,
+    );
+
+    expect(screen.getByText('Waiting for your approval')).toBeInTheDocument();
+    // AWAITING_APPROVAL is not terminal, so the timer keeps ticking against "now" (05:00 minutes
+    // since `since`) rather than freezing at `until` (which is only 3 minutes in) -- the run is
+    // still open, just idle, waiting on the human rather than the system.
+    expect(screen.getByText('5:00')).toBeInTheDocument();
+
+    // All five analysis steps done, nothing in the execution phase started, and nothing is
+    // "current" -- the system itself isn't actively working on anything right now.
+    const steps = screen.getAllByRole('listitem');
+    for (const step of steps.slice(0, 5)) {
+      expect(step).toHaveClass('done');
+    }
+    for (const step of steps.slice(5)) {
+      expect(step).toHaveClass('pending');
+    }
+  });
+
+  it('marks every step done once published, with the timer frozen at the final duration', () => {
+    render(<AnalysisProgress state="PUBLISHED" since="2026-07-22T10:00:00Z" until="2026-07-22T10:04:30Z" />);
+
+    expect(screen.getByText('Published')).toBeInTheDocument();
+    expect(screen.getByText('4:30')).toBeInTheDocument();
+    for (const step of screen.getAllByRole('listitem')) {
+      expect(step).toHaveClass('done');
+    }
+  });
+
+  it('marks the pipeline done but not publish when publishing fails', () => {
+    render(<AnalysisProgress state="PUBLISH_FAILED" since="2026-07-22T10:00:00Z" until="2026-07-22T10:04:30Z" />);
+
+    expect(screen.getByText('Publish failed')).toBeInTheDocument();
+    const steps = screen.getAllByRole('listitem');
+    for (const step of steps.slice(0, 9)) {
+      expect(step).toHaveClass('done');
+    }
+    expect(steps[9]).toHaveClass('pending'); // Publish itself did not succeed
+  });
+
+  it('remembers the furthest step actually reached when a run fails mid-flight', () => {
+    const { rerender } = render(
+      <AnalysisProgress state="SEARCHING" since="2026-07-22T10:00:00Z" until="2026-07-22T10:00:00Z" />,
+    );
+    rerender(<AnalysisProgress state="ASSESSING" since="2026-07-22T10:00:00Z" until="2026-07-22T10:00:00Z" />);
+    rerender(<AnalysisProgress state="FAILED" since="2026-07-22T10:00:00Z" until="2026-07-22T10:01:00Z" />);
+
+    expect(screen.getByText('Run failed')).toBeInTheDocument();
+    const steps = screen.getAllByRole('listitem');
+    // Validate, Compare specs, Search evidence were observed live -- Assess impact was in
+    // progress when it failed, so it (and everything after) is not counted done.
+    expect(steps[0]).toHaveClass('done');
+    expect(steps[1]).toHaveClass('done');
+    expect(steps[2]).toHaveClass('done');
+    expect(steps[3]).toHaveClass('pending');
+  });
+
+  it('shows nothing done for a failed run whose earlier progress was never observed live', () => {
+    render(<AnalysisProgress state="FAILED" since="2026-07-22T10:00:00Z" until="2026-07-22T10:01:00Z" />);
+
+    for (const step of screen.getAllByRole('listitem')) {
+      expect(step).toHaveClass('pending');
+    }
+  });
+
+  it('keeps the timeline collapsed by default and expands it in place when toggled', async () => {
+    const user = userEvent.setup();
+    const events: RunEvent[] = [
+      {
+        runId: 'r',
+        seq: 1,
+        occurredAt: '2026-07-22T10:00:05Z',
+        step: 'diff',
+        status: 'COMPLETED',
+        message: '4 change(s) detected',
+        metadata: '{"kind":"tool"}',
+      },
+    ];
+
+    render(
+      <AnalysisProgress
+        state="ASSESSING"
+        since="2026-07-22T10:00:00Z"
+        until="2026-07-22T10:00:00Z"
+        events={events}
+      />,
+    );
+
+    const toggle = screen.getByRole('button', { name: 'Show timeline ▸' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('4 change(s) detected')).not.toBeInTheDocument();
+
+    await user.click(toggle);
+    expect(screen.getByText('4 change(s) detected')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Hide timeline ▾' }));
+    expect(screen.queryByText('4 change(s) detected')).not.toBeInTheDocument();
   });
 });
 

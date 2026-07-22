@@ -8,8 +8,11 @@
   --accent: #4f8cff;
   --accent-rgb: 79, 140, 255;
   --ok: #2ecc8f;
+  --ok-rgb: 46, 204, 143;
   --bad: #ff5d6c;
+  --bad-rgb: 255, 93, 108;
   --warn: #f5b83d;
+  --warn-rgb: 245, 184, 61;
   --busy: #6fa8ff;
   --llm: #c792ea;
   --diff-bg: #0b0f18;
@@ -38,8 +41,11 @@
   --accent: #2f6fe0;
   --accent-rgb: 47, 111, 224;
   --ok: #178a5c;
+  --ok-rgb: 23, 138, 92;
   --bad: #c93a49;
+  --bad-rgb: 201, 58, 73;
   --warn: #9a6d10;
+  --warn-rgb: 154, 109, 16;
   --busy: #2f6fe0;
   --llm: #8a3fc4;
   --diff-bg: #fbfcfe;
@@ -238,6 +244,18 @@ button.reject {
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
 }
 
+.progress-card.tone-ok {
+  border-color: rgba(var(--ok-rgb), 0.4);
+}
+
+.progress-card.tone-bad {
+  border-color: rgba(var(--bad-rgb), 0.4);
+}
+
+.progress-card.tone-warn {
+  border-color: rgba(var(--warn-rgb), 0.4);
+}
+
 .progress-headline {
   display: flex;
   align-items: center;
@@ -262,6 +280,22 @@ button.reject {
   animation: progress-dot-ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
 }
 
+.progress-dot.static::after {
+  display: none;
+}
+
+.progress-card.tone-ok .progress-dot {
+  background: var(--ok);
+}
+
+.progress-card.tone-bad .progress-dot {
+  background: var(--bad);
+}
+
+.progress-card.tone-warn .progress-dot {
+  background: var(--warn);
+}
+
 .progress-label {
   flex: 1;
   font-weight: 600;
@@ -271,6 +305,26 @@ button.reject {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
   font-size: 0.85rem;
+}
+
+.progress-toggle {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.progress-toggle:hover {
+  text-decoration: underline;
+}
+
+.progress-details {
+  margin-top: 1rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
 }
 
 .progress-bar {
@@ -290,6 +344,25 @@ button.reject {
   border-radius: 999px;
   background: linear-gradient(90deg, transparent, var(--accent), transparent);
   animation: progress-sweep 1.6s ease-in-out infinite;
+}
+
+.progress-bar-fill.static {
+  left: 0;
+  background: var(--accent);
+  animation: none;
+  transition: width 0.5s ease;
+}
+
+.progress-card.tone-ok .progress-bar-fill.static {
+  background: var(--ok);
+}
+
+.progress-card.tone-bad .progress-bar-fill.static {
+  background: var(--bad);
+}
+
+.progress-card.tone-warn .progress-bar-fill.static {
+  background: var(--warn);
 }
 
 .progress-steps {
@@ -391,11 +464,30 @@ button.reject {
   }
 }
 
+@keyframes progress-fill-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .progress-dot::after,
-  .progress-bar-fill,
   .progress-steps li.current::before {
     animation: none;
+  }
+
+  /* The sweep is the kind of side-to-side motion prefers-reduced-motion opts
+     out of, but a busy run still needs a live signal -- swap it for a
+     stationary opacity pulse instead of going fully static, which otherwise
+     looks identical to "nothing is happening". */
+  .progress-bar-fill {
+    left: 0;
+    width: 100%;
+    animation: progress-fill-pulse 1.8s ease-in-out infinite;
   }
 }
 

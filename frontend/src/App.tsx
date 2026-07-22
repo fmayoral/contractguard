@@ -15,7 +15,6 @@ import { ReportView } from './components/ReportView';
 import { RunList } from './components/RunList';
 import { RunSetup } from './components/RunSetup';
 import { ThemeToggle } from './components/ThemeToggle';
-import { Timeline } from './components/Timeline';
 import { ValidationView } from './components/ValidationView';
 import type { RunDetail, RunSummary } from './types';
 
@@ -99,7 +98,7 @@ export default function App() {
               <Badge tone={stateTone(run.state)}>{run.state}</Badge>
             </header>
 
-            {stateTone(run.state) === 'busy' && <AnalysisProgress state={run.state} since={run.createdAt} />}
+            <AnalysisProgress state={run.state} since={run.createdAt} until={run.updatedAt} events={events} />
 
             {run.failure && (
               <section className="card failure-card">
@@ -111,11 +110,6 @@ export default function App() {
                 <p className="muted">{run.failure.remediation}</p>
               </section>
             )}
-
-            <section className="card">
-              <h3>Timeline</h3>
-              <Timeline events={events} />
-            </section>
 
             <section className="card">
               <h3>Contract changes</h3>

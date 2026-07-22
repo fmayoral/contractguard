@@ -164,7 +164,9 @@ describe('App critical journey', () => {
     expect(screen.getByText(/Approving authorises ContractGuard/)).toBeInTheDocument();
     expect(screen.getByText('Approve plan')).toBeEnabled();
 
-    // AWAITING_APPROVAL is waiting on the human, not the system -- no busy indicator.
+    // AWAITING_APPROVAL is waiting on the human, not the system -- the progress indicator stays
+    // visible but shows a waiting state, not an in-progress step label.
+    expect(screen.getByText('Waiting for your approval')).toBeInTheDocument();
     expect(screen.queryByText(/Comparing specifications|Drafting migration plan/)).not.toBeInTheDocument();
   });
 
@@ -240,6 +242,9 @@ describe('App critical journey', () => {
 
     // A busy state shows the live "working" indicator with its step label.
     expect(await screen.findByText('Comparing specifications…')).toBeInTheDocument();
+
+    // The timeline lives inside the progress indicator, collapsed by default.
+    await user.click(screen.getByText('Show timeline ▸'));
 
     const fetchesBeforeEvent = detailFetches;
 

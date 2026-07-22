@@ -14,14 +14,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends git curl \
 WORKDIR /app
 COPY --from=build /build/target/contractguard-backend-*-SNAPSHOT.jar app.jar
 COPY samples ./samples
-COPY scripts/reset-demo.sh ./scripts/reset-demo.sh
-RUN chmod +x scripts/reset-demo.sh
+COPY scripts/reset-demo.sh scripts/docker-entrypoint.sh ./scripts/
+RUN chmod +x scripts/reset-demo.sh scripts/docker-entrypoint.sh
 EXPOSE 7080
-# Materialise the demo repository, then start bound to all interfaces so the
-# frontend container can reach the API (the compose network stays internal).
-CMD ["/bin/bash", "-c", "./scripts/reset-demo.sh && java -jar app.jar \
-    --server.address=0.0.0.0 \
-    --contractguard.workspace.roots[0]=/app/workspace \
-    --contractguard.storage.directory=/app/data \
-    --contractguard.specs.directory=/app/samples/openapi \
-    --spring.datasource.url=jdbc:h2:file:/app/data/contractguard;MODE=PostgreSQL"]
+# Materialises the demo repository (unless CONTRACTGUARD_DEMO_CONTENT=false),
+# then starts bound to all interfaces so the frontend container can reach the
+# API (the compose network stays internal). See scripts/docker-entrypoint.sh.
+CMD ["./scripts/docker-entrypoint.sh"]

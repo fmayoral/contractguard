@@ -67,6 +67,7 @@ only when you want to demo a specific feature:
 | Remote repositories + draft-PR publishing (FR-027) | `CONTRACTGUARD_CREDENTIAL_KEY=$(openssl rand -base64 32)` |
 | A real name on audit entries instead of `local-operator` | `CONTRACTGUARD_AUDIT_PRINCIPAL=...` |
 | Exporting traces somewhere other than the bundled Jaeger (FR-029) | `MANAGEMENT_OTLP_TRACING_ENDPOINT=http://...:4318/v1/traces`, or `=""` to fall back to log-only export |
+| Only your own registered repositories/specs in the picker, no bundled demo content | `CONTRACTGUARD_DEMO_CONTENT=false` |
 
 After editing `.env`, restart to pick it up:
 
@@ -105,6 +106,10 @@ the fastest way to get a clean consumer checkout:
 ```bash
 docker compose restart backend
 ```
+
+Set `CONTRACTGUARD_DEMO_CONTENT=false` (§3) to stop that re-materialisation
+entirely once you're working with your own registered repositories/specs —
+the local workspace and specs directory start empty instead.
 
 Runs, reports and the Maven dependency cache persist across restarts in
 named volumes (`contractguard-data`, `maven-cache`) — only removing the

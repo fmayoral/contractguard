@@ -163,6 +163,9 @@ describe('App critical journey', () => {
     expect(screen.getByText(/low: mechanical rename/)).toBeInTheDocument();
     expect(screen.getByText(/Approving authorises ContractGuard/)).toBeInTheDocument();
     expect(screen.getByText('Approve plan')).toBeEnabled();
+
+    // AWAITING_APPROVAL is waiting on the human, not the system -- no busy indicator.
+    expect(screen.queryByText(/Comparing specifications|Drafting migration plan/)).not.toBeInTheDocument();
   });
 
   it('approves the plan against its hash and then offers execution', async () => {
@@ -234,6 +237,10 @@ describe('App critical journey', () => {
     render(<App />);
     await user.click(await screen.findByText('demo'));
     await waitFor(() => expect(StubEventSource.instances.length).toBe(1));
+
+    // A busy state shows the live "working" indicator with its step label.
+    expect(await screen.findByText('Comparing specifications…')).toBeInTheDocument();
+
     const fetchesBeforeEvent = detailFetches;
 
     StubEventSource.instances[0].emit('run-event', {

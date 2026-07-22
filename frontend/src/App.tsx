@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from './api';
 import { isTerminal, stateTone } from './format';
 import { useRunEvents } from './useRunEvents';
+import { AnalysisProgress } from './components/AnalysisProgress';
 import { Badge } from './components/Badge';
 import { ChangeTable } from './components/ChangeTable';
 import { HelpModal } from './components/HelpModal';
@@ -94,6 +95,8 @@ export default function App() {
               </div>
               <Badge tone={stateTone(run.state)}>{run.state}</Badge>
             </header>
+
+            {stateTone(run.state) === 'busy' && <AnalysisProgress state={run.state} since={run.createdAt} />}
 
             {run.failure && (
               <section className="card failure-card">

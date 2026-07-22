@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { AnalysisProgress } from './AnalysisProgress';
 import { Timeline } from './Timeline';
 import { ValidationView } from './ValidationView';
 import { ReportView } from './ReportView';
@@ -41,6 +42,54 @@ function mockJsonFetch(status: number, body: unknown) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe('AnalysisProgress', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('labels the current step, marks earlier steps done, and counts elapsed time live', () => {
+    const now = new Date('2026-07-22T10:00:20Z').getTime();
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    render(<AnalysisProgress state="ASSESSING" since="2026-07-22T10:00:05Z" />);
+
+    expect(screen.getByText('Assessing consumer impact…')).toBeInTheDocument();
+    expect(screen.getByText('0:15')).toBeInTheDocument();
+
+    const steps = screen.getAllByRole('listitem');
+    expect(steps.map((li) => li.textContent)).toEqual([
+      'Validate',
+      'Compare specs',
+      'Search evidence',
+      'Assess impact',
+      'Draft plan',
+    ]);
+    expect(steps[0]).toHaveClass('done');
+    expect(steps[1]).toHaveClass('done');
+    expect(steps[2]).toHaveClass('done');
+    expect(steps[3]).toHaveClass('current');
+    expect(steps[4]).toHaveClass('pending');
+
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(screen.getByText('1:15')).toBeInTheDocument();
+  });
+
+  it('shows the execution-phase steps once patching or validating', () => {
+    render(<AnalysisProgress state="VALIDATING" since="2026-07-22T10:00:00Z" />);
+
+    expect(screen.getByText('Running the consumer build & tests…')).toBeInTheDocument();
+    expect(screen.getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      'Prepare branch',
+      'Apply patch',
+      'Build & test',
+      'Repair & retry',
+    ]);
+  });
 });
 
 describe('Timeline', () => {

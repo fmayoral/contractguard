@@ -15,7 +15,10 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     ports:
-      - "127.0.0.1:7080:7080"
+      # Host-side port only -- the container still listens on 7080 internally
+      # (nginx's proxy and the healthcheck below both talk to it in-network),
+      # so only this left-hand number needs to dodge a taken/reserved host port.
+      - "127.0.0.1:7900:7080"
     environment:
       CONTRACTGUARD_DEMO_CONTENT: ${CONTRACTGUARD_DEMO_CONTENT:-true}
       CONTRACTGUARD_LLM_PROVIDER: ${CONTRACTGUARD_LLM_PROVIDER:-mock}

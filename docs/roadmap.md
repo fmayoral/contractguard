@@ -90,8 +90,10 @@ Registering was one-way: a repository or spec source added with the wrong URL or
 ### FR-033 — Gradle Support
 `BuildValidationPort` adapter for Gradle wrapper builds (`gradlew test`), with the same timeout/output-bounding semantics as Maven.
 
-### FR-034 — Expanded OpenAPI Change Taxonomy
+### FR-034 — Expanded OpenAPI Change Taxonomy (partially completed)
 Detect and classify: parameter add/remove/required/type changes, request-body schema changes, response status-code changes, content-type changes, nullability, numeric/string constraint tightening, and security-scheme changes. Each new category gets deterministic classification rules and report treatment; remediation coverage may lag detection (report as manual-migration items, mirroring today's Limitations honesty).
+
+Shipped: parameter add/remove/required/type changes, request-body add/remove/schema-change, and response status-code add/remove — nine new deterministic `ChangeType` categories replacing the previous generic `UNKNOWN_CHANGE` fallback for operation-level differences (see [ADR-0014](adr/0014-expanded-change-taxonomy.md)). Not yet built: content-type changes, nullability, numeric/string constraint tightening, and security-scheme changes — none of these are detected at all yet (they don't fall through to `UNKNOWN_CHANGE` either; they're simply not compared).
 
 ### FR-035 — TypeScript/JavaScript Consumer Analysis
 Evidence collection and impact assessment for TS/JS consumers (fetch/axios clients, generated SDK usage), validated via the repo's package-manager test script. Remediation initially limited to the mechanical categories already supported for Java.

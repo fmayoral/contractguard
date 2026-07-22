@@ -90,10 +90,17 @@ class OpenApiSpecReaderTest {
         assertThat(model.endpoints()).containsKeys("GET /things/{id}", "POST /things/{id}");
         SpecModel.Endpoint get = model.endpoints().get("GET /things/{id}");
         assertThat(get.responseSchema()).isEqualTo("Thing");
-        assertThat(get.parameterNames()).containsExactly("id");
+        assertThat(get.parameters()).containsOnlyKeys("id");
+        SpecModel.ParameterShape id = get.parameters().get("id");
+        assertThat(id.location()).isEqualTo("path");
+        assertThat(id.required()).isTrue();
+        assertThat(id.shape().type()).isEqualTo("string");
+        assertThat(get.responseStatusCodes()).containsExactly("200");
         SpecModel.Endpoint post = model.endpoints().get("POST /things/{id}");
         assertThat(post.requestBodySchema()).isEqualTo("Thing");
+        assertThat(post.requestBodyRequired()).isFalse();
         assertThat(post.responseSchema()).isNull();
+        assertThat(post.responseStatusCodes()).containsExactly("204");
 
         SpecModel.SchemaShape thing = model.schemas().get("Thing");
         assertThat(thing.required()).containsExactly("name");

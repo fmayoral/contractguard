@@ -22,13 +22,26 @@ public record SpecModel(Map<String, Endpoint> endpoints, Map<String, SchemaShape
     }
 
     /**
-     * @param responseSchema name of the 2xx JSON response schema, null when absent
-     * @param requestBodySchema name of the JSON request body schema, null when absent
+     * @param responseSchema      name of the 2xx JSON response schema, null when absent
+     * @param parameters           declared parameters (query/path/header/cookie), keyed by name
+     * @param requestBodySchema    name of the JSON request body schema, null when absent
+     * @param requestBodyRequired  ignored when {@code requestBodySchema} is null
+     * @param responseStatusCodes  every declared response status code, e.g. {@code "200"}, {@code "404"}
      */
     public record Endpoint(String method, String path, String responseSchema,
-            Set<String> parameterNames, String requestBodySchema) {
+            Map<String, ParameterShape> parameters, String requestBodySchema,
+            boolean requestBodyRequired, Set<String> responseStatusCodes) {
         public Endpoint {
-            parameterNames = Set.copyOf(parameterNames);
+            parameters = Map.copyOf(parameters);
+            responseStatusCodes = Set.copyOf(responseStatusCodes);
+        }
+    }
+
+    /** @param location OpenAPI parameter location, e.g. {@code query}, {@code path}, {@code header} */
+    public record ParameterShape(String location, boolean required, PropertyShape shape) {
+
+        public boolean sameTypeAs(ParameterShape other) {
+            return shape.sameTypeAs(other.shape);
         }
     }
 

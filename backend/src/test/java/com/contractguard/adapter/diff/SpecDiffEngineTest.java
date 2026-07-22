@@ -127,21 +127,144 @@ class SpecDiffEngineTest {
     }
 
     @Test
-    void parameterChangeSurfacesAsUnknownWithWarning() {
-        SpecModel before = new SpecModel(Map.of(
-                SpecModel.endpointKey("GET", "/a"),
-                new SpecModel.Endpoint("GET", "/a", "A", Set.of("id"), null)), Map.of());
-        SpecModel after = new SpecModel(Map.of(
-                SpecModel.endpointKey("GET", "/a"),
-                new SpecModel.Endpoint("GET", "/a", "A", Set.of("id", "verbose"), null)), Map.of());
+    void requiredParameterAdditionIsPotentiallyBreaking() {
+        SpecModel before = withEndpoint(endpointWithParams("GET", "/a", Map.of()));
+        SpecModel after = withEndpoint(endpointWithParams("GET", "/a",
+                Map.of("verbose", param("query", true, "boolean"))));
 
-        SpecDiffEngine.EngineResult result = engine.diff(before, after);
+        List<ApiChange> changes = engine.diff(before, after).changes();
 
-        assertThat(result.changes()).singleElement().satisfies(change -> {
-            assertThat(change.type()).isEqualTo(ChangeType.UNKNOWN_CHANGE);
-            assertThat(change.classification()).isEqualTo(Classification.UNKNOWN);
+        assertThat(changes).singleElement().satisfies(change -> {
+            assertThat(change.type()).isEqualTo(ChangeType.PARAMETER_ADDED);
+            assertThat(change.classification()).isEqualTo(Classification.POTENTIALLY_BREAKING);
+            assertThat(change.property()).isEqualTo("verbose");
         });
-        assertThat(result.warnings()).anySatisfy(w -> assertThat(w).contains("GET /a"));
+    }
+
+    @Test
+    void optionalParameterAdditionIsNonBreaking() {
+        SpecModel before = withEndpoint(endpointWithParams("GET", "/a", Map.of()));
+        SpecModel after = withEndpoint(endpointWithParams("GET", "/a",
+                Map.of("verbose", param("query", false, "boolean"))));
+
+        List<ApiChange> changes = engine.diff(before, after).changes();
+
+        assertThat(changes).singleElement().satisfies(change ->
+                assertThat(change.classification()).isEqualTo(Classification.NON_BREAKING));
+    }
+
+    @Test
+    void parameterRemovalIsBreaking() {
+        SpecModel before = withEndpoint(endpointWithParams("GET", "/a",
+                Map.of("id", param("path", true, "string"))));
+        SpecModel after = withEndpoint(endpointWithParams("GET", "/a", Map.of()));
+
+        List<ApiChange> changes = engine.diff(before, after).changes();
+
+        assertThat(changes).singleElement().satisfies(change -> {
+            assertThat(change.type()).isEqualTo(ChangeType.PARAMETER_REMOVED);
+            assertThat(change.classification()).isEqualTo(Classification.BREAKING);
+        });
+    }
+
+    @Test
+    void parameterTypeChangeIsBreaking() {
+        SpecModel before = withEndpoint(endpointWithParams("GET", "/a",
+                Map.of("id", param("path", true, "string"))));
+        SpecModel after = withEndpoint(endpointWithParams("GET", "/a",
+                Map.of("id", param("path", true, "integer"))));
+
+        List<ApiChange> changes = engine.diff(before, after).changes();
+
+        assertThat(changes).singleElement().satisfies(change -> {
+            assertThat(change.type()).isEqualTo(ChangeType.PARAMETER_TYPE_CHANGED);
+            assertThat(change.classification()).isEqualTo(Classification.BREAKING);
+        });
+    }
+
+    @Test
+    void parameterRequiredFlagChangeIsPotentiallyBreaking() {
+        SpecModel before = withEndpoint(endpointWithParams("GET", "/a",
+                Map.of("id", param("path", false, "string"))));
+        SpecModel after = withEndpoint(endpointWithParams("GET", "/a",
+                Map.of("id", param("path", true, "string"))));
+
+        List<ApiChange> changes = engine.diff(before, after).changes();
+
+        assertThat(changes).singleElement().satisfies(change -> {
+            assertThat(change.type()).isEqualTo(ChangeType.PARAMETER_REQUIRED_CHANGED);
+            assertThat(change.classification()).isEqualTo(Classification.POTENTIALLY_BREAKING);
+        });
+    }
+
+    @Test
+    void requiredRequestBodyAdditionIsPotentiallyBreaking() {
+        SpecModel before = withEndpoint(endpointWithRequestBody("POST", "/a", null, false));
+        SpecModel after = withEndpoint(endpointWithRequestBody("POST", "/a", "Body", true));
+
+        List<ApiChange> changes = engine.diff(before, after).changes();
+
+        assertThat(changes).singleElement().satisfies(change -> {
+            assertThat(change.type()).isEqualTo(ChangeType.REQUEST_BODY_ADDED);
+            assertThat(change.classification()).isEqualTo(Classification.POTENTIALLY_BREAKING);
+            assertThat(change.newValue()).isEqualTo("Body");
+        });
+    }
+
+    @Test
+    void requestBodyRemovalIsBreaking() {
+        SpecModel before = withEndpoint(endpointWithRequestBody("POST", "/a", "Body", true));
+        SpecModel after = withEndpoint(endpointWithRequestBody("POST", "/a", null, false));
+
+        List<ApiChange> changes = engine.diff(before, after).changes();
+
+        assertThat(changes).singleElement().satisfies(change -> {
+            assertThat(change.type()).isEqualTo(ChangeType.REQUEST_BODY_REMOVED);
+            assertThat(change.classification()).isEqualTo(Classification.BREAKING);
+        });
+    }
+
+    @Test
+    void requestBodySchemaChangeIsBreaking() {
+        SpecModel before = withEndpoint(endpointWithRequestBody("POST", "/a", "BodyV1", true));
+        SpecModel after = withEndpoint(endpointWithRequestBody("POST", "/a", "BodyV2", true));
+
+        List<ApiChange> changes = engine.diff(before, after).changes();
+
+        assertThat(changes).singleElement().satisfies(change -> {
+            assertThat(change.type()).isEqualTo(ChangeType.REQUEST_BODY_SCHEMA_CHANGED);
+            assertThat(change.classification()).isEqualTo(Classification.BREAKING);
+            assertThat(change.oldValue()).isEqualTo("BodyV1");
+            assertThat(change.newValue()).isEqualTo("BodyV2");
+        });
+    }
+
+    @Test
+    void responseStatusAdditionIsPotentiallyBreaking() {
+        SpecModel before = withEndpoint(endpointWithStatusCodes("GET", "/a", Set.of("200")));
+        SpecModel after = withEndpoint(endpointWithStatusCodes("GET", "/a", Set.of("200", "429")));
+
+        List<ApiChange> changes = engine.diff(before, after).changes();
+
+        assertThat(changes).singleElement().satisfies(change -> {
+            assertThat(change.type()).isEqualTo(ChangeType.RESPONSE_STATUS_ADDED);
+            assertThat(change.classification()).isEqualTo(Classification.POTENTIALLY_BREAKING);
+            assertThat(change.property()).isEqualTo("429");
+        });
+    }
+
+    @Test
+    void responseStatusRemovalIsBreaking() {
+        SpecModel before = withEndpoint(endpointWithStatusCodes("GET", "/a", Set.of("200", "404")));
+        SpecModel after = withEndpoint(endpointWithStatusCodes("GET", "/a", Set.of("200")));
+
+        List<ApiChange> changes = engine.diff(before, after).changes();
+
+        assertThat(changes).singleElement().satisfies(change -> {
+            assertThat(change.type()).isEqualTo(ChangeType.RESPONSE_STATUS_REMOVED);
+            assertThat(change.classification()).isEqualTo(Classification.BREAKING);
+            assertThat(change.property()).isEqualTo("404");
+        });
     }
 
     @Test
@@ -170,7 +293,29 @@ class SpecDiffEngineTest {
     }
 
     private static SpecModel.Endpoint endpoint(String method, String path, String responseSchema) {
-        return new SpecModel.Endpoint(method, path, responseSchema, Set.of(), null);
+        return new SpecModel.Endpoint(method, path, responseSchema, Map.of(), null, false, Set.of());
+    }
+
+    private static SpecModel withEndpoint(SpecModel.Endpoint endpoint) {
+        return new SpecModel(Map.of(SpecModel.endpointKey(endpoint.method(), endpoint.path()), endpoint), Map.of());
+    }
+
+    private static SpecModel.Endpoint endpointWithParams(String method, String path,
+            Map<String, SpecModel.ParameterShape> parameters) {
+        return new SpecModel.Endpoint(method, path, null, parameters, null, false, Set.of());
+    }
+
+    private static SpecModel.ParameterShape param(String location, boolean required, String type) {
+        return new SpecModel.ParameterShape(location, required, new SpecModel.PropertyShape(type, null, List.of()));
+    }
+
+    private static SpecModel.Endpoint endpointWithRequestBody(String method, String path,
+            String schema, boolean required) {
+        return new SpecModel.Endpoint(method, path, null, Map.of(), schema, required, Set.of());
+    }
+
+    private static SpecModel.Endpoint endpointWithStatusCodes(String method, String path, Set<String> codes) {
+        return new SpecModel.Endpoint(method, path, null, Map.of(), null, false, codes);
     }
 
     private static SpecModel.PropertyShape stringProp() {

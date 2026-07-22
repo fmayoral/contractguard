@@ -77,8 +77,33 @@ public class EvidenceCollector {
                     new Term(change.oldValue(), "HANDLES_REMOVED_ENUM_VALUE"));
             case ENUM_VALUE_ADDED -> List.of(
                     new Term(change.property(), "SWITCHES_ON_EXTENDED_ENUM"));
+            case PARAMETER_ADDED -> List.of(
+                    new Term(change.property(), "REFERENCES_ADDED_PARAMETER"));
+            case PARAMETER_REMOVED -> List.of(
+                    new Term(change.property(), "SENDS_REMOVED_PARAMETER"));
+            case PARAMETER_TYPE_CHANGED, PARAMETER_REQUIRED_CHANGED -> List.of(
+                    new Term(change.property(), "SENDS_CHANGED_PARAMETER"));
+            case REQUEST_BODY_ADDED, REQUEST_BODY_REMOVED -> List.of(
+                    new Term(templateFreePrefix(change.path()), "CALLS_ENDPOINT_WITH_CHANGED_REQUEST_BODY"));
+            case REQUEST_BODY_SCHEMA_CHANGED -> requestBodySchemaChangedTerms(change);
+            case RESPONSE_STATUS_ADDED, RESPONSE_STATUS_REMOVED -> List.of(
+                    new Term(templateFreePrefix(change.path()), "CALLS_ENDPOINT_WITH_CHANGED_RESPONSE_STATUS"));
             case UNKNOWN_CHANGE -> unknownTerms(change);
         };
+    }
+
+    /** The path term always applies; the old/new request body schema names are added when present. */
+    private List<Term> requestBodySchemaChangedTerms(ApiChange change) {
+        Map<String, Term> terms = new LinkedHashMap<>();
+        String prefix = templateFreePrefix(change.path());
+        terms.put(prefix, new Term(prefix, "CALLS_ENDPOINT_WITH_CHANGED_REQUEST_BODY"));
+        if (change.oldValue() != null) {
+            terms.put(change.oldValue(), new Term(change.oldValue(), "BUILDS_STALE_REQUEST_PAYLOAD"));
+        }
+        if (change.newValue() != null) {
+            terms.put(change.newValue(), new Term(change.newValue(), "MAY_NEED_NEW_REQUEST_PAYLOAD"));
+        }
+        return List.copyOf(terms.values());
     }
 
     private List<Term> unknownTerms(ApiChange change) {

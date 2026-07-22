@@ -34,13 +34,12 @@ public class SpecDiffEngine {
     public EngineResult diff(SpecModel oldSpec, SpecModel newSpec) {
         List<ApiChange> changes = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
-        diffEndpoints(oldSpec, newSpec, changes, warnings);
+        diffEndpoints(oldSpec, newSpec, changes);
         diffSchemas(oldSpec, newSpec, changes, warnings);
         return new EngineResult(changes, warnings);
     }
 
-    private void diffEndpoints(SpecModel oldSpec, SpecModel newSpec,
-            List<ApiChange> changes, List<String> warnings) {
+    private void diffEndpoints(SpecModel oldSpec, SpecModel newSpec, List<ApiChange> changes) {
         Set<String> removedKeys = new TreeSet<>(oldSpec.endpoints().keySet());
         removedKeys.removeAll(newSpec.endpoints().keySet());
         Set<String> addedKeys = new TreeSet<>(newSpec.endpoints().keySet());
@@ -60,7 +59,7 @@ public class SpecDiffEngine {
                     null, added.path(), added.responseSchema(),
                     evidence(e -> e.put("path", added.path()))));
         }
-        diffSharedEndpoints(oldSpec, newSpec, changes, warnings);
+        diffSharedEndpoints(oldSpec, newSpec, changes);
     }
 
     /** Pairs a removed endpoint with a uniquely matching added one (rename) or reports removal. */
@@ -94,25 +93,117 @@ public class SpecDiffEngine {
         }
     }
 
-    private void diffSharedEndpoints(SpecModel oldSpec, SpecModel newSpec,
-            List<ApiChange> changes, List<String> warnings) {
+    private void diffSharedEndpoints(SpecModel oldSpec, SpecModel newSpec, List<ApiChange> changes) {
         for (String sharedKey : oldSpec.endpoints().keySet()) {
             SpecModel.Endpoint before = oldSpec.endpoints().get(sharedKey);
             SpecModel.Endpoint after = newSpec.endpoints().get(sharedKey);
             if (after == null) {
                 continue;
             }
-            if (!before.parameterNames().equals(after.parameterNames())
-                    || !Objects.equals(before.requestBodySchema(), after.requestBodySchema())) {
-                warnings.add("Operation-level change on %s is outside the analysed categories"
-                        .formatted(sharedKey));
-                changes.add(endpointChange(ChangeType.UNKNOWN_CHANGE, before.method(),
-                        before.path(), after.path(), before.responseSchema(),
+            diffParameters(before, after, changes);
+            diffRequestBody(before, after, changes);
+            diffResponseStatusCodes(before, after, changes);
+        }
+    }
+
+    /** No rename pairing (unlike endpoints/properties): a renamed parameter surfaces as remove+add. */
+    private void diffParameters(SpecModel.Endpoint before, SpecModel.Endpoint after, List<ApiChange> changes) {
+        Set<String> removedNames = new TreeSet<>(before.parameters().keySet());
+        removedNames.removeAll(after.parameters().keySet());
+        Set<String> addedNames = new TreeSet<>(after.parameters().keySet());
+        addedNames.removeAll(before.parameters().keySet());
+
+        for (String name : removedNames) {
+            SpecModel.ParameterShape removed = before.parameters().get(name);
+            changes.add(endpointDetailChange(ChangeType.PARAMETER_REMOVED, before.method(), before.path(),
+                    name, name, null, false,
+                    evidence(e -> {
+                        e.put("parameter", name);
+                        e.put("in", removed.location());
+                    })));
+        }
+        for (String name : addedNames) {
+            SpecModel.ParameterShape added = after.parameters().get(name);
+            changes.add(endpointDetailChange(ChangeType.PARAMETER_ADDED, after.method(), after.path(),
+                    name, null, name, added.required(),
+                    evidence(e -> {
+                        e.put("parameter", name);
+                        e.put("in", added.location());
+                        e.put("required", added.required());
+                    })));
+        }
+        diffSharedParameters(before, after, changes);
+    }
+
+    private void diffSharedParameters(SpecModel.Endpoint before, SpecModel.Endpoint after, List<ApiChange> changes) {
+        for (String name : new TreeSet<>(before.parameters().keySet())) {
+            SpecModel.ParameterShape oldParam = before.parameters().get(name);
+            SpecModel.ParameterShape newParam = after.parameters().get(name);
+            if (newParam == null) {
+                continue;
+            }
+            if (!oldParam.sameTypeAs(newParam)) {
+                changes.add(endpointDetailChange(ChangeType.PARAMETER_TYPE_CHANGED, before.method(), before.path(),
+                        name, typeLabel(oldParam.shape()), typeLabel(newParam.shape()), false,
                         evidence(e -> {
-                            e.put("detail", "parameters or request body changed");
-                            e.put("endpoint", sharedKey);
+                            e.put("parameter", name);
+                            e.put("oldType", typeLabel(oldParam.shape()));
+                            e.put("newType", typeLabel(newParam.shape()));
                         })));
             }
+            if (oldParam.required() != newParam.required()) {
+                changes.add(endpointDetailChange(ChangeType.PARAMETER_REQUIRED_CHANGED, before.method(), before.path(),
+                        name, String.valueOf(oldParam.required()), String.valueOf(newParam.required()), false,
+                        evidence(e -> {
+                            e.put("parameter", name);
+                            e.put("wasRequired", oldParam.required());
+                            e.put("isRequired", newParam.required());
+                        })));
+            }
+        }
+    }
+
+    /** Added/removed/changed are distinguished since consumer impact differs (ADR-0014). */
+    private void diffRequestBody(SpecModel.Endpoint before, SpecModel.Endpoint after, List<ApiChange> changes) {
+        String oldSchema = before.requestBodySchema();
+        String newSchema = after.requestBodySchema();
+        if (Objects.equals(oldSchema, newSchema)) {
+            return;
+        }
+        if (oldSchema == null) {
+            changes.add(endpointDetailChange(ChangeType.REQUEST_BODY_ADDED, after.method(), after.path(),
+                    null, null, newSchema, after.requestBodyRequired(),
+                    evidence(e -> {
+                        e.put("schema", newSchema);
+                        e.put("required", after.requestBodyRequired());
+                    })));
+        } else if (newSchema == null) {
+            changes.add(endpointDetailChange(ChangeType.REQUEST_BODY_REMOVED, before.method(), before.path(),
+                    null, oldSchema, null, false,
+                    evidence(e -> e.put("schema", oldSchema))));
+        } else {
+            changes.add(endpointDetailChange(ChangeType.REQUEST_BODY_SCHEMA_CHANGED, before.method(), before.path(),
+                    null, oldSchema, newSchema, false,
+                    evidence(e -> {
+                        e.put("oldSchema", oldSchema);
+                        e.put("newSchema", newSchema);
+                    })));
+        }
+    }
+
+    private void diffResponseStatusCodes(SpecModel.Endpoint before, SpecModel.Endpoint after, List<ApiChange> changes) {
+        Set<String> removed = new TreeSet<>(before.responseStatusCodes());
+        removed.removeAll(after.responseStatusCodes());
+        Set<String> added = new TreeSet<>(after.responseStatusCodes());
+        added.removeAll(before.responseStatusCodes());
+
+        for (String status : removed) {
+            changes.add(endpointDetailChange(ChangeType.RESPONSE_STATUS_REMOVED, before.method(), before.path(),
+                    status, status, null, false, evidence(e -> e.put("status", status))));
+        }
+        for (String status : added) {
+            changes.add(endpointDetailChange(ChangeType.RESPONSE_STATUS_ADDED, after.method(), after.path(),
+                    status, null, status, false, evidence(e -> e.put("status", status))));
         }
     }
 
@@ -249,6 +340,19 @@ public class SpecDiffEngine {
                 type, result.classification(), method,
                 oldPath != null ? oldPath : newPath, schema, null,
                 oldPath, newPath, result.reason(), rawEvidence, null);
+    }
+
+    /**
+     * Builds a parameter/request-body/response-status change on a shared (never renamed) endpoint.
+     * {@code detail} carries the parameter name or status code -- null for request-body changes,
+     * which are endpoint-scoped rather than named.
+     */
+    private ApiChange endpointDetailChange(ChangeType type, String method, String path, String detail,
+            String oldValue, String newValue, boolean affectsRequired, String rawEvidence) {
+        ClassificationPolicy.Result result = ClassificationPolicy.classify(type, affectsRequired);
+        return new ApiChange(changeId(type, method, path, detail, oldValue, newValue),
+                type, result.classification(), method, path, null, detail,
+                oldValue, newValue, result.reason(), rawEvidence, null);
     }
 
     private ApiChange schemaChange(ChangeType type, String schema, String property,

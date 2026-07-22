@@ -66,8 +66,10 @@ public class OpenApiSpecReader {
                     endpoints.put(SpecModel.endpointKey(method, path),
                             new SpecModel.Endpoint(method, path,
                                     successResponseSchema(op.getValue()),
-                                    parameterNames(op.getValue()),
-                                    requestBodySchema(op.getValue())));
+                                    parameters(op.getValue()),
+                                    requestBodySchema(op.getValue()),
+                                    requestBodyRequired(op.getValue()),
+                                    responseStatusCodes(op.getValue())));
                 }
             }
         }
@@ -119,6 +121,16 @@ public class OpenApiSpecReader {
                 ? null : jsonSchemaRef(operation.getRequestBody().getContent());
     }
 
+    private boolean requestBodyRequired(Operation operation) {
+        return operation.getRequestBody() != null
+                && Boolean.TRUE.equals(operation.getRequestBody().getRequired());
+    }
+
+    private Set<String> responseStatusCodes(Operation operation) {
+        return operation.getResponses() == null
+                ? Set.of() : new LinkedHashSet<>(operation.getResponses().keySet());
+    }
+
     private String jsonSchemaRef(Content content) {
         if (content == null) {
             return null;
@@ -131,13 +143,18 @@ public class OpenApiSpecReader {
         return ref.substring(ref.lastIndexOf('/') + 1);
     }
 
-    private Set<String> parameterNames(Operation operation) {
-        Set<String> names = new LinkedHashSet<>();
+    private Map<String, SpecModel.ParameterShape> parameters(Operation operation) {
+        Map<String, SpecModel.ParameterShape> parameters = new LinkedHashMap<>();
         if (operation.getParameters() != null) {
             for (Parameter parameter : operation.getParameters()) {
-                names.add(parameter.getName());
+                Schema<?> schema = parameter.getSchema();
+                SpecModel.PropertyShape shape = schema == null
+                        ? new SpecModel.PropertyShape(null, null, List.of())
+                        : new SpecModel.PropertyShape(schema.getType(), schema.getFormat(), List.of());
+                parameters.put(parameter.getName(), new SpecModel.ParameterShape(
+                        parameter.getIn(), Boolean.TRUE.equals(parameter.getRequired()), shape));
             }
         }
-        return names;
+        return parameters;
     }
 }

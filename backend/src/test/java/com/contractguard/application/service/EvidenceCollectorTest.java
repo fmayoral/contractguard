@@ -76,4 +76,32 @@ class EvidenceCollectorTest {
                 change(ChangeType.UNKNOWN_CHANGE, null, null, null)));
         assertThat(queries).containsExactly("/customers/", "Customer");
     }
+
+    @Test
+    void parameterAdditionSearchesTheParameterName() {
+        collector.collect("demo", List.of(
+                change(ChangeType.PARAMETER_ADDED, "verbose", null, "verbose")));
+        assertThat(queries).containsExactly("verbose");
+    }
+
+    @Test
+    void parameterRemovalSearchesTheParameterName() {
+        collector.collect("demo", List.of(
+                change(ChangeType.PARAMETER_REMOVED, "id", "id", null)));
+        assertThat(queries).containsExactly("id");
+    }
+
+    @Test
+    void requestBodySchemaChangeSearchesPathAndBothSchemaNames() {
+        collector.collect("demo", List.of(
+                change(ChangeType.REQUEST_BODY_SCHEMA_CHANGED, null, "BodyV1", "BodyV2")));
+        assertThat(queries).containsExactly("/customers/", "BodyV1", "BodyV2");
+    }
+
+    @Test
+    void responseStatusAdditionSearchesTheEndpointPath() {
+        collector.collect("demo", List.of(
+                change(ChangeType.RESPONSE_STATUS_ADDED, "429", null, "429")));
+        assertThat(queries).containsExactly("/customers/");
+    }
 }

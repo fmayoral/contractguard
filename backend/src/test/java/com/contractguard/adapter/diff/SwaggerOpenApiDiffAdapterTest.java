@@ -5,8 +5,12 @@ import com.contractguard.domain.ApiChange;
 import com.contractguard.domain.ChangeType;
 import com.contractguard.domain.Classification;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -82,5 +86,93 @@ class SwaggerOpenApiDiffAdapterTest {
         return adapter.diff(OLD_SPEC, NEW_SPEC).changes().stream()
                 .filter(c -> c.type() == type)
                 .findFirst().orElseThrow();
+    }
+
+    /**
+     * End-to-end check of ADR-0014's new categories through the real parser and diff engine
+     * together (not hand-built {@link SpecModel} objects, unlike {@code SpecDiffEngineTest}) --
+     * confirms {@link OpenApiSpecReader}'s parameter/request-body/response-status extraction and
+     * {@link SpecDiffEngine}'s comparison of them agree with each other on real YAML.
+     */
+    @Test
+    void expandedTaxonomyIsDetectedThroughTheRealParserAndEngineTogether(@TempDir Path dir) throws IOException {
+        Path oldSpec = Files.writeString(dir.resolve("old.yaml"), """
+                openapi: 3.0.3
+                info: {title: Orders, version: "1"}
+                paths:
+                  /orders:
+                    post:
+                      parameters:
+                        - name: id
+                          in: query
+                          required: true
+                          schema: {type: string}
+                      requestBody:
+                        required: true
+                        content:
+                          application/json:
+                            schema: {$ref: '#/components/schemas/OrderRequestV1'}
+                      responses:
+                        '201': {description: created}
+                        '409': {description: conflict}
+                components:
+                  schemas:
+                    OrderRequestV1:
+                      type: object
+                """);
+        // OrderRequestV1 stays declared below (unused) so only the endpoint's schema *reference*
+        // changes -- a fully removed schema is a separate, unrelated signal (diffSchemas' own
+        // UNKNOWN_CHANGE fallback) this test isn't about.
+        Path newSpec = Files.writeString(dir.resolve("new.yaml"), """
+                openapi: 3.0.3
+                info: {title: Orders, version: "2"}
+                paths:
+                  /orders:
+                    post:
+                      parameters:
+                        - name: id
+                          in: query
+                          required: false
+                          schema: {type: string}
+                        - name: idempotencyKey
+                          in: header
+                          required: true
+                          schema: {type: string}
+                      requestBody:
+                        required: true
+                        content:
+                          application/json:
+                            schema: {$ref: '#/components/schemas/OrderRequestV2'}
+                      responses:
+                        '201': {description: created}
+                        '429': {description: throttled}
+                components:
+                  schemas:
+                    OrderRequestV1:
+                      type: object
+                    OrderRequestV2:
+                      type: object
+                """);
+
+        List<ApiChange> changes = adapter.diff(oldSpec, newSpec).changes();
+
+        assertThat(changes).extracting(ApiChange::type, ApiChange::classification)
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple(
+                                ChangeType.PARAMETER_ADDED, Classification.POTENTIALLY_BREAKING),
+                        org.assertj.core.groups.Tuple.tuple(
+                                ChangeType.PARAMETER_REQUIRED_CHANGED, Classification.POTENTIALLY_BREAKING),
+                        org.assertj.core.groups.Tuple.tuple(
+                                ChangeType.REQUEST_BODY_SCHEMA_CHANGED, Classification.BREAKING),
+                        org.assertj.core.groups.Tuple.tuple(
+                                ChangeType.RESPONSE_STATUS_ADDED, Classification.POTENTIALLY_BREAKING),
+                        org.assertj.core.groups.Tuple.tuple(
+                                ChangeType.RESPONSE_STATUS_REMOVED, Classification.BREAKING));
+
+        ApiChange schemaChange = changes.stream()
+                .filter(c -> c.type() == ChangeType.REQUEST_BODY_SCHEMA_CHANGED)
+                .findFirst().orElseThrow();
+        assertThat(schemaChange.oldValue()).isEqualTo("OrderRequestV1");
+        assertThat(schemaChange.newValue()).isEqualTo("OrderRequestV2");
     }
 }

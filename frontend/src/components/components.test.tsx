@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AnalysisProgress } from './AnalysisProgress';
+import { AuditTrail } from './AuditTrail';
 import { Timeline } from './Timeline';
 import { ValidationView } from './ValidationView';
 import { ReportView } from './ReportView';
@@ -327,6 +328,64 @@ describe('ReportView', () => {
 
     await user.click(screen.getByText('Load report'));
     expect(await screen.findByText('ContractGuard Report')).toBeInTheDocument();
+  });
+});
+
+describe('AuditTrail', () => {
+  it('loads and renders one row per entry, with the plan hash shown for approval decisions', async () => {
+    mockJsonFetch(200, [
+      {
+        id: 'a-1',
+        runId: 'run-1',
+        repositoryId: 'customer-consumer',
+        principal: 'operator',
+        eventType: 'STATE_TRANSITION',
+        detail: 'CREATED -> VALIDATING_INPUT',
+        planHash: null,
+        occurredAt: '2026-07-24T10:00:00Z',
+      },
+      {
+        id: 'a-2',
+        runId: 'run-1',
+        repositoryId: 'customer-consumer',
+        principal: 'operator',
+        eventType: 'APPROVAL_DECISION',
+        detail: 'Plan approved',
+        planHash: 'hash-abc123456789',
+        occurredAt: '2026-07-24T10:01:00Z',
+      },
+    ]);
+    const user = userEvent.setup();
+    render(<AuditTrail runId="run-1" />);
+
+    await user.click(screen.getByText('Load audit trail'));
+
+    expect(await screen.findByText('CREATED -> VALIDATING_INPUT')).toBeInTheDocument();
+    expect(screen.getByText('Plan approved')).toBeInTheDocument();
+    expect(screen.getByText('hash-abc1234')).toBeInTheDocument();
+    expect(screen.getAllByText('operator')).toHaveLength(2);
+    expect(screen.getByText('state')).toBeInTheDocument();
+    expect(screen.getByText('approval')).toBeInTheDocument();
+  });
+
+  it('shows a hint when the run has no recorded entries', async () => {
+    mockJsonFetch(200, []);
+    const user = userEvent.setup();
+    render(<AuditTrail runId="run-1" />);
+
+    await user.click(screen.getByText('Load audit trail'));
+
+    expect(await screen.findByText('No audit entries recorded yet.')).toBeInTheDocument();
+  });
+
+  it('shows an error message if the audit trail fails to load', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
+    const user = userEvent.setup();
+    render(<AuditTrail runId="run-1" />);
+
+    await user.click(screen.getByText('Load audit trail'));
+
+    expect(await screen.findByText('network down')).toBeInTheDocument();
   });
 });
 

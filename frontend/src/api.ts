@@ -1,4 +1,5 @@
 import type {
+  AuditEntry,
   RemoteRepositorySummary,
   RunDetail,
   RunEvent,
@@ -136,5 +137,8 @@ export const api = {
   },
   reportMarkdownUrl(runId: string): string {
     return `/api/runs/${runId}/artifacts/report.md`;
+  },
+  auditTrail(runId: string): Promise<AuditEntry[]> {
+    return request(`/api/audit?runId=${encodeURIComponent(runId)}`);
   },
 };

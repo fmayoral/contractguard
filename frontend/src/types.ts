@@ -141,6 +141,18 @@ export interface RunEvent {
   metadata: string | null;
 }
 
+// Mirrors AuditDtos.Entry: one append-only, principal-attributed compliance fact (FR-025).
+export interface AuditEntry {
+  id: string;
+  runId: string;
+  repositoryId: string;
+  principal: string;
+  eventType: string;
+  detail: string;
+  planHash: string | null;
+  occurredAt: string;
+}
+
 // Mirrors com.contractguard.application.service.SpecOption.SpecOrigin's name().toLowerCase().
 export interface SpecOption {
   id: string;

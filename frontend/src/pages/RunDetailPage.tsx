@@ -5,6 +5,7 @@ import { isTerminal, stateTone } from '../format';
 import { useAutoScrollToBottom } from '../useAutoScrollToBottom';
 import { useRunEvents } from '../useRunEvents';
 import { AnalysisProgress } from '../components/AnalysisProgress';
+import { AuditTrail } from '../components/AuditTrail';
 import { Badge } from '../components/Badge';
 import { ChangeTable } from '../components/ChangeTable';
 import { ImpactView } from '../components/ImpactView';
@@ -150,6 +151,11 @@ export function RunDetailPage() {
       <section className="card">
         <h3>Report</h3>
         <ReportView runId={run.id} terminal={isTerminal(run.state)} />
+      </section>
+
+      <section className="card">
+        <h3>Audit trail</h3>
+        <AuditTrail runId={run.id} />
       </section>
     </div>
   );

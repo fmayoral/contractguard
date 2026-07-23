@@ -1636,3 +1636,47 @@ button.small {
     animation: none;
   }
 }
+
+/* ── Audit trail (FR-025) ──────────────────────────────────────────────────── */
+
+.audit-trail {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.audit-item {
+  display: grid;
+  grid-template-columns: 80px 90px 1fr 110px;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.83rem;
+}
+
+.audit-time {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.audit-kind {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.audit-kind.kind-state_transition { color: var(--busy); }
+.audit-kind.kind-approval_decision { color: var(--ok); }
+.audit-kind.kind-repository_mutation { color: var(--llm); }
+
+.audit-hash {
+  margin-left: 0.5rem;
+}
+
+.audit-principal {
+  font-size: 0.78rem;
+  text-align: right;
+}

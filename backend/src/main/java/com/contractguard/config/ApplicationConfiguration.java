@@ -17,6 +17,7 @@ import com.contractguard.application.service.ReportService;
 import com.contractguard.application.service.RetentionService;
 import com.contractguard.application.service.RunQueryService;
 import com.contractguard.application.service.RunService;
+import com.contractguard.application.service.RunStatisticsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationRunner;
@@ -71,6 +72,11 @@ public class ApplicationConfiguration {
     @Bean
     public RunQueryService runQueryService(RunRepository runs, RunEventLog events, ArtifactStore artifacts) {
         return new RunQueryService(runs, events, artifacts);
+    }
+
+    @Bean
+    public RunStatisticsService runStatisticsService(RunRepository runs, Clock clock) {
+        return new RunStatisticsService(runs, clock);
     }
 
     @Bean

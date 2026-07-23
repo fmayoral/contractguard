@@ -53,6 +53,22 @@ public final class ClassificationPolicy {
                     "RESPONSE_STATUS_ADDED_EXHAUSTIVE_HANDLING_MISSES_IT");
             case RESPONSE_STATUS_REMOVED ->
                     new Result(Classification.BREAKING, "RESPONSE_STATUS_REMOVED_HANDLING_UNREACHABLE");
+            // Both directions mirror PROPERTY_REQUIRED_CHANGED's symmetric simplification: reported
+            // only in the risky direction is tempting, but nullable flipping either way is worth a
+            // human glance, so both surface as POTENTIALLY_BREAKING regardless of direction.
+            case PROPERTY_NULLABLE_CHANGED ->
+                    new Result(Classification.POTENTIALLY_BREAKING, "NULLABLE_FLAG_CHANGED_CONSUMER_NULL_HANDLING");
+            // Only ever produced for the tightening direction (SpecDiffEngine never reports loosening).
+            case PROPERTY_CONSTRAINT_TIGHTENED -> new Result(Classification.POTENTIALLY_BREAKING,
+                    "CONSTRAINT_TIGHTENED_PREVIOUSLY_VALID_VALUES_MAY_BE_REJECTED");
+            case REQUEST_BODY_CONTENT_TYPE_ADDED ->
+                    new Result(Classification.NON_BREAKING, "REQUEST_BODY_CONTENT_TYPE_ADDED_EXISTING_FORMAT_STILL_WORKS");
+            case REQUEST_BODY_CONTENT_TYPE_REMOVED -> new Result(Classification.BREAKING,
+                    "REQUEST_BODY_CONTENT_TYPE_REMOVED_CALLERS_USING_IT_ARE_REJECTED");
+            case SECURITY_REQUIREMENT_ADDED -> new Result(Classification.POTENTIALLY_BREAKING,
+                    "SECURITY_REQUIREMENT_ADDED_UNCREDENTIALED_CALLERS_GET_401");
+            case SECURITY_REQUIREMENT_REMOVED ->
+                    new Result(Classification.NON_BREAKING, "SECURITY_REQUIREMENT_REMOVED_LESS_STRICT");
             case UNKNOWN_CHANGE -> new Result(Classification.UNKNOWN, "CHANGE_CATEGORY_NOT_ANALYSED");
         };
     }

@@ -103,6 +103,8 @@ public class SpecDiffEngine {
             diffParameters(before, after, changes);
             diffRequestBody(before, after, changes);
             diffResponseStatusCodes(before, after, changes);
+            diffRequestBodyContentTypes(before, after, changes);
+            diffSecuritySchemes(before, after, changes);
         }
     }
 
@@ -204,6 +206,41 @@ public class SpecDiffEngine {
         for (String status : added) {
             changes.add(endpointDetailChange(ChangeType.RESPONSE_STATUS_ADDED, after.method(), after.path(),
                     status, null, status, false, evidence(e -> e.put("status", status))));
+        }
+    }
+
+    /** Scoped to the request body's media types only; per-response-status content types are not tracked (ADR-0014). */
+    private void diffRequestBodyContentTypes(SpecModel.Endpoint before, SpecModel.Endpoint after, List<ApiChange> changes) {
+        Set<String> removed = new TreeSet<>(before.requestBodyContentTypes());
+        removed.removeAll(after.requestBodyContentTypes());
+        Set<String> added = new TreeSet<>(after.requestBodyContentTypes());
+        added.removeAll(before.requestBodyContentTypes());
+
+        for (String contentType : removed) {
+            changes.add(endpointDetailChange(ChangeType.REQUEST_BODY_CONTENT_TYPE_REMOVED, before.method(),
+                    before.path(), contentType, contentType, null, false,
+                    evidence(e -> e.put("contentType", contentType))));
+        }
+        for (String contentType : added) {
+            changes.add(endpointDetailChange(ChangeType.REQUEST_BODY_CONTENT_TYPE_ADDED, after.method(),
+                    after.path(), contentType, null, contentType, false,
+                    evidence(e -> e.put("contentType", contentType))));
+        }
+    }
+
+    private void diffSecuritySchemes(SpecModel.Endpoint before, SpecModel.Endpoint after, List<ApiChange> changes) {
+        Set<String> removed = new TreeSet<>(before.securitySchemes());
+        removed.removeAll(after.securitySchemes());
+        Set<String> added = new TreeSet<>(after.securitySchemes());
+        added.removeAll(before.securitySchemes());
+
+        for (String scheme : removed) {
+            changes.add(endpointDetailChange(ChangeType.SECURITY_REQUIREMENT_REMOVED, before.method(), before.path(),
+                    scheme, scheme, null, false, evidence(e -> e.put("scheme", scheme))));
+        }
+        for (String scheme : added) {
+            changes.add(endpointDetailChange(ChangeType.SECURITY_REQUIREMENT_ADDED, after.method(), after.path(),
+                    scheme, null, scheme, false, evidence(e -> e.put("scheme", scheme))));
         }
     }
 
@@ -311,7 +348,53 @@ public class SpecDiffEngine {
                             e.put("isRequired", isRequired);
                         })));
             }
+            if (oldProp.nullable() != newProp.nullable()) {
+                changes.add(schemaChange(ChangeType.PROPERTY_NULLABLE_CHANGED, schemaName, shared,
+                        String.valueOf(oldProp.nullable()), String.valueOf(newProp.nullable()),
+                        evidence(e -> {
+                            e.put("wasNullable", oldProp.nullable());
+                            e.put("isNullable", newProp.nullable());
+                        })));
+            }
+            List<String> tightened = tighteningDetails(oldProp.constraints(), newProp.constraints());
+            if (!tightened.isEmpty()) {
+                String detail = String.join(", ", tightened);
+                changes.add(schemaChange(ChangeType.PROPERTY_CONSTRAINT_TIGHTENED, schemaName, shared,
+                        null, detail, evidence(e -> e.put("detail", detail))));
+            }
         }
+    }
+
+    /**
+     * Only the tightening direction is reported (a shrinking allowed range can reject previously
+     * valid values); loosening is not surfaced since it never breaks an existing valid caller.
+     * Pattern/regex tightening is not modelled -- regex containment is undecidable in general.
+     */
+    private static List<String> tighteningDetails(SpecModel.Constraints before, SpecModel.Constraints after) {
+        List<String> details = new ArrayList<>();
+        if (tightenedUpperBound(before.maxLength(), after.maxLength())) {
+            details.add("maxLength %s->%s".formatted(before.maxLength(), after.maxLength()));
+        }
+        if (tightenedLowerBound(before.minLength(), after.minLength())) {
+            details.add("minLength %s->%s".formatted(before.minLength(), after.minLength()));
+        }
+        if (tightenedUpperBound(before.maximum(), after.maximum())) {
+            details.add("maximum %s->%s".formatted(before.maximum(), after.maximum()));
+        }
+        if (tightenedLowerBound(before.minimum(), after.minimum())) {
+            details.add("minimum %s->%s".formatted(before.minimum(), after.minimum()));
+        }
+        return details;
+    }
+
+    /** An upper bound ({@code maxLength}/{@code maximum}) tightens when it decreases (or is newly set). */
+    private static boolean tightenedUpperBound(Number before, Number after) {
+        return after != null && (before == null || after.doubleValue() < before.doubleValue());
+    }
+
+    /** A lower bound ({@code minLength}/{@code minimum}) tightens when it increases (or is newly set). */
+    private static boolean tightenedLowerBound(Number before, Number after) {
+        return after != null && (before == null || after.doubleValue() > before.doubleValue());
     }
 
     private void diffEnumValues(String schemaName, String property,

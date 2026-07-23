@@ -10,6 +10,7 @@ import io.swagger.v3.oas.models.media.MediaType;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.parameters.Parameter;
 import io.swagger.v3.oas.models.responses.ApiResponse;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.parser.OpenAPIV3Parser;
 import io.swagger.v3.parser.core.models.ParseOptions;
 import io.swagger.v3.parser.core.models.SwaggerParseResult;
@@ -69,7 +70,9 @@ public class OpenApiSpecReader {
                                     parameters(op.getValue()),
                                     requestBodySchema(op.getValue()),
                                     requestBodyRequired(op.getValue()),
-                                    responseStatusCodes(op.getValue())));
+                                    responseStatusCodes(op.getValue()),
+                                    requestBodyContentTypes(op.getValue()),
+                                    securitySchemes(op.getValue(), api)));
                 }
             }
         }
@@ -87,18 +90,32 @@ public class OpenApiSpecReader {
         Map<String, Schema> raw = schema.getProperties();
         if (raw != null) {
             for (Map.Entry<String, Schema> entry : new TreeMap<>(raw).entrySet()) {
-                Schema<?> prop = entry.getValue();
-                List<String> enums = new ArrayList<>();
-                if (prop.getEnum() != null) {
-                    prop.getEnum().forEach(v -> enums.add(String.valueOf(v)));
-                }
-                properties.put(entry.getKey(),
-                        new SpecModel.PropertyShape(prop.getType(), prop.getFormat(), enums));
+                properties.put(entry.getKey(), propertyShape(entry.getValue()));
             }
         }
         Set<String> required = schema.getRequired() == null
                 ? Set.of() : new LinkedHashSet<>(schema.getRequired());
         return new SpecModel.SchemaShape(properties, required);
+    }
+
+    /** Shared by schema properties and parameter schemas -- both are plain {@link Schema} nodes. */
+    private SpecModel.PropertyShape propertyShape(Schema<?> schema) {
+        if (schema == null) {
+            return new SpecModel.PropertyShape(null, null, List.of());
+        }
+        List<String> enums = new ArrayList<>();
+        if (schema.getEnum() != null) {
+            schema.getEnum().forEach(v -> enums.add(String.valueOf(v)));
+        }
+        boolean nullable = Boolean.TRUE.equals(schema.getNullable());
+        SpecModel.Constraints constraints = new SpecModel.Constraints(
+                asDouble(schema.getMinimum()), asDouble(schema.getMaximum()),
+                schema.getMinLength(), schema.getMaxLength());
+        return new SpecModel.PropertyShape(schema.getType(), schema.getFormat(), enums, nullable, constraints);
+    }
+
+    private static Double asDouble(java.math.BigDecimal value) {
+        return value == null ? null : value.doubleValue();
     }
 
     private String successResponseSchema(Operation operation) {
@@ -147,14 +164,37 @@ public class OpenApiSpecReader {
         Map<String, SpecModel.ParameterShape> parameters = new LinkedHashMap<>();
         if (operation.getParameters() != null) {
             for (Parameter parameter : operation.getParameters()) {
-                Schema<?> schema = parameter.getSchema();
-                SpecModel.PropertyShape shape = schema == null
-                        ? new SpecModel.PropertyShape(null, null, List.of())
-                        : new SpecModel.PropertyShape(schema.getType(), schema.getFormat(), List.of());
                 parameters.put(parameter.getName(), new SpecModel.ParameterShape(
-                        parameter.getIn(), Boolean.TRUE.equals(parameter.getRequired()), shape));
+                        parameter.getIn(), Boolean.TRUE.equals(parameter.getRequired()),
+                        propertyShape(parameter.getSchema())));
             }
         }
         return parameters;
+    }
+
+    private Set<String> requestBodyContentTypes(Operation operation) {
+        if (operation.getRequestBody() == null || operation.getRequestBody().getContent() == null) {
+            return Set.of();
+        }
+        return new LinkedHashSet<>(operation.getRequestBody().getContent().keySet());
+    }
+
+    /**
+     * An empty (explicit {@code security: []}) requirement list means "no security" and must NOT
+     * fall back to the global default; only an entirely absent list inherits it.
+     */
+    private Set<String> securitySchemes(Operation operation, OpenAPI api) {
+        List<SecurityRequirement> requirements = operation.getSecurity();
+        if (requirements == null) {
+            requirements = api.getSecurity();
+        }
+        if (requirements == null) {
+            return Set.of();
+        }
+        Set<String> schemes = new LinkedHashSet<>();
+        for (SecurityRequirement requirement : requirements) {
+            schemes.addAll(requirement.keySet());
+        }
+        return schemes;
     }
 }

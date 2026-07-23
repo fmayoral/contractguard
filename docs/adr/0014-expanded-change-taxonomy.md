@@ -92,17 +92,102 @@ change, with the entire evidence-collection → LLM-impact-assessment →
 migration-planning → reporting pipeline picking up the new categories with
 no modification.
 
-## Deliberately not built this round
+## Addendum (2026-07-23): nullability, constraint tightening, content types, security
 
-Nullability changes, numeric/string constraint tightening (`minimum`,
-`maxLength`, etc.), content-type changes (a JSON body becoming
-`multipart/form-data`, say), and security-scheme changes remain undetected
-— any such difference that doesn't also touch a category above still falls
-through as no change at all (not even `UNKNOWN_CHANGE`, since the old
-catch-all this ADR replaces only fired on parameter/request-body
-differences). `docs/roadmap.md`'s FR-034 entry is marked partially
-completed accordingly, the same honesty pattern used for FR-027 (GitHub-only)
-and FR-029 (tracing/metrics without structured logs).
+The four categories the first round deferred were built the same day, once
+asked "is the rest feasible?" Same file set, same mirroring-an-existing-rule
+approach:
+
+### 6. `PropertyShape` gains `nullable` and `Constraints`, via a backward-compatible constructor
+
+`SpecModel.PropertyShape` needed two more facts per property: the OpenAPI
+`nullable` keyword, and numeric/string bounds (`minimum`, `maximum`,
+`minLength`, `maxLength`) as a nested `Constraints` record (`Constraints.NONE`
+when a schema declares none). Adding a canonical 5-arg constructor would have
+forced every existing call site (`OpenApiSpecReader`, several
+`SpecDiffEngineTest` helpers) to change; instead `PropertyShape` keeps its
+original 3-arg constructor as an explicit overload delegating to the fuller
+one with `nullable=false, constraints=Constraints.NONE`. Every pre-existing
+call site kept compiling unchanged. `ParameterShape` wraps the same
+`PropertyShape`, so parameters got type/format comparison "for free" in the
+first round and could have gotten nullable/constraint comparison the same
+way — deliberately not done (see below), to keep this round's scope to
+schema properties.
+
+### 7. `PROPERTY_NULLABLE_CHANGED` is symmetric, matching `PROPERTY_REQUIRED_CHANGED`'s precedent
+
+A property becoming nullable (consumers may not null-check) and becoming
+non-nullable (consumers already null-checking lose nothing) are not equally
+risky, but `PROPERTY_REQUIRED_CHANGED` already accepted exactly this kind of
+simplification — both directions are `POTENTIALLY_BREAKING`, not modelled
+per-direction. Matching that precedent kept the classifier's mental model
+uniform rather than introducing a one-off asymmetric rule.
+
+### 8. Constraint tightening is one-directional by design; pattern/regex is out of scope
+
+`SpecDiffEngine` only ever emits `PROPERTY_CONSTRAINT_TIGHTENED` — loosening
+a bound (raising `maxLength`, lowering `minimum`) is never reported, because
+it cannot reject a previously-valid value and so isn't classifier-relevant.
+Detected dimensions are `minimum`/`maximum`/`minLength`/`maxLength` only;
+`pattern` tightening is **not** modelled at all, in either direction —
+regex-containment ("does every string matching the new pattern also match
+the old one?") is undecidable in general, so no honest deterministic rule
+exists to write. This is a hard scope boundary, not a "future work" gap.
+
+### 9. Request-body content types are tracked separately from the JSON schema reference, and can double-report with it
+
+`requestBodyContentTypes` (the full media-type key set, e.g. `application/json`,
+`application/xml`) is tracked independently of `requestBodySchema` (which only
+ever looks at the `application/json` entry, unchanged since ADR-0002). If a
+request body's only content type flips from JSON to XML, both
+`REQUEST_BODY_REMOVED` (the JSON schema reference disappeared) and
+`REQUEST_BODY_CONTENT_TYPE_REMOVED` (the `application/json` media type
+disappeared) fire for the same underlying edit. This is accepted, not a bug —
+consistent with the schema-removal double-signal already accepted in the
+first round (`diffSchemas`' fallback firing alongside an endpoint-level
+change): the two facts are genuinely different (payload shape vs. wire
+format) and both are worth a human's attention.
+
+**Response-status-specific content types are out of scope.** Each response
+status can declare its own content-type set in OpenAPI, but tracking that
+per-status would multiply the model's complexity for a rarer edit than a
+request body's format changing; only the request body's content types are
+tracked.
+
+### 10. Security requirements are read per-operation with correct fallback-to-global semantics
+
+`Operation.getSecurity()` returning `null` (unset) must inherit the
+document's global `security:` block, while returning an empty list (explicit
+`security: []`) must not — that empty list *is* the operation's requirement
+("no security"), not an absence of one. `OpenApiSpecReader.securitySchemes`
+distinguishes these with a plain `!= null` check before falling back, which
+swagger-parser's object model supports directly. Only the *set of scheme
+names* required is compared (`SECURITY_REQUIREMENT_ADDED`/`_REMOVED`), not
+scope lists (an OAuth2 requirement gaining an extra scope) or
+`components.securitySchemes` definition changes (a scheme's type or flow
+changing) — both left for a future round if ever needed, since the
+per-operation requirement is the more common and more consumer-visible edit.
+
+### 11. Classification for the new pair types mirrors the required-addition pattern, not the removal pattern
+
+`SECURITY_REQUIREMENT_ADDED` is `POTENTIALLY_BREAKING` (mirrors adding a
+required parameter/property: existing callers without the new credential are
+newly rejected) and `SECURITY_REQUIREMENT_REMOVED` is `NON_BREAKING`
+(existing credentialed callers are unaffected by less being required).
+`REQUEST_BODY_CONTENT_TYPE_REMOVED` is `BREAKING`/`_ADDED` is `NON_BREAKING`,
+following the general removal/addition convention directly.
+
+## Deliberately not built (either round)
+
+Regex `pattern` tightening (undecidable, see above), per-response-status
+content types (scope decision, see above), security scope-list and
+scheme-definition changes (see above), and nullability/constraint tightening
+for *parameters* rather than schema properties (the underlying
+`PropertyShape` already carries the data; `diffSharedParameters` was not
+extended to check it, purely a scope cut to keep this round's diff to
+schema properties, where these two categories are far more common in
+practice). `docs/roadmap.md`'s FR-034 entry reflects exactly this remaining
+scope.
 
 ## Consequences
 
@@ -116,3 +201,7 @@ and FR-029 (tracing/metrics without structured logs).
   unaffected: new enum constants are purely additive, and
   `RunDocument`'s `ChangeType.valueOf(...)` deserialization does not require
   every historical value to still be producible.
+- The second round's `PropertyShape` constructor change was verified
+  backward-compatible by full compilation, not just by inspection: every
+  pre-existing 3-arg call site across `OpenApiSpecReader` and
+  `SpecDiffEngineTest` compiled unchanged.

@@ -88,6 +88,13 @@ public class EvidenceCollector {
             case REQUEST_BODY_SCHEMA_CHANGED -> requestBodySchemaChangedTerms(change);
             case RESPONSE_STATUS_ADDED, RESPONSE_STATUS_REMOVED -> List.of(
                     new Term(templateFreePrefix(change.path()), "CALLS_ENDPOINT_WITH_CHANGED_RESPONSE_STATUS"));
+            case PROPERTY_NULLABLE_CHANGED, PROPERTY_CONSTRAINT_TIGHTENED -> List.of(
+                    new Term(change.property(), "READS_CHANGED_PROPERTY"),
+                    new Term(capitalise(change.property()), "READS_CHANGED_PROPERTY_ACCESSOR"));
+            case REQUEST_BODY_CONTENT_TYPE_ADDED, REQUEST_BODY_CONTENT_TYPE_REMOVED -> List.of(
+                    new Term(templateFreePrefix(change.path()), "CALLS_ENDPOINT_WITH_CHANGED_REQUEST_BODY"));
+            case SECURITY_REQUIREMENT_ADDED, SECURITY_REQUIREMENT_REMOVED -> List.of(
+                    new Term(templateFreePrefix(change.path()), "CALLS_ENDPOINT_WITH_CHANGED_SECURITY_REQUIREMENT"));
             case UNKNOWN_CHANGE -> unknownTerms(change);
         };
     }

@@ -106,4 +106,62 @@ class OpenApiSpecReaderTest {
         assertThat(thing.required()).containsExactly("name");
         assertThat(thing.properties().get("state").enumValues()).containsExactly("OPEN", "SHUT");
     }
+
+    @Test
+    void extractsNullabilityConstraintsContentTypesAndSecurity() throws IOException {
+        Path file = Files.writeString(tempDir.resolve("api.yaml"), """
+                openapi: 3.0.3
+                info: {title: T, version: "1"}
+                security:
+                  - apiKey: []
+                paths:
+                  /orders:
+                    post:
+                      security:
+                        - oauth2: [write]
+                      requestBody:
+                        content:
+                          application/json:
+                            schema: {$ref: '#/components/schemas/Order'}
+                          application/xml:
+                            schema: {$ref: '#/components/schemas/Order'}
+                      responses:
+                        '201': {description: created}
+                    get:
+                      responses:
+                        '200': {description: ok}
+                components:
+                  schemas:
+                    Order:
+                      type: object
+                      properties:
+                        note:
+                          type: string
+                          nullable: true
+                          maxLength: 200
+                        quantity:
+                          type: integer
+                          minimum: 1
+                """);
+
+        SpecModel model = reader.read(file);
+
+        SpecModel.Endpoint post = model.endpoints().get("POST /orders");
+        assertThat(post.requestBodyContentTypes()).containsExactlyInAnyOrder("application/json", "application/xml");
+        assertThat(post.securitySchemes()).containsExactly("oauth2");
+
+        SpecModel.Endpoint get = model.endpoints().get("GET /orders");
+        assertThat(get.requestBodyContentTypes()).isEmpty();
+        assertThat(get.securitySchemes())
+                .as("no operation-level security falls back to the document's global requirement")
+                .containsExactly("apiKey");
+
+        SpecModel.PropertyShape note = model.schemas().get("Order").properties().get("note");
+        assertThat(note.nullable()).isTrue();
+        assertThat(note.constraints().maxLength()).isEqualTo(200);
+
+        SpecModel.PropertyShape quantity = model.schemas().get("Order").properties().get("quantity");
+        assertThat(quantity.nullable()).isFalse();
+        assertThat(quantity.constraints().minimum()).isEqualTo(1.0);
+    }
 }

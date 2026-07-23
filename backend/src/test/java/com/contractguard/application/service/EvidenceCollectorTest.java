@@ -104,4 +104,32 @@ class EvidenceCollectorTest {
                 change(ChangeType.RESPONSE_STATUS_ADDED, "429", null, "429")));
         assertThat(queries).containsExactly("/customers/");
     }
+
+    @Test
+    void nullableChangeSearchesBothPropertyCasings() {
+        collector.collect("demo", List.of(
+                change(ChangeType.PROPERTY_NULLABLE_CHANGED, "fullName", "false", "true")));
+        assertThat(queries).containsExactly("fullName", "FullName");
+    }
+
+    @Test
+    void constraintTighteningSearchesBothPropertyCasings() {
+        collector.collect("demo", List.of(
+                change(ChangeType.PROPERTY_CONSTRAINT_TIGHTENED, "fullName", null, "maxLength 100->50")));
+        assertThat(queries).containsExactly("fullName", "FullName");
+    }
+
+    @Test
+    void requestBodyContentTypeChangeSearchesTheEndpointPath() {
+        collector.collect("demo", List.of(
+                change(ChangeType.REQUEST_BODY_CONTENT_TYPE_REMOVED, "application/json", "application/json", null)));
+        assertThat(queries).containsExactly("/customers/");
+    }
+
+    @Test
+    void securityRequirementChangeSearchesTheEndpointPath() {
+        collector.collect("demo", List.of(
+                change(ChangeType.SECURITY_REQUIREMENT_ADDED, "apiKey", null, "apiKey")));
+        assertThat(queries).containsExactly("/customers/");
+    }
 }

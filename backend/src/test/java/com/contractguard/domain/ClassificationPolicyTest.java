@@ -78,6 +78,31 @@ class ClassificationPolicyTest {
                 .isEqualTo(Classification.POTENTIALLY_BREAKING);
     }
 
+    @Test
+    void secondTaxonomyRoundFollowsTheSameConventions() {
+        // Nullable flips either way are surfaced, mirroring PROPERTY_REQUIRED_CHANGED's symmetric rule.
+        assertThat(ClassificationPolicy.classify(ChangeType.PROPERTY_NULLABLE_CHANGED, false).classification())
+                .isEqualTo(Classification.POTENTIALLY_BREAKING);
+
+        // Only ever produced for the tightening direction -- always potentially breaking.
+        assertThat(ClassificationPolicy.classify(ChangeType.PROPERTY_CONSTRAINT_TIGHTENED, false).classification())
+                .isEqualTo(Classification.POTENTIALLY_BREAKING);
+
+        // Content types: removal is BREAKING (existing callers using it are rejected), addition is
+        // NON_BREAKING (an alternative representation, existing callers unaffected).
+        assertThat(ClassificationPolicy.classify(ChangeType.REQUEST_BODY_CONTENT_TYPE_REMOVED, false).classification())
+                .isEqualTo(Classification.BREAKING);
+        assertThat(ClassificationPolicy.classify(ChangeType.REQUEST_BODY_CONTENT_TYPE_ADDED, false).classification())
+                .isEqualTo(Classification.NON_BREAKING);
+
+        // Security requirements mirror the required-addition pattern: a newly required credential
+        // is POTENTIALLY_BREAKING, a dropped one is NON_BREAKING (existing credentialed callers are fine).
+        assertThat(ClassificationPolicy.classify(ChangeType.SECURITY_REQUIREMENT_ADDED, false).classification())
+                .isEqualTo(Classification.POTENTIALLY_BREAKING);
+        assertThat(ClassificationPolicy.classify(ChangeType.SECURITY_REQUIREMENT_REMOVED, false).classification())
+                .isEqualTo(Classification.NON_BREAKING);
+    }
+
     @ParameterizedTest
     @EnumSource(ChangeType.class)
     void everyChangeTypeHasAMachineReadableReason(ChangeType type) {

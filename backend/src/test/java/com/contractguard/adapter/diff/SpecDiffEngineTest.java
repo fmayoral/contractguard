@@ -268,6 +268,132 @@ class SpecDiffEngineTest {
     }
 
     @Test
+    void propertyBecomingNullableIsPotentiallyBreaking() {
+        SpecModel before = schemaOnly("Thing", Map.of("value", nullableProp(false)), Set.of());
+        SpecModel after = schemaOnly("Thing", Map.of("value", nullableProp(true)), Set.of());
+
+        List<ApiChange> changes = engine.diff(before, after).changes();
+
+        assertThat(changes).singleElement().satisfies(change -> {
+            assertThat(change.type()).isEqualTo(ChangeType.PROPERTY_NULLABLE_CHANGED);
+            assertThat(change.classification()).isEqualTo(Classification.POTENTIALLY_BREAKING);
+        });
+    }
+
+    @Test
+    void propertyBecomingNonNullableIsAlsoReported() {
+        SpecModel before = schemaOnly("Thing", Map.of("value", nullableProp(true)), Set.of());
+        SpecModel after = schemaOnly("Thing", Map.of("value", nullableProp(false)), Set.of());
+
+        List<ApiChange> changes = engine.diff(before, after).changes();
+
+        assertThat(changes).singleElement().satisfies(change ->
+                assertThat(change.type()).isEqualTo(ChangeType.PROPERTY_NULLABLE_CHANGED));
+    }
+
+    @Test
+    void shrinkingMaxLengthIsConstraintTightening() {
+        SpecModel before = schemaOnly("Thing",
+                Map.of("value", propWithConstraints("string", new SpecModel.Constraints(null, null, null, 100))),
+                Set.of());
+        SpecModel after = schemaOnly("Thing",
+                Map.of("value", propWithConstraints("string", new SpecModel.Constraints(null, null, null, 50))),
+                Set.of());
+
+        List<ApiChange> changes = engine.diff(before, after).changes();
+
+        assertThat(changes).singleElement().satisfies(change -> {
+            assertThat(change.type()).isEqualTo(ChangeType.PROPERTY_CONSTRAINT_TIGHTENED);
+            assertThat(change.classification()).isEqualTo(Classification.POTENTIALLY_BREAKING);
+            assertThat(change.newValue()).contains("maxLength 100->50");
+        });
+    }
+
+    @Test
+    void raisingMinimumIsConstraintTightening() {
+        SpecModel before = schemaOnly("Thing",
+                Map.of("value", propWithConstraints("integer", new SpecModel.Constraints(0.0, null, null, null))),
+                Set.of());
+        SpecModel after = schemaOnly("Thing",
+                Map.of("value", propWithConstraints("integer", new SpecModel.Constraints(10.0, null, null, null))),
+                Set.of());
+
+        List<ApiChange> changes = engine.diff(before, after).changes();
+
+        assertThat(changes).singleElement().satisfies(change ->
+                assertThat(change.type()).isEqualTo(ChangeType.PROPERTY_CONSTRAINT_TIGHTENED));
+    }
+
+    @Test
+    void looseningAConstraintIsNotReported() {
+        SpecModel before = schemaOnly("Thing",
+                Map.of("value", propWithConstraints("string", new SpecModel.Constraints(null, null, null, 50))),
+                Set.of());
+        SpecModel after = schemaOnly("Thing",
+                Map.of("value", propWithConstraints("string", new SpecModel.Constraints(null, null, null, 100))),
+                Set.of());
+
+        assertThat(engine.diff(before, after).changes()).isEmpty();
+    }
+
+    @Test
+    void requestBodyContentTypeAdditionIsNonBreaking() {
+        SpecModel before = withEndpoint(endpointWithContentTypes("POST", "/a", Set.of("application/json")));
+        SpecModel after = withEndpoint(endpointWithContentTypes("POST", "/a",
+                Set.of("application/json", "multipart/form-data")));
+
+        List<ApiChange> changes = engine.diff(before, after).changes();
+
+        assertThat(changes).singleElement().satisfies(change -> {
+            assertThat(change.type()).isEqualTo(ChangeType.REQUEST_BODY_CONTENT_TYPE_ADDED);
+            assertThat(change.classification()).isEqualTo(Classification.NON_BREAKING);
+            assertThat(change.property()).isEqualTo("multipart/form-data");
+        });
+    }
+
+    @Test
+    void requestBodyContentTypeRemovalIsBreaking() {
+        SpecModel before = withEndpoint(endpointWithContentTypes("POST", "/a", Set.of("application/json")));
+        SpecModel after = withEndpoint(endpointWithContentTypes("POST", "/a", Set.of("application/xml")));
+
+        List<ApiChange> changes = engine.diff(before, after).changes();
+
+        assertThat(changes).extracting(ApiChange::type).contains(ChangeType.REQUEST_BODY_CONTENT_TYPE_REMOVED);
+        ApiChange removal = changes.stream()
+                .filter(c -> c.type() == ChangeType.REQUEST_BODY_CONTENT_TYPE_REMOVED)
+                .findFirst().orElseThrow();
+        assertThat(removal.classification()).isEqualTo(Classification.BREAKING);
+        assertThat(removal.property()).isEqualTo("application/json");
+    }
+
+    @Test
+    void securityRequirementAdditionIsPotentiallyBreaking() {
+        SpecModel before = withEndpoint(endpointWithSecuritySchemes("GET", "/a", Set.of()));
+        SpecModel after = withEndpoint(endpointWithSecuritySchemes("GET", "/a", Set.of("apiKey")));
+
+        List<ApiChange> changes = engine.diff(before, after).changes();
+
+        assertThat(changes).singleElement().satisfies(change -> {
+            assertThat(change.type()).isEqualTo(ChangeType.SECURITY_REQUIREMENT_ADDED);
+            assertThat(change.classification()).isEqualTo(Classification.POTENTIALLY_BREAKING);
+            assertThat(change.property()).isEqualTo("apiKey");
+        });
+    }
+
+    @Test
+    void securityRequirementRemovalIsNonBreaking() {
+        SpecModel before = withEndpoint(endpointWithSecuritySchemes("GET", "/a", Set.of("apiKey")));
+        SpecModel after = withEndpoint(endpointWithSecuritySchemes("GET", "/a", Set.of()));
+
+        List<ApiChange> changes = engine.diff(before, after).changes();
+
+        assertThat(changes).singleElement().satisfies(change -> {
+            assertThat(change.type()).isEqualTo(ChangeType.SECURITY_REQUIREMENT_REMOVED);
+            assertThat(change.classification()).isEqualTo(Classification.NON_BREAKING);
+        });
+    }
+
+    @Test
     void schemaRemovalSurfacesAsUnknownWithWarning() {
         SpecModel before = schemaOnly("Gone", Map.of("x", stringProp()), Set.of());
         SpecModel after = new SpecModel(Map.of(), Map.of());
@@ -293,7 +419,7 @@ class SpecDiffEngineTest {
     }
 
     private static SpecModel.Endpoint endpoint(String method, String path, String responseSchema) {
-        return new SpecModel.Endpoint(method, path, responseSchema, Map.of(), null, false, Set.of());
+        return new SpecModel.Endpoint(method, path, responseSchema, Map.of(), null, false, Set.of(), Set.of(), Set.of());
     }
 
     private static SpecModel withEndpoint(SpecModel.Endpoint endpoint) {
@@ -302,7 +428,7 @@ class SpecDiffEngineTest {
 
     private static SpecModel.Endpoint endpointWithParams(String method, String path,
             Map<String, SpecModel.ParameterShape> parameters) {
-        return new SpecModel.Endpoint(method, path, null, parameters, null, false, Set.of());
+        return new SpecModel.Endpoint(method, path, null, parameters, null, false, Set.of(), Set.of(), Set.of());
     }
 
     private static SpecModel.ParameterShape param(String location, boolean required, String type) {
@@ -311,11 +437,27 @@ class SpecDiffEngineTest {
 
     private static SpecModel.Endpoint endpointWithRequestBody(String method, String path,
             String schema, boolean required) {
-        return new SpecModel.Endpoint(method, path, null, Map.of(), schema, required, Set.of());
+        return new SpecModel.Endpoint(method, path, null, Map.of(), schema, required, Set.of(), Set.of(), Set.of());
     }
 
     private static SpecModel.Endpoint endpointWithStatusCodes(String method, String path, Set<String> codes) {
-        return new SpecModel.Endpoint(method, path, null, Map.of(), null, false, codes);
+        return new SpecModel.Endpoint(method, path, null, Map.of(), null, false, codes, Set.of(), Set.of());
+    }
+
+    private static SpecModel.Endpoint endpointWithContentTypes(String method, String path, Set<String> contentTypes) {
+        return new SpecModel.Endpoint(method, path, null, Map.of(), null, false, Set.of(), contentTypes, Set.of());
+    }
+
+    private static SpecModel.Endpoint endpointWithSecuritySchemes(String method, String path, Set<String> schemes) {
+        return new SpecModel.Endpoint(method, path, null, Map.of(), null, false, Set.of(), Set.of(), schemes);
+    }
+
+    private static SpecModel.PropertyShape propWithConstraints(String type, SpecModel.Constraints constraints) {
+        return new SpecModel.PropertyShape(type, null, List.of(), false, constraints);
+    }
+
+    private static SpecModel.PropertyShape nullableProp(boolean nullable) {
+        return new SpecModel.PropertyShape("string", null, List.of(), nullable, SpecModel.Constraints.NONE);
     }
 
     private static SpecModel.PropertyShape stringProp() {

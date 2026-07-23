@@ -175,4 +175,79 @@ class SwaggerOpenApiDiffAdapterTest {
         assertThat(schemaChange.oldValue()).isEqualTo("OrderRequestV1");
         assertThat(schemaChange.newValue()).isEqualTo("OrderRequestV2");
     }
+
+    /** Covers the second FR-034 round (ADR-0014 addendum): nullability, constraint tightening, content types, security. */
+    @Test
+    void secondRoundOfTheExpandedTaxonomyIsDetectedThroughTheRealParserAndEngineTogether(@TempDir Path dir)
+            throws IOException {
+        Path oldSpec = Files.writeString(dir.resolve("old.yaml"), """
+                openapi: 3.0.3
+                info: {title: Orders, version: "1"}
+                paths:
+                  /orders:
+                    post:
+                      security:
+                        - apiKey: []
+                      requestBody:
+                        content:
+                          application/json:
+                            schema: {$ref: '#/components/schemas/OrderRequest'}
+                      responses:
+                        '201': {description: created}
+                components:
+                  schemas:
+                    OrderRequest:
+                      type: object
+                      properties:
+                        note:
+                          type: string
+                          maxLength: 200
+                """);
+        Path newSpec = Files.writeString(dir.resolve("new.yaml"), """
+                openapi: 3.0.3
+                info: {title: Orders, version: "2"}
+                paths:
+                  /orders:
+                    post:
+                      security:
+                        - oauth2: [write]
+                      requestBody:
+                        content:
+                          application/json:
+                            schema: {$ref: '#/components/schemas/OrderRequest'}
+                          application/xml:
+                            schema: {$ref: '#/components/schemas/OrderRequest'}
+                      responses:
+                        '201': {description: created}
+                components:
+                  schemas:
+                    OrderRequest:
+                      type: object
+                      properties:
+                        note:
+                          type: string
+                          nullable: true
+                          maxLength: 50
+                """);
+
+        List<ApiChange> changes = adapter.diff(oldSpec, newSpec).changes();
+
+        assertThat(changes).extracting(ApiChange::type, ApiChange::classification)
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple(
+                                ChangeType.PROPERTY_NULLABLE_CHANGED, Classification.POTENTIALLY_BREAKING),
+                        org.assertj.core.groups.Tuple.tuple(
+                                ChangeType.PROPERTY_CONSTRAINT_TIGHTENED, Classification.POTENTIALLY_BREAKING),
+                        org.assertj.core.groups.Tuple.tuple(
+                                ChangeType.REQUEST_BODY_CONTENT_TYPE_ADDED, Classification.NON_BREAKING),
+                        org.assertj.core.groups.Tuple.tuple(
+                                ChangeType.SECURITY_REQUIREMENT_ADDED, Classification.POTENTIALLY_BREAKING),
+                        org.assertj.core.groups.Tuple.tuple(
+                                ChangeType.SECURITY_REQUIREMENT_REMOVED, Classification.NON_BREAKING));
+
+        ApiChange tightened = changes.stream()
+                .filter(c -> c.type() == ChangeType.PROPERTY_CONSTRAINT_TIGHTENED)
+                .findFirst().orElseThrow();
+        assertThat(tightened.newValue()).isEqualTo("maxLength 200->50");
+    }
 }

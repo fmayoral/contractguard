@@ -124,15 +124,16 @@ docker compose down -v       # stop and wipe all persisted state
 
 - **PostgreSQL** — the containers use embedded H2, matching the zero-setup
   local-first default. The `postgres` Spring profile is fully supported for
-  server deployments; see [Database](../README.md#database) in the README
-  for running the jar against a real PostgreSQL instance outside this
-  compose file.
+  server deployments; see [Database](configuration.md#database) in the
+  configuration reference for running the jar against a real PostgreSQL
+  instance outside this compose file.
 - **Sandboxed build validation (FR-030)** — `DockerBuildValidationAdapter`
   shells out to a `docker` CLI to run the consumer's own build in a
   container; the `backend` container here has no Docker socket mounted, so
   turning on `contractguard.validation.docker.enabled` inside this compose
   setup will fail. It works when running the backend directly on a host
-  that has Docker (see the root [README](../README.md#sandboxed-validation)).
+  that has Docker (see [Sandboxed validation](configuration.md#sandboxed-validation)
+  in the configuration reference).
 - **TLS / a reverse proxy / authentication** — this compose file is a demo
   and evaluation setup, reachable only from the host running it
   (`127.0.0.1` port bindings). It is not a production hardening pass; see

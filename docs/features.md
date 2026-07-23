@@ -91,8 +91,8 @@ bounded, schema-validated loop it can never bypass.
 - **Deregistration** for every registered kind (repository, spec source,
   upload) — removing a repository or spec source also clears its local
   clone cache, so a corrected re-registration never reuses a stale checkout.
-- A dedicated **Manage sources** panel keeps registering/removing sources
-  fully separate from starting a run — no wizard, no back-and-forth.
+- A dedicated **Settings** page keeps registering/removing sources fully
+  separate from starting a run — no wizard, no back-and-forth.
 
 ## 8. Remote Git Integration & Publishing
 
@@ -162,11 +162,20 @@ bounded, schema-validated loop it can never bypass.
 
 ## 14. Dashboard Experience
 
+- A **statistics dashboard**: run activity over time, outcome and
+  classification breakdowns, change-type distribution, remediation
+  first-pass/repair rates and lines-of-code touched — all computed
+  server-side from the persisted run history (`GET /api/statistics`) and
+  rendered as dependency-free SVG charts whose segment ordering was
+  validated for colour-vision-deficiency separation.
+- A **filterable run history** page with per-run detail views at stable,
+  shareable URLs (`/runs/{id}`).
 - A **single-panel run form** — pick repository, old spec, new spec, name,
   go — with no forward/back navigation.
+- A **Settings** page holding all source registration/upload/removal,
+  the light/dark theme choice, and the quick reference.
 - A first-run **onboarding banner** naming the three-step workflow, and an
   in-app **quick-reference panel** for anyone who gets lost mid-workflow.
-- **Light and dark themes**, toggleable from the sidebar.
 
 ---
 

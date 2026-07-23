@@ -111,11 +111,11 @@ open a real draft PR against it).
    export CONTRACTGUARD_CREDENTIAL_KEY=$(openssl rand -base64 32)
    ```
 
-2. In the dashboard, press **Manage sources** (next to **New analysis
-   run**), then under "Consumer repositories" fill in a repository ID, the
-   clone URL, default branch and your token, and press **Register
-   repository**. Close the modal — it now appears in the **Consumer
-   repository** picker under "Registered GitHub repositories" — select it.
+2. In the web app, open the **Settings** page, then under "Consumer
+   repositories" fill in a repository ID, the clone URL, default branch and
+   your token, and press **Register repository**. Go to **New run** — it now
+   appears in the **Consumer repository** picker under "Registered GitHub
+   repositories" — select it.
 
    Equivalently, over the API:
 
@@ -150,23 +150,19 @@ open a real draft PR against it).
    the failure message and a **Retry publish** button; retrying with a
    corrected token succeeds without re-running analysis or execution.
 
-<!-- TODO(fernando): capture docs/screenshots/6-publish-and-pull-request.png
-     (Publish card + resulting draft-PR link) here once you've run this
-     section against a real repository — same file the root README's step 6
-     references. -->
+![Publish card with the resulting draft pull request link](screenshots/6-publish-and-pull-request.png)
 
 ## 10. Test specification sources and upload (FR-043)
 
-The **Manage sources** modal offers three ways to get old/new specs in
-front of a run, no filesystem or deployment access required for any of
-them; the **New analysis run** form itself only ever picks from what's
-already registered.
+The **Settings** page offers three ways to get old/new specs in front of a
+run, no filesystem or deployment access required for any of them; the
+**New run** form itself only ever picks from what's already registered.
 
-1. Press **Manage sources**.
+1. Open **Settings**.
 2. **Upload**: under "Uploaded specifications", choose a `.yaml`/`.yml`/
-   `.json` file — it appears immediately in that list. Close the modal and
-   whichever of old/new is still unset on the underlying form gets filled
-   with it automatically (never overwriting a choice you already made).
+   `.json` file — it appears immediately in that list. Back on **New run**,
+   whichever of old/new is still unset gets filled with it automatically
+   (never overwriting a choice you already made).
 3. **Register a spec repository**: under "Specification repositories",
    supply a clone URL and default branch. Unlike consumer repository
    registration, **the token is optional** — try registering a public
@@ -188,14 +184,14 @@ already registered.
    that doesn't exist, or a private repo with no/an invalid token. The setup
    screen still loads normally — that one source just contributes no files,
    and a hint under the picker names it as having "contributed no files."
-5. Close the modal and start the run exactly as in section 5 above; the
+5. Go to **New run** and start the run exactly as in section 5 above; the
    analysis works identically regardless of where the specs came from.
 
 ## 11. Test deregistration (FR-044)
 
-1. Press **Manage sources**. Each registered remote repository and spec
-   source, and each uploaded specification, has a **Remove** button next to
-   it (local workspace repositories and bundled specs don't — they aren't
+1. Open **Settings**. Each registered remote repository and spec source,
+   and each uploaded specification, has a **Remove** button next to it
+   (local workspace repositories and bundled specs don't — they aren't
    registrations).
 2. Remove the repository registered in section 9: press **Remove** next to
    it, confirm the dialog. It disappears from the list and from the

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { isTerminal, stateTone } from '../format';
 import { useAutoScrollToBottom } from '../useAutoScrollToBottom';
@@ -14,11 +14,15 @@ import { ReportView } from '../components/ReportView';
 import { ValidationView } from '../components/ValidationView';
 import type { RunDetail } from '../types';
 
+const HIGHLIGHT_DURATION_MS = 1600;
+
 /** One run's whole lifecycle: progress, changes, impact, plan, remediation, publish, report. */
 export function RunDetailPage() {
   const { runId } = useParams<{ runId: string }>();
+  const location = useLocation();
   const [run, setRun] = useState<RunDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const scrolledForKey = useRef<string | null>(null);
 
   const refreshRun = useCallback(() => {
     if (!runId) return;
@@ -36,6 +40,21 @@ export function RunDetailPage() {
   const events = useRunEvents(runId ?? null, refreshRun);
 
   useAutoScrollToBottom(runId ?? null, `${events.length}:${run?.updatedAt ?? ''}`);
+
+  // A notification click carries { scrollTo: <element id> } via navigation state -- e.g.
+  // action-required toasts land the user on this exact spot instead of the page top. Guarded
+  // by location.key so it fires once per navigation, not on every subsequent run refresh.
+  useEffect(() => {
+    const target = (location.state as { scrollTo?: string } | null)?.scrollTo;
+    if (!run || !target || scrolledForKey.current === location.key) return;
+    const el = document.getElementById(target);
+    if (!el) return;
+    scrolledForKey.current = location.key;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    el.classList.add('highlight-pulse');
+    const timer = setTimeout(() => el.classList.remove('highlight-pulse'), HIGHLIGHT_DURATION_MS);
+    return () => clearTimeout(timer);
+  }, [run, location.state, location.key]);
 
   if (loadError) {
     return (
@@ -96,7 +115,7 @@ export function RunDetailPage() {
         <ImpactView assessments={run.assessments} evidence={run.evidence} />
       </section>
 
-      <section className="card">
+      <section className="card" id="plan-approval">
         <h3>Migration plan &amp; approval</h3>
         <PlanApproval
           runId={run.id}

@@ -1479,3 +1479,143 @@ button.small {
   color: var(--accent);
   word-break: break-all;
 }
+
+/* ── Site-wide action-required notifications ──────────────────────────────── */
+
+.toast-stack {
+  position: fixed;
+  top: 1.25rem;
+  right: 1.25rem;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: min(360px, calc(100vw - 2.5rem));
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.85rem 0.9rem;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid rgba(var(--warn-rgb), 0.45);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(var(--warn-rgb), 0.08);
+  cursor: pointer;
+  animation: toast-in 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.toast:hover {
+  border-color: rgba(var(--warn-rgb), 0.7);
+}
+
+.toast:focus-visible {
+  outline: 2px solid var(--warn);
+  outline-offset: 2px;
+}
+
+.toast-leaving {
+  animation: toast-out 0.28s ease forwards;
+}
+
+.toast-icon {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(var(--warn-rgb), 0.16);
+  color: var(--warn);
+  font-size: 0.95rem;
+}
+
+.toast-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.toast-body strong {
+  font-size: 0.92rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toast-body p {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.toast-dismiss {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0.1rem 0.3rem;
+  border-radius: 6px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.toast-dismiss:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    max-height: 100px;
+  }
+  to {
+    opacity: 0;
+    transform: translateX(24px) scale(0.96);
+    max-height: 0;
+    margin-bottom: -0.6rem;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+}
+
+/* The section a notification click scrolls to gets a brief glow so it's obvious
+   where the page landed, fading back to the ordinary card border on its own. */
+.highlight-pulse {
+  animation: highlight-pulse 1.6s ease-out;
+}
+
+@keyframes highlight-pulse {
+  0% {
+    border-color: rgba(var(--warn-rgb), 0.9);
+    box-shadow: 0 0 0 4px rgba(var(--warn-rgb), 0.18);
+  }
+  100% {
+    border-color: var(--border);
+    box-shadow: 0 0 0 4px rgba(var(--warn-rgb), 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast,
+  .toast-leaving,
+  .highlight-pulse {
+    animation: none;
+  }
+}

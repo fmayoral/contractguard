@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { BrowserRouter, NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { applyTheme, initialTheme } from './theme';
+import { ActionRequiredNotifications } from './components/ActionRequiredNotifications';
 import { DashboardPage } from './pages/DashboardPage';
 import { NewRunPage } from './pages/NewRunPage';
 import { RunDetailPage } from './pages/RunDetailPage';
@@ -33,6 +34,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <ActionRequiredNotifications />
       <div className="app-shell">
         <nav className="nav-rail" aria-label="Primary">
           <div className="brand">

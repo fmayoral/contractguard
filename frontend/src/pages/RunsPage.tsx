@@ -14,7 +14,7 @@ function formatWhen(iso: string): string {
 }
 
 export function RunsPage() {
-  const runs = useLiveRuns();
+  const { runs } = useLiveRuns();
   const [query, setQuery] = useState('');
   const [stateFilter, setStateFilter] = useState<StateFilter>('all');
   const navigate = useNavigate();

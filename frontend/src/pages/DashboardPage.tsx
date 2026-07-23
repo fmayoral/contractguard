@@ -53,7 +53,7 @@ function successRate(stats: Statistics): string {
 export function DashboardPage() {
   const [stats, setStats] = useState<Statistics | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const runs = useLiveRuns();
+  const { runs } = useLiveRuns();
 
   useEffect(() => {
     const load = () => {

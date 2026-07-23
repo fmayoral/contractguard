@@ -23,7 +23,7 @@ export function RunSetup({ onCreated }: RunSetupProps) {
   const [newSpec, setNewSpec] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const liveRuns = useLiveRuns();
+  const { runs: liveRuns } = useLiveRuns();
 
   // Mirrors the backend's per-repository exclusivity (RunService.createRun's REPOSITORY_BUSY
   // check): proactively blocking here prevents the race the reactive error would otherwise

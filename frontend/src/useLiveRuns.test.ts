@@ -37,17 +37,20 @@ describe('useLiveRuns', () => {
     vi.unstubAllGlobals();
   });
 
-  it('fetches immediately on mount and again every poll interval', async () => {
+  it('starts unloaded, then fetches immediately on mount and again every poll interval', async () => {
     let state = 'PLANNING';
     const fetchSpy = vi.fn().mockImplementation(async () =>
       new Response(JSON.stringify([runRow(state)]), { status: 200 }));
     vi.stubGlobal('fetch', fetchSpy);
 
     const { result } = renderHook(() => useLiveRuns());
+    expect(result.current.loaded).toBe(false);
+
     await flush();
 
-    expect(result.current).toHaveLength(1);
-    expect(result.current[0].state).toBe('PLANNING');
+    expect(result.current.loaded).toBe(true);
+    expect(result.current.runs).toHaveLength(1);
+    expect(result.current.runs[0].state).toBe('PLANNING');
     expect(fetchSpy).toHaveBeenCalledTimes(1);
 
     // The state changes server-side between polls -- exactly the bug this hook fixes
@@ -58,7 +61,7 @@ describe('useLiveRuns', () => {
     });
 
     expect(fetchSpy).toHaveBeenCalledTimes(2);
-    expect(result.current[0].state).toBe('AWAITING_APPROVAL');
+    expect(result.current.runs[0].state).toBe('AWAITING_APPROVAL');
   });
 
   it('keeps the last known list instead of clearing it on a transient fetch error', async () => {
@@ -73,15 +76,16 @@ describe('useLiveRuns', () => {
 
     const { result } = renderHook(() => useLiveRuns());
     await flush();
-    expect(result.current).toHaveLength(1);
+    expect(result.current.runs).toHaveLength(1);
 
     shouldFail = true;
     await act(async () => {
       await vi.advanceTimersByTimeAsync(LIVE_RUNS_POLL_MS);
     });
 
-    expect(result.current).toHaveLength(1);
-    expect(result.current[0].state).toBe('SUCCEEDED');
+    expect(result.current.loaded).toBe(true);
+    expect(result.current.runs).toHaveLength(1);
+    expect(result.current.runs[0].state).toBe('SUCCEEDED');
   });
 
   it('stops polling once the component unmounts', async () => {

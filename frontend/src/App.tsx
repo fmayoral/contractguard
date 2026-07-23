@@ -1,171 +1,74 @@
-import { useCallback, useEffect, useState } from 'react';
-import { api } from './api';
-import { isTerminal, stateTone } from './format';
-import { useAutoScrollToBottom } from './useAutoScrollToBottom';
-import { useRunEvents } from './useRunEvents';
-import { AnalysisProgress } from './components/AnalysisProgress';
-import { Badge } from './components/Badge';
-import { ChangeTable } from './components/ChangeTable';
-import { HelpModal } from './components/HelpModal';
-import { ImpactView } from './components/ImpactView';
-import { OnboardingBanner } from './components/OnboardingBanner';
-import { PlanApproval } from './components/PlanApproval';
-import { PublishPanel } from './components/PublishPanel';
-import { ReportView } from './components/ReportView';
-import { RunList } from './components/RunList';
-import { RunSetup } from './components/RunSetup';
-import { ThemeToggle } from './components/ThemeToggle';
-import { ValidationView } from './components/ValidationView';
-import type { RunDetail, RunSummary } from './types';
+import { useEffect } from 'react';
+import { BrowserRouter, NavLink, Navigate, Route, Routes } from 'react-router-dom';
+import { applyTheme, initialTheme } from './theme';
+import { DashboardPage } from './pages/DashboardPage';
+import { NewRunPage } from './pages/NewRunPage';
+import { RunDetailPage } from './pages/RunDetailPage';
+import { RunsPage } from './pages/RunsPage';
+import { SettingsPage } from './pages/SettingsPage';
 
+function NavIcon({ path }: { path: string }) {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+      <path d={path} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+const ICONS = {
+  dashboard: 'M4 13h6V4H4v9zm0 7h6v-5H4v5zm10 0h6v-9h-6v9zm0-16v5h6V4h-6z',
+  runs: 'M4 6h16M4 12h16M4 18h10',
+  newRun: 'M12 5v14M5 12h14',
+  settings:
+    'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm7.4-3a7.4 7.4 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.5 7.5 0 0 0-2-1.2L14.6 3h-4l-.4 2.7a7.5 7.5 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.4 7.4 0 0 0 0 2.4l-2 1.5 2 3.4 2.3-1a7.5 7.5 0 0 0 2 1.2l.4 2.7h4l.4-2.7a7.5 7.5 0 0 0 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2z',
+};
+
+/** Application shell: a fixed navigation rail plus the routed page area. */
 export default function App() {
-  const [runs, setRuns] = useState<RunSummary[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [run, setRun] = useState<RunDetail | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [helpOpen, setHelpOpen] = useState(false);
-
-  const refreshRuns = useCallback(() => {
-    api.listRuns().then(setRuns).catch(() => setRuns([]));
+  // The stored (or OS-preferred) theme must apply at startup, not only once the
+  // Settings page -- the only place that changes it -- has been visited.
+  useEffect(() => {
+    applyTheme(initialTheme());
   }, []);
 
-  const refreshRun = useCallback(() => {
-    if (!selectedId) return;
-    api
-      .getRun(selectedId)
-      .then((detail) => {
-        setRun(detail);
-        setLoadError(null);
-      })
-      .catch((e: unknown) => setLoadError(e instanceof Error ? e.message : String(e)));
-  }, [selectedId]);
-
-  useEffect(refreshRuns, [refreshRuns]);
-  useEffect(refreshRun, [refreshRun]);
-
-  // Every SSE event refreshes both the run detail and the history list.
-  const events = useRunEvents(selectedId, () => {
-    refreshRun();
-    refreshRuns();
-  });
-
-  useAutoScrollToBottom(selectedId, `${events.length}:${run?.updatedAt ?? ''}`);
-
-  const onCreated = (runId: string) => {
-    setSelectedId(runId);
-    refreshRuns();
-  };
-
   return (
-    <div className="layout">
-      <aside className="sidebar">
-        <div className="sidebar-header">
-          <h1>ContractGuard AI</h1>
-          <div className="sidebar-header-actions">
-            <button type="button" className="secondary small" onClick={() => setHelpOpen(true)}>
-              Help
-            </button>
-            <ThemeToggle />
+    <BrowserRouter>
+      <div className="app-shell">
+        <nav className="nav-rail" aria-label="Primary">
+          <div className="brand">
+            <span className="brand-mark" aria-hidden="true">
+              ⛨
+            </span>
+            <span className="brand-name">ContractGuard</span>
           </div>
-        </div>
-        <OnboardingBanner />
-        <RunSetup onCreated={onCreated} />
-        {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
-        <section className="card">
-          <h2>Run history</h2>
-          <RunList runs={runs} selectedId={selectedId} onSelect={setSelectedId} />
-        </section>
-      </aside>
-
-      <main className="content">
-        {!run && (
-          <section className="card">
-            <p className="hint">
-              {loadError ?? 'Select or start a run to see its analysis, plan and remediation.'}
-            </p>
-          </section>
-        )}
-        {run && (
-          <>
-            <header className="run-header">
-              <div>
-                <h2>{run.name}</h2>
-                <p className="muted">
-                  {run.repositoryId} · {run.oldSpecName ?? '…'} → {run.newSpecName ?? '…'} · trace{' '}
-                  <code>{run.traceId.slice(0, 8)}</code>
-                </p>
-              </div>
-              <Badge tone={stateTone(run.state)}>{run.state}</Badge>
-            </header>
-
-            <AnalysisProgress state={run.state} since={run.createdAt} until={run.updatedAt} events={events} />
-
-            {run.failure && (
-              <section className="card failure-card">
-                <h3>Run failed: {run.failure.category}</h3>
-                <p>{run.failure.message}</p>
-                <p>
-                  Repository mutated: <strong>{run.failure.mutationOccurred ? 'yes' : 'no'}</strong>
-                </p>
-                <p className="muted">{run.failure.remediation}</p>
-              </section>
-            )}
-
-            <section className="card">
-              <h3>Contract changes</h3>
-              <ChangeTable changes={run.changes} />
-            </section>
-
-            <section className="card">
-              <h3>Consumer impact</h3>
-              <ImpactView assessments={run.assessments} evidence={run.evidence} />
-            </section>
-
-            <section className="card">
-              <h3>Migration plan &amp; approval</h3>
-              <PlanApproval
-                runId={run.id}
-                state={run.state}
-                plan={run.plan}
-                approval={run.approval}
-                onChanged={() => {
-                  refreshRun();
-                  refreshRuns();
-                }}
-              />
-            </section>
-
-            <section className="card">
-              <h3>Remediation &amp; validation</h3>
-              <ValidationView
-                originalBranch={run.originalBranch}
-                workingBranch={run.workingBranch}
-                patches={run.patches}
-                validations={run.validations}
-              />
-            </section>
-
-            <section className="card">
-              <h3>Publish</h3>
-              <PublishPanel
-                runId={run.id}
-                state={run.state}
-                remoteRepository={run.remoteRepository}
-                pullRequestUrl={run.pullRequestUrl}
-                onChanged={() => {
-                  refreshRun();
-                  refreshRuns();
-                }}
-              />
-            </section>
-
-            <section className="card">
-              <h3>Report</h3>
-              <ReportView runId={run.id} terminal={isTerminal(run.state)} />
-            </section>
-          </>
-        )}
-      </main>
-    </div>
+          <NavLink to="/" end>
+            <NavIcon path={ICONS.dashboard} />
+            Dashboard
+          </NavLink>
+          <NavLink to="/runs">
+            <NavIcon path={ICONS.runs} />
+            Runs
+          </NavLink>
+          <NavLink to="/new">
+            <NavIcon path={ICONS.newRun} />
+            New run
+          </NavLink>
+          <NavLink to="/settings">
+            <NavIcon path={ICONS.settings} />
+            Settings
+          </NavLink>
+        </nav>
+        <main className="app-content">
+          <Routes>
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/runs" element={<RunsPage />} />
+            <Route path="/runs/:runId" element={<RunDetailPage />} />
+            <Route path="/new" element={<NewRunPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </main>
+      </div>
+    </BrowserRouter>
   );
 }

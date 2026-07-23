@@ -27,9 +27,9 @@ export function HelpModal({ onClose }: HelpModalProps) {
         <section className="modal-section">
           <h3>Sources vs. runs</h3>
           <p>
-            <strong>Manage sources</strong> registers where repositories and specifications come
-            from. <strong>New analysis run</strong> only picks among what is already registered —
-            it never registers anything itself.
+            <strong>Settings</strong> registers where repositories and specifications come from.{' '}
+            <strong>New run</strong> only picks among what is already registered — it never
+            registers anything itself.
           </p>
         </section>
 
@@ -47,7 +47,7 @@ export function HelpModal({ onClose }: HelpModalProps) {
           <h3>Specification kinds</h3>
           <p>
             A specification can be <strong>local</strong> (bundled with the workspace),{' '}
-            <strong>uploaded</strong> (a file you dropped in through Manage sources), or come{' '}
+            <strong>uploaded</strong> (a file you dropped in through Settings), or come{' '}
             <strong>from a spec repository</strong> you registered — each shows up in its own group
             in the specification pickers.
           </p>

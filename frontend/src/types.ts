@@ -163,3 +163,32 @@ export interface RemoteRepositorySummary {
   defaultBranch: string;
   registeredAt: string;
 }
+
+// Mirrors StatisticsDtos: aggregates over the whole run history for the dashboard.
+
+export interface DailyCount {
+  day: string;
+  count: number;
+}
+
+export interface RemediationStats {
+  validatedRuns: number;
+  firstPassRuns: number;
+  repairAttempts: number;
+  repairedRuns: number;
+  averageValidationMillis: number;
+  linesAdded: number;
+  linesRemoved: number;
+  filesTouched: number;
+}
+
+export interface Statistics {
+  totalRuns: number;
+  activeRuns: number;
+  runsByState: Record<string, number>;
+  runsPerDay: DailyCount[];
+  totalChanges: number;
+  changesByType: Record<string, number>;
+  changesByClassification: Record<string, number>;
+  remediation: RemediationStats;
+}

@@ -9,8 +9,9 @@ import { RunList } from './RunList';
 import { DiffView } from './DiffView';
 import { ThemeToggle } from './ThemeToggle';
 import { PublishPanel } from './PublishPanel';
+import { MemoryRouter } from 'react-router-dom';
 import { HelpModal } from './HelpModal';
-import { ManageSourcesModal } from './ManageSourcesModal';
+import { SettingsPage } from '../pages/SettingsPage';
 import { OnboardingBanner } from './OnboardingBanner';
 import { RegisterRemoteRepository } from './RegisterRemoteRepository';
 import { RegisterSpecSource } from './RegisterSpecSource';
@@ -22,7 +23,11 @@ function mockRoutedFetch(handler: (url: string, init?: RequestInit) => { status?
   const spy = vi.fn(async (url: string, init?: RequestInit) => {
     const result = handler(url, init);
     if (!result) throw new Error(`unexpected fetch: ${url}`);
-    const body = typeof result.body === 'string' ? result.body : JSON.stringify(result.body);
+    // A 204 must have a null body -- the Response constructor throws otherwise, matching the
+    // real fetch spec that DELETE endpoints (204 No Content) rely on.
+    const body = result.status === 204
+      ? null
+      : typeof result.body === 'string' ? result.body : JSON.stringify(result.body);
     return new Response(body, { status: result.status ?? 200, headers: { 'Content-Type': 'application/json' } });
   });
   vi.stubGlobal('fetch', spy);
@@ -669,8 +674,8 @@ describe('UploadSpecification', () => {
   });
 });
 
-describe('ManageSourcesModal', () => {
-  const options: SetupOptions = {
+describe('SettingsPage', () => {
+  const setupBody: SetupOptions = {
     repositories: ['customer-consumer'],
     remoteRepositories: [
       { repositoryId: 'acme-widgets', owner: 'acme', name: 'widgets', defaultBranch: 'main', registeredAt: '2026-07-21T10:00:00Z' },
@@ -683,75 +688,103 @@ describe('ManageSourcesModal', () => {
     ],
   };
 
-  it('removes a registered repository after confirmation and notifies the parent', async () => {
-    const user = userEvent.setup();
-    const spy = mockJsonFetch(204, '');
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
-    const onChanged = vi.fn();
+  function mockSettingsFetch() {
+    return mockRoutedFetch((url, init) => {
+      if (init?.method === 'DELETE') return { status: 204, body: '' };
+      if (url === '/api/setup') return { body: setupBody };
+      return null;
+    });
+  }
 
-    render(<ManageSourcesModal options={options} onClose={vi.fn()} onChanged={onChanged} />);
+  function renderSettings() {
+    return render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    );
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('removes a registered repository after confirmation and refreshes', async () => {
+    const user = userEvent.setup();
+    const spy = mockSettingsFetch();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    renderSettings();
     // Both the remote-repository and spec-source lists render a "Remove" button; the
     // remote-repository one is first (Consumer repositories section comes before
     // Specification repositories).
-    await user.click(screen.getAllByRole('button', { name: 'Remove' })[0]);
+    await user.click((await screen.findAllByRole('button', { name: 'Remove' }))[0]);
 
     expect(spy).toHaveBeenCalledWith('/api/repositories/remote/acme-widgets', expect.objectContaining({ method: 'DELETE' }));
-    expect(onChanged).toHaveBeenCalled();
+    // A successful removal refreshes the setup listing.
+    await waitFor(() =>
+      expect(spy.mock.calls.filter(([url]) => url === '/api/setup').length).toBeGreaterThan(1),
+    );
   });
 
   it('does nothing when the removal confirmation is declined', async () => {
     const user = userEvent.setup();
-    const spy = mockJsonFetch(204, '');
+    const spy = mockSettingsFetch();
     vi.spyOn(window, 'confirm').mockReturnValue(false);
-    const onChanged = vi.fn();
 
-    render(<ManageSourcesModal options={options} onClose={vi.fn()} onChanged={onChanged} />);
-    await user.click(screen.getAllByRole('button', { name: 'Remove' })[0]);
+    renderSettings();
+    await user.click((await screen.findAllByRole('button', { name: 'Remove' }))[0]);
 
-    expect(spy).not.toHaveBeenCalled();
-    expect(onChanged).not.toHaveBeenCalled();
+    expect(spy.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
   });
 
   it('removes a spec source and an uploaded specification after confirmation', async () => {
     const user = userEvent.setup();
-    const spy = mockJsonFetch(204, '');
+    const spy = mockSettingsFetch();
     vi.spyOn(window, 'confirm').mockReturnValue(true);
-    const onChanged = vi.fn();
 
-    render(<ManageSourcesModal options={options} onClose={vi.fn()} onChanged={onChanged} />);
+    renderSettings();
 
-    await user.click(screen.getAllByRole('button', { name: 'Remove' })[1]);
+    await user.click((await screen.findAllByRole('button', { name: 'Remove' }))[1]);
     expect(spy).toHaveBeenCalledWith('/api/spec-sources/openapi-specs', expect.objectContaining({ method: 'DELETE' }));
 
-    await user.click(screen.getAllByRole('button', { name: 'Remove' })[2]);
+    await user.click((await screen.findAllByRole('button', { name: 'Remove' }))[2]);
     expect(spy).toHaveBeenCalledWith('/api/specs/mine.yaml', expect.objectContaining({ method: 'DELETE' }));
-
-    expect(onChanged).toHaveBeenCalledTimes(2);
   });
 
-  it('surfaces the error and does not notify the parent when removal fails', async () => {
+  it('surfaces the error when removal fails', async () => {
     const user = userEvent.setup();
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{"message":"boom"}', { status: 500 })));
+    mockRoutedFetch((url, init) => {
+      if (init?.method === 'DELETE') return { status: 500, body: { message: 'boom' } };
+      if (url === '/api/setup') return { body: setupBody };
+      return null;
+    });
     vi.spyOn(window, 'confirm').mockReturnValue(true);
-    const onChanged = vi.fn();
 
-    render(<ManageSourcesModal options={options} onClose={vi.fn()} onChanged={onChanged} />);
-    await user.click(screen.getAllByRole('button', { name: 'Remove' })[0]);
+    renderSettings();
+    await user.click((await screen.findAllByRole('button', { name: 'Remove' }))[0]);
 
     expect(await screen.findByText(/Could not remove acme-widgets/)).toBeInTheDocument();
-    expect(onChanged).not.toHaveBeenCalled();
   });
 
-  it('closes on Escape and on clicking Done', async () => {
+  it('switches and persists the theme via the appearance radios', async () => {
     const user = userEvent.setup();
-    const onClose = vi.fn();
-    render(<ManageSourcesModal options={options} onClose={onClose} onChanged={vi.fn()} />);
+    mockSettingsFetch();
 
-    await user.click(screen.getByText('Done'));
-    expect(onClose).toHaveBeenCalledTimes(1);
+    renderSettings();
+    await user.click(screen.getByRole('radio', { name: 'Light' }));
 
-    await user.keyboard('{Escape}');
-    expect(onClose).toHaveBeenCalledTimes(2);
+    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(localStorage.getItem('contractguard-theme')).toBe('light');
+  });
+
+  it('opens the quick reference from the reference card', async () => {
+    const user = userEvent.setup();
+    mockSettingsFetch();
+
+    renderSettings();
+    await user.click(screen.getByRole('button', { name: 'Open quick reference' }));
+
+    expect(await screen.findByText('Quick reference')).toBeInTheDocument();
   });
 });
 
@@ -792,36 +825,20 @@ describe('HelpModal', () => {
 });
 
 describe('RunSetup', () => {
-  it('opens Manage sources without disturbing the current selection, and refreshes on change', async () => {
-    const user = userEvent.setup();
-    let uploaded = false;
-    mockRoutedFetch((url, init) => {
+  it('links to Settings for source management instead of registering inline', async () => {
+    mockRoutedFetch((url) => {
       if (url === '/api/setup') {
-        return {
-          body: {
-            repositories: ['customer-consumer'],
-            remoteRepositories: [],
-            specifications: uploaded
-              ? [{ id: 'upload:mine.yaml', label: 'mine.yaml', origin: 'uploaded', sourceId: null }]
-              : [],
-            specSources: [],
-          },
-        };
-      }
-      if (url === '/api/specs' && init?.method === 'POST') {
-        uploaded = true;
-        return { status: 201, body: { id: 'upload:mine.yaml', label: 'mine.yaml', origin: 'uploaded', sourceId: null } };
+        return { body: { repositories: [], remoteRepositories: [], specifications: [], specSources: [] } };
       }
       return null;
     });
-    render(<RunSetup onCreated={vi.fn()} />);
+    render(
+      <MemoryRouter>
+        <RunSetup onCreated={vi.fn()} />
+      </MemoryRouter>,
+    );
 
-    await user.click(await screen.findByRole('button', { name: 'Manage sources' }));
-    const file = new File(['openapi: 3.0.3'], 'mine.yaml', { type: 'application/yaml' });
-    await user.upload(await screen.findByLabelText('Upload a specification file'), file);
-
-    // The newly uploaded spec fills the still-empty "Old specification" slot on the underlying form.
-    await waitFor(() => expect(screen.getByLabelText('Old specification')).toHaveValue('upload:mine.yaml'));
+    expect(await screen.findByRole('link', { name: 'Manage sources' })).toHaveAttribute('href', '/settings');
   });
 
   it('hints when no repositories are registered yet', async () => {
@@ -831,7 +848,11 @@ describe('RunSetup', () => {
       }
       return null;
     });
-    render(<RunSetup onCreated={vi.fn()} />);
+    render(
+      <MemoryRouter>
+        <RunSetup onCreated={vi.fn()} />
+      </MemoryRouter>,
+    );
 
     expect(await screen.findByText(/No repositories available yet/)).toBeInTheDocument();
     expect(screen.getByText('Start analysis')).toBeDisabled();
@@ -857,7 +878,11 @@ describe('RunSetup', () => {
       }
       return null;
     });
-    render(<RunSetup onCreated={vi.fn()} />);
+    render(
+      <MemoryRouter>
+        <RunSetup onCreated={vi.fn()} />
+      </MemoryRouter>,
+    );
 
     await screen.findByText('Start analysis');
     const groupLabels = [...document.querySelectorAll('optgroup')].map((g) => g.label);
@@ -865,5 +890,69 @@ describe('RunSetup', () => {
     expect(groupLabels).toContain('From openapi-specs');
     expect(screen.getByRole('option', { name: 'acme-widgets' })).toBeInTheDocument();
     expect(screen.getAllByRole('option', { name: 'widgets.yaml' }).length).toBe(2);
+  });
+
+  const setupBody = {
+    repositories: ['customer-consumer'],
+    remoteRepositories: [],
+    specifications: [
+      { id: 'local:v1.yaml', label: 'v1.yaml', origin: 'local', sourceId: null },
+      { id: 'local:v2.yaml', label: 'v2.yaml', origin: 'local', sourceId: null },
+    ],
+    specSources: [],
+  };
+
+  it('blocks the form and explains why when the selected repository already has an active run', async () => {
+    mockRoutedFetch((url) => {
+      if (url === '/api/setup') return { body: setupBody };
+      if (url === '/api/runs') {
+        return {
+          body: [{
+            id: 'run-1', name: 'in-flight', state: 'PLANNING', repositoryId: 'customer-consumer',
+            createdAt: '2026-07-23T10:00:00Z', updatedAt: '2026-07-23T10:00:00Z',
+            workingBranch: null, failureCategory: null, pullRequestUrl: null, remoteRepository: false,
+          }],
+        };
+      }
+      return null;
+    });
+    render(
+      <MemoryRouter>
+        <RunSetup onCreated={vi.fn()} />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(/in-flight/)).toBeInTheDocument();
+    expect(screen.getByText('PLANNING')).toBeInTheDocument();
+    expect(screen.getByText('Start analysis')).toBeDisabled();
+    expect(screen.getByLabelText('Old specification')).toBeDisabled();
+    expect(screen.getByLabelText('New specification')).toBeDisabled();
+    // The repository picker itself must stay usable so the user can switch to a free repo.
+    expect(screen.getByLabelText('Consumer repository')).toBeEnabled();
+  });
+
+  it('does not block when the only active run is on a different repository', async () => {
+    mockRoutedFetch((url) => {
+      if (url === '/api/setup') return { body: setupBody };
+      if (url === '/api/runs') {
+        return {
+          body: [{
+            id: 'run-1', name: 'elsewhere', state: 'PLANNING', repositoryId: 'some-other-repo',
+            createdAt: '2026-07-23T10:00:00Z', updatedAt: '2026-07-23T10:00:00Z',
+            workingBranch: null, failureCategory: null, pullRequestUrl: null, remoteRepository: false,
+          }],
+        };
+      }
+      return null;
+    });
+    render(
+      <MemoryRouter>
+        <RunSetup onCreated={vi.fn()} />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText('Start analysis');
+    await waitFor(() => expect(screen.queryByText(/elsewhere/)).not.toBeInTheDocument());
+    expect(screen.getByLabelText('Old specification')).toBeEnabled();
   });
 });

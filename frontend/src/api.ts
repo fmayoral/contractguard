@@ -5,6 +5,7 @@ import type {
   RunSummary,
   SetupOptions,
   SpecOption,
+  Statistics,
 } from './types';
 
 export class ApiError extends Error {
@@ -53,6 +54,9 @@ export const api = {
   },
   listRuns(): Promise<RunSummary[]> {
     return request('/api/runs');
+  },
+  statistics(): Promise<Statistics> {
+    return request('/api/statistics');
   },
   getRun(runId: string): Promise<RunDetail> {
     return request(`/api/runs/${runId}`);

@@ -29,8 +29,8 @@ export function OnboardingBanner() {
       </div>
       <ol className="onboarding-steps">
         <li>
-          <strong>Manage sources</strong> — register a GitHub repository, register a spec repository,
-          or upload specification files.
+          <strong>Settings</strong> — register a GitHub repository, register a spec repository, or
+          upload specification files.
         </li>
         <li>
           <strong>New analysis run</strong> — pick a consumer repository and the old and new

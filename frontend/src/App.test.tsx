@@ -87,6 +87,39 @@ const awaitingApprovalRun: RunDetail = {
   validations: [],
 };
 
+const emptyStatistics = {
+  totalRuns: 0,
+  activeRuns: 0,
+  runsByState: {},
+  runsPerDay: [{ day: '2026-07-23', count: 0 }],
+  totalChanges: 0,
+  changesByType: {},
+  changesByClassification: {},
+  remediation: {
+    validatedRuns: 0,
+    firstPassRuns: 0,
+    repairAttempts: 0,
+    repairedRuns: 0,
+    averageValidationMillis: 0,
+    linesAdded: 0,
+    linesRemoved: 0,
+    filesTouched: 0,
+  },
+};
+
+const runListRow = {
+  id: 'run-1',
+  name: 'demo',
+  state: 'AWAITING_APPROVAL',
+  repositoryId: 'customer-consumer',
+  createdAt: '2026-07-18T10:00:00Z',
+  updatedAt: '2026-07-18T10:01:00Z',
+  workingBranch: null,
+  failureCategory: null,
+  pullRequestUrl: null,
+  remoteRepository: false,
+};
+
 type FetchHandler = (url: string, init?: RequestInit) => { status?: number; body: unknown } | null;
 
 function installFetch(handler: FetchHandler) {
@@ -105,6 +138,11 @@ function installFetch(handler: FetchHandler) {
   return spy;
 }
 
+/** BrowserRouter reads the real jsdom URL, which persists across tests — pin it per test. */
+function startAt(path: string) {
+  window.history.replaceState({}, '', path);
+}
+
 beforeEach(() => {
   StubEventSource.instances.length = 0;
 });
@@ -114,9 +152,8 @@ afterEach(() => {
 });
 
 describe('App critical journey', () => {
-  it('creates a run from the setup form and shows its dashboard', async () => {
+  it('creates a run from the New run page and lands on its detail', async () => {
     const user = userEvent.setup();
-    let created = false;
     installFetch((url, init) => {
       if (url === '/api/setup') {
         return {
@@ -132,11 +169,7 @@ describe('App critical journey', () => {
         };
       }
       if (url === '/api/runs' && init?.method === 'POST') {
-        created = true;
         return { status: 201, body: { id: 'run-1', name: 'demo', state: 'CREATED' } };
-      }
-      if (url === '/api/runs') {
-        return { body: created ? [{ id: 'run-1', name: 'demo', state: 'AWAITING_APPROVAL' }] : [] };
       }
       if (url === '/api/runs/run-1') {
         return { body: awaitingApprovalRun };
@@ -144,6 +177,7 @@ describe('App critical journey', () => {
       return null;
     });
 
+    startAt('/new');
     render(<App />);
 
     await screen.findByText('Start analysis');
@@ -174,11 +208,8 @@ describe('App critical journey', () => {
     const user = userEvent.setup();
     let approved = false;
     const spy = installFetch((url, init) => {
-      if (url === '/api/setup') {
-        return { body: { repositories: [], specifications: [], remoteRepositories: [], specSources: [] } };
-      }
       if (url === '/api/runs' && !init?.method) {
-        return { body: [{ id: 'run-1', name: 'demo', state: 'AWAITING_APPROVAL' }] };
+        return { body: [runListRow] };
       }
       if (url === '/api/runs/run-1/approval' && init?.method === 'POST') {
         approved = true;
@@ -204,6 +235,7 @@ describe('App critical journey', () => {
       return null;
     });
 
+    startAt('/runs');
     render(<App />);
     await user.click(await screen.findByText('demo'));
     await user.click(await screen.findByText('Approve plan'));
@@ -225,9 +257,8 @@ describe('App critical journey', () => {
     const user = userEvent.setup();
     let detailFetches = 0;
     installFetch((url, init) => {
-      if (url === '/api/setup') return { body: { repositories: [], specifications: [], remoteRepositories: [], specSources: [] } };
       if (url === '/api/runs' && !init?.method) {
-        return { body: [{ id: 'run-1', name: 'demo', state: 'DIFFING' }] };
+        return { body: [{ ...runListRow, state: 'DIFFING' }] };
       }
       if (url === '/api/runs/run-1') {
         detailFetches += 1;
@@ -236,6 +267,7 @@ describe('App critical journey', () => {
       return null;
     });
 
+    startAt('/runs');
     render(<App />);
     await user.click(await screen.findByText('demo'));
     await waitFor(() => expect(StubEventSource.instances.length).toBe(1));
@@ -266,9 +298,8 @@ describe('App critical journey', () => {
   it('shows the failure card with mutation state for failed runs', async () => {
     const user = userEvent.setup();
     installFetch((url, init) => {
-      if (url === '/api/setup') return { body: { repositories: [], specifications: [], remoteRepositories: [], specSources: [] } };
       if (url === '/api/runs' && !init?.method) {
-        return { body: [{ id: 'run-1', name: 'demo', state: 'FAILED' }] };
+        return { body: [{ ...runListRow, state: 'FAILED' }] };
       }
       if (url === '/api/runs/run-1') {
         return {
@@ -288,6 +319,7 @@ describe('App critical journey', () => {
       return null;
     });
 
+    startAt('/runs');
     render(<App />);
     await user.click(await screen.findByText('demo'));
 
@@ -295,5 +327,80 @@ describe('App critical journey', () => {
     expect(screen.getByText(/repository has uncommitted changes/)).toBeInTheDocument();
     expect(screen.getByText('no')).toBeInTheDocument();
     expect(screen.getByText(/Commit, stash or reset/)).toBeInTheDocument();
+  });
+});
+
+describe('Dashboard', () => {
+  it('renders stat tiles, charts and recent runs from the statistics endpoint', async () => {
+    installFetch((url, init) => {
+      if (url === '/api/statistics') {
+        return {
+          body: {
+            ...emptyStatistics,
+            totalRuns: 9,
+            activeRuns: 1,
+            runsByState: { SUCCEEDED: 2, FAILED: 1, DIFFING: 1 },
+            runsPerDay: [
+              { day: '2026-07-22', count: 1 },
+              { day: '2026-07-23', count: 3 },
+            ],
+            totalChanges: 6,
+            changesByType: { PROPERTY_RENAMED: 4, ENDPOINT_ADDED: 2 },
+            changesByClassification: { BREAKING: 4, NON_BREAKING: 2 },
+            remediation: {
+              validatedRuns: 2,
+              firstPassRuns: 1,
+              repairAttempts: 1,
+              repairedRuns: 1,
+              averageValidationMillis: 30000,
+              linesAdded: 12,
+              linesRemoved: 4,
+              filesTouched: 3,
+            },
+          },
+        };
+      }
+      if (url === '/api/runs' && !init?.method) {
+        return { body: [runListRow] };
+      }
+      return null;
+    });
+
+    startAt('/');
+    render(<App />);
+
+    // Tiles: totals, success rate (2 of 3 terminal), breaking changes, lines remediated.
+    expect(await screen.findByText('Total runs')).toBeInTheDocument();
+    expect(screen.getByText('9')).toBeInTheDocument();
+    expect(screen.getByText('67%')).toBeInTheDocument();
+    expect(screen.getByText('+12 −4')).toBeInTheDocument();
+
+    // Outcome donut legend carries every label and count (colour is never the only channel).
+    expect(screen.getByText('Succeeded')).toBeInTheDocument();
+    expect(screen.getByText('Failed')).toBeInTheDocument();
+
+    // Change-type bars are labelled with their counts.
+    expect(screen.getByText('property renamed')).toBeInTheDocument();
+
+    // The run is non-terminal (AWAITING_APPROVAL), so it shows in both the Active-now
+    // banner and Recent runs -- both link through to the run detail.
+    expect(screen.getByText('1 run in progress')).toBeInTheDocument();
+    const demoLinks = screen.getAllByRole('link', { name: /demo/ });
+    expect(demoLinks).toHaveLength(2);
+    demoLinks.forEach((link) => expect(link).toHaveAttribute('href', '/runs/run-1'));
+  });
+
+  it('offers a first-run call to action when no runs exist yet', async () => {
+    installFetch((url, init) => {
+      if (url === '/api/statistics') return { body: emptyStatistics };
+      if (url === '/api/runs' && !init?.method) return { body: [] };
+      return null;
+    });
+
+    startAt('/');
+    render(<App />);
+
+    expect(await screen.findByText('No runs yet')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Start your first run' })).toHaveAttribute('href', '/new');
   });
 });

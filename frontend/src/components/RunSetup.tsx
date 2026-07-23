@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api, ApiError } from '../api';
-import { ManageSourcesModal } from './ManageSourcesModal';
+import { isTerminal, stateTone } from '../format';
+import { useLiveRuns } from '../useLiveRuns';
+import { Badge } from './Badge';
 import type { SetupOptions, SpecOption } from '../types';
 
 interface RunSetupProps {
@@ -9,8 +12,8 @@ interface RunSetupProps {
 
 /**
  * A single, focused panel: pick a repository and two specs, name the run, start it. Registering
- * repositories/specs is a deliberately separate action (the "Manage sources" modal) rather than
- * inline here, so this form never grows past "make three choices and go" (FR-044).
+ * repositories/specs is a deliberately separate concern (the Settings page) rather than inline
+ * here, so this form never grows past "make three choices and go" (FR-044).
  */
 export function RunSetup({ onCreated }: RunSetupProps) {
   const [options, setOptions] = useState<SetupOptions | null>(null);
@@ -20,7 +23,15 @@ export function RunSetup({ onCreated }: RunSetupProps) {
   const [newSpec, setNewSpec] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [manageOpen, setManageOpen] = useState(false);
+  const liveRuns = useLiveRuns();
+
+  // Mirrors the backend's per-repository exclusivity (RunService.createRun's REPOSITORY_BUSY
+  // check): proactively blocking here prevents the race the reactive error would otherwise
+  // only report after the fact. Scoped to the selected repository only -- the backend allows
+  // concurrent runs on different repositories, so this must not block those too.
+  const blockingRun = repository
+    ? liveRuns.find((run) => run.repositoryId === repository && !isTerminal(run.state))
+    : undefined;
 
   const refreshOptions = () =>
     api.setup().then((setup) => {
@@ -36,10 +47,6 @@ export function RunSetup({ onCreated }: RunSetupProps) {
     refreshOptions().catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const onSourcesChanged = () => {
-    refreshOptions().catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
-  };
 
   const start = async () => {
     setBusy(true);
@@ -94,14 +101,19 @@ export function RunSetup({ onCreated }: RunSetupProps) {
     <section className="card">
       <div className="card-header-row">
         <h2>New analysis run</h2>
-        <button type="button" className="secondary small" onClick={() => setManageOpen(true)}>
+        <Link className="secondary small button-like" to="/settings">
           Manage sources
-        </button>
+        </Link>
       </div>
       <div className="form-grid">
         <label>
           Run name
-          <input value={name} placeholder="optional" onChange={(e) => setName(e.target.value)} />
+          <input
+            value={name}
+            placeholder="optional"
+            disabled={!!blockingRun}
+            onChange={(e) => setName(e.target.value)}
+          />
         </label>
         <label>
           Consumer repository
@@ -122,17 +134,26 @@ export function RunSetup({ onCreated }: RunSetupProps) {
         </label>
         <label>
           Old specification
-          <select value={oldSpec} onChange={(e) => setOldSpec(e.target.value)}>
+          <select value={oldSpec} disabled={!!blockingRun} onChange={(e) => setOldSpec(e.target.value)}>
             {specGroups}
           </select>
         </label>
         <label>
           New specification
-          <select value={newSpec} onChange={(e) => setNewSpec(e.target.value)}>
+          <select value={newSpec} disabled={!!blockingRun} onChange={(e) => setNewSpec(e.target.value)}>
             {specGroups}
           </select>
         </label>
       </div>
+
+      {blockingRun && (
+        <p className="hint busy-hint">
+          <strong>{blockingRun.name}</strong> is already running on this repository (currently{' '}
+          <Badge tone={stateTone(blockingRun.state)}>{blockingRun.state}</Badge>). Wait for it to
+          finish, or <Link to={`/runs/${blockingRun.id}`}>watch its progress</Link>. You can still
+          pick a different repository above.
+        </p>
+      )}
 
       {noRepositories && (
         <p className="hint">
@@ -147,18 +168,10 @@ export function RunSetup({ onCreated }: RunSetupProps) {
         </p>
       )}
 
-      <button disabled={busy || !repository || !oldSpec || !newSpec} onClick={start}>
+      <button disabled={busy || !repository || !oldSpec || !newSpec || !!blockingRun} onClick={start}>
         {busy ? 'Starting…' : 'Start analysis'}
       </button>
       {error && <p className="error">{error}</p>}
-
-      {manageOpen && (
-        <ManageSourcesModal
-          options={options}
-          onClose={() => setManageOpen(false)}
-          onChanged={onSourcesChanged}
-        />
-      )}
     </section>
   );
 }

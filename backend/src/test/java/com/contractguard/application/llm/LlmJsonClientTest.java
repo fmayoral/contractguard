@@ -94,6 +94,20 @@ class LlmJsonClientTest {
     }
 
     @Test
+    void trailingCommasAreTolerated() {
+        // Real models occasionally leave a trailing comma before a closing brace on long
+        // structured output (e.g. a multi-file rewrite) -- that's a syntax slip, not a genuine
+        // schema violation, so it must not cost one of the two attempts the model gets.
+        QueuedLlmGateway gateway = new QueuedLlmGateway().enqueue("{\"value\":\"trailing\",}");
+        LlmJsonClient client = new LlmJsonClient(gateway, new JacksonJsonCodec(), new NoOpObservability());
+
+        Answer answer = client.request(prompt, "{}", Answer.class, a -> List.of());
+
+        assertThat(answer.value()).isEqualTo("trailing");
+        assertThat(gateway.requests()).hasSize(1);
+    }
+
+    @Test
     void markdownFencesAreTolerated() {
         QueuedLlmGateway gateway = new QueuedLlmGateway()
                 .enqueue("```json\n{\"value\":\"fenced\"}\n```");

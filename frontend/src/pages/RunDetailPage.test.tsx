@@ -43,6 +43,10 @@ function renderRunDetail(initialEntry: { pathname: string; state?: unknown }) {
   );
 }
 
+function stubRun(detail: RunDetail) {
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response(JSON.stringify(detail), { status: 200 })));
+}
+
 describe('RunDetailPage scroll-to-section', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -90,5 +94,46 @@ describe('RunDetailPage scroll-to-section', () => {
     expect(screen.getByText('demo')).toBeInTheDocument();
 
     expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it('scrolls to the failure section for a failed run', async () => {
+    stubRun(runDetail({
+      state: 'FAILED',
+      failure: {
+        category: 'VALIDATION_FAILED',
+        message: 'Build failed after the bounded repair attempt.',
+        mutationOccurred: true,
+        artifactId: null,
+        remediation: 'Inspect the build log and start a fresh run once fixed.',
+      },
+    }));
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+
+    renderRunDetail({ pathname: '/runs/run-1', state: { scrollTo: 'failure' } });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.getByText('demo')).toBeInTheDocument();
+
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
+    expect(document.getElementById('failure')).toHaveClass('highlight-pulse');
+  });
+
+  it('scrolls to the publish section for a succeeded remote run', async () => {
+    stubRun(runDetail({ state: 'SUCCEEDED', remoteRepository: true }));
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+
+    renderRunDetail({ pathname: '/runs/run-1', state: { scrollTo: 'publish' } });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.getByText('demo')).toBeInTheDocument();
+
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
+    expect(document.getElementById('publish')).toHaveClass('highlight-pulse');
   });
 });

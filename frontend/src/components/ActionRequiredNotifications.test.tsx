@@ -5,7 +5,7 @@ import { ActionRequiredNotifications } from './ActionRequiredNotifications';
 import { LIVE_RUNS_POLL_MS } from '../useLiveRuns';
 import type { RunSummary } from '../types';
 
-function runRow(id: string, state: string): RunSummary {
+function runRow(id: string, state: string, remoteRepository = false): RunSummary {
   return {
     id,
     name: 'demo',
@@ -16,7 +16,7 @@ function runRow(id: string, state: string): RunSummary {
     workingBranch: null,
     failureCategory: null,
     pullRequestUrl: null,
-    remoteRepository: false,
+    remoteRepository,
   };
 }
 
@@ -177,5 +177,123 @@ describe('ActionRequiredNotifications', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getByTestId('location').textContent).toMatch(/^\//);
     expect(screen.getByTestId('location').textContent).not.toContain('/runs/run-1');
+  });
+
+  it('notifies when a run succeeds on a remote repository, scrolling to the publish section', async () => {
+    let state = 'VALIDATING';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () =>
+        new Response(JSON.stringify([runRow('run-1', state, true)]), { status: 200 })),
+    );
+
+    renderAt('/');
+    await flush();
+    state = 'SUCCEEDED';
+    await poll();
+
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveClass('toast-ok');
+    expect(screen.getByText('customer-consumer succeeded — ready to publish')).toBeInTheDocument();
+
+    fireEvent.click(alert);
+    expect(screen.getByTestId('location').textContent).toContain('/runs/run-1');
+    expect(screen.getByTestId('location').textContent).toContain('publish');
+  });
+
+  it('notifies when a run succeeds on a local repository without asking for a scroll', async () => {
+    let state = 'VALIDATING';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () =>
+        new Response(JSON.stringify([runRow('run-1', state, false)]), { status: 200 })),
+    );
+
+    renderAt('/');
+    await flush();
+    state = 'SUCCEEDED';
+    await poll();
+
+    expect(screen.getByText('customer-consumer succeeded')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('alert'));
+    expect(screen.getByTestId('location').textContent).toContain('/runs/run-1::null');
+  });
+
+  it('notifies when a run fails, scrolling to the failure section', async () => {
+    let state = 'VALIDATING';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => new Response(JSON.stringify([runRow('run-1', state)]), { status: 200 })),
+    );
+
+    renderAt('/');
+    await flush();
+    state = 'FAILED';
+    await poll();
+
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveClass('toast-bad');
+    expect(screen.getByText('customer-consumer failed')).toBeInTheDocument();
+
+    fireEvent.click(alert);
+    expect(screen.getByTestId('location').textContent).toContain('failure');
+  });
+
+  it('notifies when a publish attempt fails, scrolling back to the publish section', async () => {
+    let state = 'PUBLISHING';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => new Response(JSON.stringify([runRow('run-1', state, true)]), { status: 200 })),
+    );
+
+    renderAt('/');
+    await flush();
+    state = 'PUBLISH_FAILED';
+    await poll();
+
+    expect(screen.getByText('customer-consumer publish failed')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('alert'));
+    expect(screen.getByTestId('location').textContent).toContain('publish');
+  });
+
+  it('does not notify for outcomes the user caused themselves (rejected, cancelled, published)', async () => {
+    for (const state of ['REJECTED', 'CANCELLED', 'PUBLISHED']) {
+      let current = 'PLANNING';
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockImplementation(async () => new Response(JSON.stringify([runRow('run-1', current)]), { status: 200 })),
+      );
+
+      const { unmount } = renderAt('/');
+      await flush();
+      current = state;
+      await poll();
+
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      unmount();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('replaces an existing toast rather than stacking a second one for the same run', async () => {
+    let state = 'PLANNING';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => new Response(JSON.stringify([runRow('run-1', state)]), { status: 200 })),
+    );
+
+    renderAt('/');
+    await flush();
+    state = 'AWAITING_APPROVAL';
+    await poll();
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(screen.getByText('customer-consumer is awaiting your approval')).toBeInTheDocument();
+
+    state = 'FAILED';
+    await poll();
+
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(screen.getByText('customer-consumer failed')).toBeInTheDocument();
   });
 });

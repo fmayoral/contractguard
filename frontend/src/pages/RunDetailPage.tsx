@@ -95,7 +95,7 @@ export function RunDetailPage() {
       <AnalysisProgress state={run.state} since={run.createdAt} until={run.updatedAt} events={events} />
 
       {run.failure && (
-        <section className="card failure-card">
+        <section className="card failure-card" id="failure">
           <h3>Run failed: {run.failure.category}</h3>
           <p>{run.failure.message}</p>
           <p>
@@ -136,7 +136,7 @@ export function RunDetailPage() {
         />
       </section>
 
-      <section className="card">
+      <section className="card" id="publish">
         <h3>Publish</h3>
         <PublishPanel
           runId={run.id}

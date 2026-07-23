@@ -35,12 +35,19 @@ public class ImplementationAgent {
     }
 
     /**
-     * @param failureOutput bounded, redacted build failure output; null for
-     *                      the first implementation attempt
+     * @param currentFiles              approved files' content, with any deterministic mechanical
+     *                                  fix already applied (ADR-0015) — this is the baseline the
+     *                                  model edits, not necessarily the untouched on-disk content
+     * @param failureOutput             bounded, redacted build failure output; null for
+     *                                  the first implementation attempt
+     * @param deterministicChangesMade  whether the deterministic pre-transform already changed at
+     *                                  least one approved file; when true, the model may legitimately
+     *                                  propose no further changes (the plan may already be fully
+     *                                  solved mechanically) instead of being forced to invent one
      * @return proposed new content per approved file (only changed files)
      */
     public Map<String, String> propose(String promptName, List<ApiChange> changes, MigrationPlan plan,
-            Map<String, String> currentFiles, String failureOutput) {
+            Map<String, String> currentFiles, String failureOutput, boolean deterministicChangesMade) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("changes", AgentPayloads.changes(changes));
         payload.put("planItems", planItems(plan));
@@ -53,7 +60,7 @@ public class ImplementationAgent {
                 prompts.get(promptName, "v1"),
                 codec.encode(payload),
                 FileRewrites.class,
-                r -> validate(r, currentFiles));
+                r -> validate(r, currentFiles, deterministicChangesMade));
 
         Map<String, String> result = new LinkedHashMap<>();
         for (FileRewrites.FileRewrite rewrite : rewrites.files()) {
@@ -62,12 +69,13 @@ public class ImplementationAgent {
         return result;
     }
 
-    private List<String> validate(FileRewrites rewrites, Map<String, String> currentFiles) {
+    private List<String> validate(FileRewrites rewrites, Map<String, String> currentFiles,
+            boolean deterministicChangesMade) {
         if (rewrites.files() == null) {
             return List.of("'files' array is missing");
         }
         List<String> violations = new ArrayList<>();
-        if (rewrites.files().isEmpty()) {
+        if (rewrites.files().isEmpty() && !deterministicChangesMade) {
             violations.add("no file changes proposed; the approved plan requires modifications");
         }
         for (FileRewrites.FileRewrite rewrite : rewrites.files()) {

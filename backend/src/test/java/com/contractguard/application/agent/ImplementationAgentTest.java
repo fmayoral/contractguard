@@ -34,7 +34,7 @@ class ImplementationAgentTest {
 
         Map<String, String> result = agent(gateway).propose(
                 ImplementationAgent.IMPLEMENTATION_PROMPT,
-                List.of(Fixtures.change("ch-1")), plan, files, null);
+                List.of(Fixtures.change("ch-1")), plan, files, null, false);
 
         assertThat(result).containsEntry("src/main/java/App.java", "String displayName;");
         assertThat(gateway.requests().get(0).promptName()).isEqualTo("implementation-agent");
@@ -46,7 +46,7 @@ class ImplementationAgentTest {
                 {"files":[{"path":"src/main/java/App.java","newContent":"fixed"}],"notes":"n"}""");
 
         agent(gateway).propose(ImplementationAgent.REPAIR_PROMPT,
-                List.of(Fixtures.change("ch-1")), plan, files, "COMPILATION ERROR at line 3");
+                List.of(Fixtures.change("ch-1")), plan, files, "COMPILATION ERROR at line 3", false);
 
         assertThat(gateway.requests().get(0).promptName()).isEqualTo("repair-agent");
         assertThat(gateway.requests().get(0).userPayload()).contains("COMPILATION ERROR at line 3");
@@ -60,19 +60,31 @@ class ImplementationAgentTest {
 
         assertThatThrownBy(() -> agent(gateway).propose(
                 ImplementationAgent.IMPLEMENTATION_PROMPT,
-                List.of(Fixtures.change("ch-1")), plan, files, null))
+                List.of(Fixtures.change("ch-1")), plan, files, null, false))
                 .isInstanceOf(ContractGuardException.class);
         assertThat(gateway.requests().get(1).userPayload()).contains("not in the approved set");
     }
 
     @Test
-    void emptyProposalsAreRejected() {
+    void emptyProposalsAreRejectedByDefault() {
         String empty = "{\"files\":[],\"notes\":\"nothing\"}";
         QueuedLlmGateway gateway = new QueuedLlmGateway().enqueue(empty, empty);
 
         assertThatThrownBy(() -> agent(gateway).propose(
                 ImplementationAgent.IMPLEMENTATION_PROMPT,
-                List.of(Fixtures.change("ch-1")), plan, files, null))
+                List.of(Fixtures.change("ch-1")), plan, files, null, false))
                 .isInstanceOf(ContractGuardException.class);
+    }
+
+    @Test
+    void emptyProposalsAreAcceptedWhenDeterministicChangesWereAlreadyMade() {
+        QueuedLlmGateway gateway = new QueuedLlmGateway().enqueue(
+                "{\"files\":[],\"notes\":\"nothing further needed\"}");
+
+        Map<String, String> result = agent(gateway).propose(
+                ImplementationAgent.IMPLEMENTATION_PROMPT,
+                List.of(Fixtures.change("ch-1")), plan, files, null, true);
+
+        assertThat(result).isEmpty();
     }
 }

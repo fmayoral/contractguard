@@ -332,6 +332,40 @@ class ExecutionServiceTest {
     }
 
     @Test
+    void deterministicRewritesLandEvenWhenTheModelProposesNothingFurther() {
+        // The fixture change (PROPERTY_RENAMED fullName->displayName) matches the reader's
+        // "String fullName;" content, so the mechanical pre-transform alone fully solves this
+        // plan -- the model is allowed to (and here does) come back with an empty proposal.
+        AnalysisRun run = approvedRun();
+        gateway.enqueue("{\"files\":[],\"notes\":\"nothing further needed\"}");
+        buildResults.add(build(0));
+
+        service.beginExecution(run.id());
+        service.execute(run.id());
+
+        AnalysisRun result = runs.findById(run.id()).orElseThrow();
+        assertThat(result.state()).isEqualTo(RunState.SUCCEEDED);
+        assertThat(fakePatch.appliedDiffs).hasSize(1);
+    }
+
+    @Test
+    void deterministicPreTransformIsRecordedOnTheTimeline() {
+        AnalysisRun run = approvedRun();
+        gateway.enqueue(REWRITE_RESPONSE);
+        buildResults.add(build(0));
+
+        service.beginExecution(run.id());
+        service.execute(run.id());
+
+        // Both approved files (App.java and its test) contain "fullName", so both are fixed.
+        assertThat(events.eventsAfter(run.id(), 0)).anySatisfy(event -> {
+            assertThat(event.step()).isEqualTo("patch");
+            assertThat(event.status()).isEqualTo("MECHANICAL");
+            assertThat(event.message()).contains("deterministic fixes to 2 file");
+        });
+    }
+
+    @Test
     void summariesExtractTestCountsAndCompilationFailures() {
         assertThat(ExecutionService.summarise(build(0)))
                 .contains("BUILD SUCCESS").contains("Tests run: 4");

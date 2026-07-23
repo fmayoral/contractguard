@@ -1,8 +1,9 @@
-package com.contractguard.adapter.llm;
+package com.contractguard.domain;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -133,5 +134,31 @@ class DeterministicRemediationTest {
         assertThat(result).contains("/v2/customers/{id}")
                 .contains("displayName")
                 .doesNotContain("SUSPENDED");
+    }
+
+    @Test
+    void specsForProjectsTheFactsTransformNeedsFromRealApiChanges() {
+        ApiChange rename = new ApiChange("chg-1", ChangeType.PROPERTY_RENAMED, Classification.BREAKING,
+                null, null, "Customer", "fullName", "fullName", "displayName", "REASON", "{}", null);
+
+        List<DeterministicRemediation.ChangeSpec> specs = DeterministicRemediation.specsFor(List.of(rename));
+
+        assertThat(specs).containsExactly(
+                new DeterministicRemediation.ChangeSpec("PROPERTY_RENAMED", "fullName", "displayName"));
+    }
+
+    @Test
+    void applyToChangedFilesKeepsOnlyFilesThatActuallyChanged() {
+        List<ApiChange> changes = List.of(new ApiChange("chg-1", ChangeType.PROPERTY_RENAMED,
+                Classification.BREAKING, null, null, "Customer", "fullName", "fullName", "displayName",
+                "REASON", "{}", null));
+        Map<String, String> files = Map.of(
+                "Customer.java", "private String fullName;",
+                "Unrelated.java", "class Unrelated {}");
+
+        Map<String, String> changed = DeterministicRemediation.applyToChangedFiles(files, changes);
+
+        assertThat(changed).containsOnlyKeys("Customer.java");
+        assertThat(changed.get("Customer.java")).contains("displayName");
     }
 }

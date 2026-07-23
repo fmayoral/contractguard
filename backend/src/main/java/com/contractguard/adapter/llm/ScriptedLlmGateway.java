@@ -1,6 +1,7 @@
 package com.contractguard.adapter.llm;
 
 import com.contractguard.application.port.LlmGateway;
+import com.contractguard.domain.DeterministicRemediation;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;

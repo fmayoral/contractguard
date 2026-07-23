@@ -12,6 +12,7 @@ import com.contractguard.application.port.RunRepository;
 import com.contractguard.application.port.SourceReaderPort;
 import com.contractguard.domain.AnalysisRun;
 import com.contractguard.domain.ContractGuardException;
+import com.contractguard.domain.DeterministicRemediation;
 import com.contractguard.domain.FailureCategory;
 import com.contractguard.domain.Ids;
 import com.contractguard.domain.MigrationPlan;
@@ -167,11 +168,8 @@ public class ExecutionService {
                 Map.of("runId", run.id(), "repositoryId", run.repositoryId(), "attempt", String.valueOf(attempt)))) {
             Set<String> approvedFiles = plan.approvedFiles();
             Map<String, String> currentFiles = readApprovedFiles(run, approvedFiles);
-            events.append(run.id(), "patch", "STARTED",
-                    "Attempt %d: generating file changes for %d approved file(s)"
-                            .formatted(attempt, approvedFiles.size()), "{\"kind\":\"llm\"}");
-            Map<String, String> rewrites = agent.propose(promptName, run.changes(), plan,
-                    currentFiles, failureOutput);
+            Map<String, String> rewrites = proposeRewrites(run, plan, promptName, failureOutput,
+                    attempt, approvedFiles, currentFiles);
 
             String unifiedDiff = patches.buildUnifiedDiff(run.repositoryId(), rewrites);
             // Stored before any verdict so a rejected patch remains inspectable.
@@ -195,6 +193,33 @@ public class ExecutionService {
             audit.recordRepositoryMutation(run, "Patch attempt %d applied to %s (%d file(s))"
                     .formatted(attempt, run.workingBranch(), check.changedPaths().size()));
         }
+    }
+
+    /**
+     * Solves the mechanical part of the plan (endpoint/property rename, enum value removal)
+     * deterministically for every gateway, not just mock mode (ADR-0015), then lets the model
+     * handle whatever is left — which may be nothing at all, so an empty model response is passed
+     * through to {@link ImplementationAgent#propose} as legitimate rather than a validation failure.
+     */
+    private Map<String, String> proposeRewrites(AnalysisRun run, MigrationPlan plan, String promptName,
+            String failureOutput, int attempt, Set<String> approvedFiles, Map<String, String> currentFiles) {
+        Map<String, String> deterministicRewrites =
+                DeterministicRemediation.applyToChangedFiles(currentFiles, run.changes());
+        if (!deterministicRewrites.isEmpty()) {
+            events.append(run.id(), "patch", "MECHANICAL",
+                    "Applied deterministic fixes to %d file(s) before the model"
+                            .formatted(deterministicRewrites.size()), "{\"kind\":\"tool\"}");
+        }
+        Map<String, String> agentBaseline = new LinkedHashMap<>(currentFiles);
+        agentBaseline.putAll(deterministicRewrites);
+
+        events.append(run.id(), "patch", "STARTED",
+                "Attempt %d: generating file changes for %d approved file(s)"
+                        .formatted(attempt, approvedFiles.size()), "{\"kind\":\"llm\"}");
+        Map<String, String> rewrites = new LinkedHashMap<>(deterministicRewrites);
+        rewrites.putAll(agent.propose(promptName, run.changes(), plan,
+                agentBaseline, failureOutput, !deterministicRewrites.isEmpty()));
+        return rewrites;
     }
 
     private Map<String, String> readApprovedFiles(AnalysisRun run, Set<String> approvedFiles) {

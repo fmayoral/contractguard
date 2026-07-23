@@ -1,22 +1,56 @@
-package com.contractguard.adapter.llm;
+package com.contractguard.domain;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Deterministic source transformations the scripted gateway uses to remediate
- * the supported change categories (endpoint rename, property rename, enum
- * value removal). Transformations are idempotent so a repair pass can safely
- * re-apply them.
+ * Deterministic source transformations for the mechanical change categories
+ * (endpoint rename, property rename, enum value removal) — exact text
+ * surgery, not a model guess. Transformations are idempotent, so re-applying
+ * them (a scripted mock-mode "rewrite", a real repair pass re-reading
+ * already-patched content, or both in the same run) is always safe.
+ *
+ * <p>Used two ways: {@code adapter.llm.ScriptedLlmGateway} builds mock mode's
+ * entire response from it, and {@code application.service.ExecutionService}
+ * applies it as a pre-transform ahead of every real LLM call (ADR-0015) —
+ * the mechanical part of a plan is solved for free regardless of which
+ * gateway is configured.
  */
 public final class DeterministicRemediation {
 
-    /** The change facts a transformation needs; a projection of ApiChange. */
+    /** The change facts a transformation needs; a projection of {@link ApiChange}. */
     public record ChangeSpec(String type, String oldValue, String newValue) {
     }
 
     private DeterministicRemediation() {
+    }
+
+    /** Projects the facts {@link #transform} needs from real {@link ApiChange}s (ADR-0015). */
+    public static List<ChangeSpec> specsFor(List<ApiChange> changes) {
+        return changes.stream()
+                .map(change -> new ChangeSpec(change.type().name(), change.oldValue(), change.newValue()))
+                .toList();
+    }
+
+    /**
+     * Applies every deterministic transform this class knows to each file, keeping only the
+     * files whose content actually changed — the shape both {@link ScriptedLlmGateway} and
+     * {@link ExecutionService}'s pre-transform need (ADR-0015).
+     */
+    public static Map<String, String> applyToChangedFiles(Map<String, String> currentFiles,
+            List<ApiChange> changes) {
+        List<ChangeSpec> specs = specsFor(changes);
+        Map<String, String> changed = new LinkedHashMap<>();
+        currentFiles.forEach((path, content) -> {
+            String transformed = transform(content, specs);
+            if (!transformed.equals(content)) {
+                changed.put(path, transformed);
+            }
+        });
+        return changed;
     }
 
     public static String transform(String content, List<ChangeSpec> changes) {

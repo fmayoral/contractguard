@@ -129,6 +129,16 @@ export interface RunDetail {
   plan: Plan | null;
   patches: Patch[];
   validations: Validation[];
+  // The qualified spec IDs the run was created with (e.g. "source:acme-repo:v1.yaml"), as
+  // opposed to oldSpecName/newSpecName above (display names only) -- lets "Run again" recreate
+  // the exact same run without guessing which origin a same-named file came from.
+  oldSpecFile: string | null;
+  newSpecFile: string | null;
+}
+
+export interface DiffPreview {
+  changes: Change[];
+  warnings: string[];
 }
 
 export interface RunEvent {

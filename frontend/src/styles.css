@@ -313,6 +313,12 @@ button.reject {
   margin: 0;
 }
 
+.run-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
 .progress-card {
   position: sticky;
   top: 1rem;
@@ -1348,6 +1354,24 @@ summary:focus-visible {
   margin-top: 1rem;
   border-top: 1px solid var(--border);
   padding-top: 0.75rem;
+}
+
+.diff-preview {
+  margin-top: 1rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+
+.diff-preview .card-header-row {
+  margin-bottom: 0.4rem;
+}
+
+.diff-preview .segment-bar-layout {
+  margin-top: 0.6rem;
+}
+
+.diff-preview .data-table {
+  margin-top: 0.75rem;
 }
 
 button.secondary {

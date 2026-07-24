@@ -1018,6 +1018,35 @@ describe('RunSetup', () => {
     specSources: [],
   };
 
+  it('previews the deterministic diff once both specifications are selected', async () => {
+    mockRoutedFetch((url) => {
+      if (url === '/api/setup') return { body: setupBody };
+      if (url === '/api/runs') return { body: [] };
+      if (url.startsWith('/api/spec-diff')) {
+        expect(url).toContain('oldSpec=local%3Av1.yaml');
+        expect(url).toContain('newSpec=local%3Av2.yaml');
+        return {
+          body: {
+            changes: [{
+              id: 'c1', type: 'ENDPOINT_RENAMED', classification: 'BREAKING', method: 'GET',
+              path: '/customers/{id}', schema: null, property: null, oldValue: '/customers/{id}',
+              newValue: '/v2/customers/{id}', reason: 'ENDPOINT_PATH_CHANGED', explanation: null,
+            }],
+            warnings: [],
+          },
+        };
+      }
+      return null;
+    });
+    render(
+      <MemoryRouter>
+        <RunSetup onCreated={vi.fn()} />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Preview: 1 change detected')).toBeInTheDocument();
+  });
+
   it('blocks the form and explains why when the selected repository already has an active run', async () => {
     mockRoutedFetch((url) => {
       if (url === '/api/setup') return { body: setupBody };
@@ -1029,6 +1058,9 @@ describe('RunSetup', () => {
             workingBranch: null, failureCategory: null, pullRequestUrl: null, remoteRepository: false,
           }],
         };
+      }
+      if (url.startsWith('/api/spec-diff')) {
+        return { body: { changes: [], warnings: [] } };
       }
       return null;
     });
@@ -1059,6 +1091,9 @@ describe('RunSetup', () => {
           }],
         };
       }
+      if (url.startsWith('/api/spec-diff')) {
+        return { body: { changes: [], warnings: [] } };
+      }
       return null;
     });
     render(
@@ -1070,5 +1105,55 @@ describe('RunSetup', () => {
     await screen.findByText('Start analysis');
     await waitFor(() => expect(screen.queryByText(/elsewhere/)).not.toBeInTheDocument());
     expect(screen.getByLabelText('Old specification')).toBeEnabled();
+  });
+
+  it('pre-fills from a "Run again" carry-over when the repository and specs are still valid', async () => {
+    mockRoutedFetch((url) => {
+      if (url === '/api/setup') return { body: setupBody };
+      if (url === '/api/runs') return { body: [] };
+      if (url.startsWith('/api/spec-diff')) return { body: { changes: [], warnings: [] } };
+      return null;
+    });
+    render(
+      <MemoryRouter
+        initialEntries={[{
+          pathname: '/new',
+          state: { repositoryId: 'customer-consumer', oldSpec: 'local:v2.yaml', newSpec: 'local:v1.yaml' },
+        }]}
+      >
+        <RunSetup onCreated={vi.fn()} />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText('Start analysis');
+    expect(screen.getByLabelText('Consumer repository')).toHaveValue('customer-consumer');
+    // Deliberately the reverse of the form's own newest-first default (v1 then v2), proving
+    // these came from the carried-over state and were not silently overwritten by it.
+    expect(screen.getByLabelText('Old specification')).toHaveValue('local:v2.yaml');
+    expect(screen.getByLabelText('New specification')).toHaveValue('local:v1.yaml');
+  });
+
+  it('falls back to defaults when a "Run again" carry-over is no longer valid', async () => {
+    mockRoutedFetch((url) => {
+      if (url === '/api/setup') return { body: setupBody };
+      if (url === '/api/runs') return { body: [] };
+      if (url.startsWith('/api/spec-diff')) return { body: { changes: [], warnings: [] } };
+      return null;
+    });
+    render(
+      <MemoryRouter
+        initialEntries={[{
+          pathname: '/new',
+          state: { repositoryId: 'deregistered-repo', oldSpec: 'source:gone:v1.yaml', newSpec: 'source:gone:v2.yaml' },
+        }]}
+      >
+        <RunSetup onCreated={vi.fn()} />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText('Start analysis');
+    expect(screen.getByLabelText('Consumer repository')).toHaveValue('customer-consumer');
+    expect(screen.getByLabelText('Old specification')).toHaveValue('local:v1.yaml');
+    expect(screen.getByLabelText('New specification')).toHaveValue('local:v2.yaml');
   });
 });

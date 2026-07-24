@@ -1,13 +1,22 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { isTerminal, stateTone } from '../format';
 import { useLiveRuns } from '../useLiveRuns';
 import { Badge } from './Badge';
+import { DiffPreview } from './DiffPreview';
 import type { SetupOptions, SpecOption } from '../types';
 
 interface RunSetupProps {
   onCreated: (runId: string) => void;
+}
+
+/** Carried over by a "Run again" click (RunDetailPage) via navigation state -- the same
+ * mechanism action-required toasts use to carry a scroll target. */
+interface RunAgainState {
+  repositoryId?: string;
+  oldSpec?: string;
+  newSpec?: string;
 }
 
 /**
@@ -16,11 +25,12 @@ interface RunSetupProps {
  * here, so this form never grows past "make three choices and go" (FR-044).
  */
 export function RunSetup({ onCreated }: RunSetupProps) {
+  const carriedOver = useLocation().state as RunAgainState | null;
   const [options, setOptions] = useState<SetupOptions | null>(null);
   const [name, setName] = useState('');
-  const [repository, setRepository] = useState('');
-  const [oldSpec, setOldSpec] = useState('');
-  const [newSpec, setNewSpec] = useState('');
+  const [repository, setRepository] = useState(carriedOver?.repositoryId ?? '');
+  const [oldSpec, setOldSpec] = useState(carriedOver?.oldSpec ?? '');
+  const [newSpec, setNewSpec] = useState(carriedOver?.newSpec ?? '');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const { runs: liveRuns } = useLiveRuns();
@@ -36,10 +46,23 @@ export function RunSetup({ onCreated }: RunSetupProps) {
   const refreshOptions = () =>
     api.setup().then((setup) => {
       setOptions(setup);
-      // Fills any still-empty slot with a default; never overwrites a choice already made.
-      setRepository((current) => current || setup.repositories[0] || setup.remoteRepositories[0]?.repositoryId || '');
-      setOldSpec((current) => current || setup.specifications[0]?.id || '');
-      setNewSpec((current) => current || setup.specifications[1]?.id || setup.specifications[0]?.id || '');
+      const knownRepositories = new Set([
+        ...setup.repositories,
+        ...setup.remoteRepositories.map((r) => r.repositoryId),
+      ]);
+      const knownSpecs = new Set(setup.specifications.map((s) => s.id));
+      // Fills any still-empty *or* no-longer-valid slot with a default -- the latter covers a
+      // "Run again" carrying over a spec whose source was deregistered since -- but never
+      // overwrites a choice that's still good, whether the user made it or "Run again" did.
+      setRepository((current) =>
+        current && knownRepositories.has(current)
+          ? current
+          : setup.repositories[0] || setup.remoteRepositories[0]?.repositoryId || '');
+      setOldSpec((current) => (current && knownSpecs.has(current) ? current : setup.specifications[0]?.id || ''));
+      setNewSpec((current) =>
+        current && knownSpecs.has(current)
+          ? current
+          : setup.specifications[1]?.id || setup.specifications[0]?.id || '');
       return setup;
     });
 
@@ -145,6 +168,8 @@ export function RunSetup({ onCreated }: RunSetupProps) {
           </select>
         </label>
       </div>
+
+      {oldSpec && newSpec && <DiffPreview oldSpec={oldSpec} newSpec={newSpec} />}
 
       {blockingRun && (
         <p className="hint busy-hint">

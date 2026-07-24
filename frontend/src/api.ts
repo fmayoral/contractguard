@@ -1,5 +1,6 @@
 import type {
   AuditEntry,
+  DiffPreview,
   RemoteRepositorySummary,
   RunDetail,
   RunEvent,
@@ -143,5 +144,8 @@ export const api = {
   },
   auditLog(): Promise<AuditEntry[]> {
     return request('/api/audit');
+  },
+  previewSpecDiff(oldSpec: string, newSpec: string): Promise<DiffPreview> {
+    return request(`/api/spec-diff?oldSpec=${encodeURIComponent(oldSpec)}&newSpec=${encodeURIComponent(newSpec)}`);
   },
 };

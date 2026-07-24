@@ -15,6 +15,8 @@ const awaitingApprovalRun: RunDetail = {
   updatedAt: '2026-07-18T10:01:00Z',
   oldSpecName: 'customer-api-v1.yaml',
   newSpecName: 'customer-api-v2.yaml',
+  oldSpecFile: 'local:customer-api-v1.yaml',
+  newSpecFile: 'local:customer-api-v2.yaml',
   oldSpecHash: 'aaa',
   newSpecHash: 'bbb',
   originalBranch: null,
@@ -173,6 +175,9 @@ describe('App critical journey', () => {
       }
       if (url === '/api/runs/run-1') {
         return { body: awaitingApprovalRun };
+      }
+      if (url.startsWith('/api/spec-diff')) {
+        return { body: { changes: [], warnings: [] } };
       }
       return null;
     });

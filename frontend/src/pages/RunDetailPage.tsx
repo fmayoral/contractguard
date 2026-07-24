@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useLocation, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { isTerminal, stateTone } from '../format';
 import { useAutoScrollToBottom } from '../useAutoScrollToBottom';
@@ -21,6 +21,7 @@ const HIGHLIGHT_DURATION_MS = 1600;
 export function RunDetailPage() {
   const { runId } = useParams<{ runId: string }>();
   const location = useLocation();
+  const navigate = useNavigate();
   const [run, setRun] = useState<RunDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const scrolledForKey = useRef<string | null>(null);
@@ -95,7 +96,21 @@ export function RunDetailPage() {
             <code>{run.traceId.slice(0, 8)}</code>
           </p>
         </div>
-        <Badge tone={stateTone(run.state)}>{run.state}</Badge>
+        <div className="run-header-actions">
+          {run.oldSpecFile && run.newSpecFile && (
+            <button
+              className="secondary small"
+              onClick={() =>
+                navigate('/new', {
+                  state: { repositoryId: run.repositoryId, oldSpec: run.oldSpecFile, newSpec: run.newSpecFile },
+                })
+              }
+            >
+              Run again
+            </button>
+          )}
+          <Badge tone={stateTone(run.state)}>{run.state}</Badge>
+        </div>
       </header>
 
       <AnalysisProgress state={run.state} since={run.createdAt} until={run.updatedAt} events={events} />

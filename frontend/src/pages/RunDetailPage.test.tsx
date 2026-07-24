@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { RunDetailPage } from './RunDetailPage';
 import type { RunDetail } from '../types';
 
@@ -15,6 +15,8 @@ function runDetail(overrides: Partial<RunDetail> = {}): RunDetail {
     updatedAt: '2026-07-23T10:01:00Z',
     oldSpecName: 'v1.yaml',
     newSpecName: 'v2.yaml',
+    oldSpecFile: 'local:v1.yaml',
+    newSpecFile: 'local:v2.yaml',
     oldSpecHash: 'aaa',
     newSpecHash: 'bbb',
     originalBranch: null,
@@ -45,6 +47,22 @@ function renderRunDetail(initialEntry: { pathname: string; state?: unknown }) {
 
 function stubRun(detail: RunDetail) {
   vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response(JSON.stringify(detail), { status: 200 })));
+}
+
+function NewRunProbe() {
+  const location = useLocation();
+  return <div data-testid="new-run-probe">{JSON.stringify(location.state)}</div>;
+}
+
+function renderWithNewRunRoute(initialEntry: { pathname: string }) {
+  return render(
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <Routes>
+        <Route path="/runs/:runId" element={<RunDetailPage />} />
+        <Route path="/new" element={<NewRunProbe />} />
+      </Routes>
+    </MemoryRouter>,
+  );
 }
 
 describe('RunDetailPage scroll-to-section', () => {
@@ -135,5 +153,40 @@ describe('RunDetailPage scroll-to-section', () => {
 
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
     expect(document.getElementById('publish')).toHaveClass('highlight-pulse');
+  });
+});
+
+describe('RunDetailPage Run again', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('navigates to New Run carrying the exact same repository and qualified spec IDs', async () => {
+    stubRun(runDetail({
+      repositoryId: 'acme-consumer',
+      oldSpecFile: 'source:acme-openapi:v1.yaml',
+      newSpecFile: 'source:acme-openapi:v2.yaml',
+    }));
+
+    renderWithNewRunRoute({ pathname: '/runs/run-1' });
+    await screen.findByText('demo');
+
+    fireEvent.click(screen.getByText('Run again'));
+
+    const carried = JSON.parse(screen.getByTestId('new-run-probe').textContent ?? 'null');
+    expect(carried).toEqual({
+      repositoryId: 'acme-consumer',
+      oldSpec: 'source:acme-openapi:v1.yaml',
+      newSpec: 'source:acme-openapi:v2.yaml',
+    });
+  });
+
+  it('does not show Run again when the run has no recorded spec IDs', async () => {
+    stubRun(runDetail({ oldSpecFile: null, newSpecFile: null }));
+
+    renderWithNewRunRoute({ pathname: '/runs/run-1' });
+    await screen.findByText('demo');
+
+    expect(screen.queryByText('Run again')).not.toBeInTheDocument();
   });
 });

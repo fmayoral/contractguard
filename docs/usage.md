@@ -32,8 +32,16 @@ flowchart LR
 
 ### 1 — Analyse: diff, classify, explain
 
-Pick the consumer repository and the old/new specifications on **New run**,
-then start the analysis (a local workspace checkout, or a registered GitHub
+Pick the consumer repository and the old/new specifications on **New run** —
+as soon as both specifications are selected, an instant preview shows the
+classified changes and a breaking/non-breaking breakdown, computed the same
+way a real run's own first step would, with nothing persisted and no LLM
+call. It's a fast sanity check before committing to a full run, not a
+substitute for one: consumer impact still needs the real analysis below.
+
+![New run: instant deterministic diff preview before starting analysis](screenshots/8-diff-preview.png)
+
+Then start the analysis (a local workspace checkout, or a registered GitHub
 repository — see [Remote repositories](#remote-repositories) below). The
 backend validates inputs, computes a deterministic diff of the two specs,
 classifies each change (`BREAKING` / `NON_BREAKING` / `POTENTIALLY_BREAKING` /
@@ -96,6 +104,14 @@ automatic. The PR link then shows directly in the card; a failed publish can
 be retried once the underlying issue (e.g. an expired token) is fixed.
 
 ![Publish card with the resulting draft pull request link](screenshots/6-publish-and-pull-request.png)
+
+Every run's detail page also has a **Run again** button, next to its status
+badge, that opens New Run pre-filled with the exact same repository and
+specification versions — useful after fixing whatever caused a rejection or
+a failure, without reselecting everything by hand. It carries the qualified
+specification IDs, not just their display names (which can collide across
+different origins), and falls back to the form's normal defaults if a
+carried-over ID is no longer valid (its source was deregistered since).
 
 ## CI gate (headless CLI)
 

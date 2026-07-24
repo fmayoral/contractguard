@@ -52,8 +52,11 @@ Open <http://localhost:5173>.
 ## 5. Run the analysis
 
 1. In **New analysis run**, keep `customer-consumer`,
-   `customer-api-v1.yaml` (old) and `customer-api-v2.yaml` (new); name the
-   run and press **Start analysis**.
+   `customer-api-v1.yaml` (old) and `customer-api-v2.yaml` (new) — as soon
+   as both specifications are selected, the **Preview** card shows "4
+   changes detected" with a breaking/non-breaking breakdown, computed
+   instantly with no repository and no LLM involved; press **Show details**
+   to expand the full change list. Name the run and press **Start analysis**.
 2. Watch the timeline stream: input validation, deterministic diff, the LLM
    change explainer, repository search, the investigator's bounded tool
    calls, and planning.
@@ -99,6 +102,9 @@ Open <http://localhost:5173>.
   `planHash` returns HTTP 409 `APPROVAL_MISMATCH`.
 - **Run history**: restart the backend — completed runs and their reports
   remain available.
+- **Run again**: from the finished run's detail page, press **Run again**
+  (next to the status badge) — New Run opens with `customer-consumer` and
+  both specifications already selected, ready to start immediately.
 - **Site-wide notification**: start a run, then navigate away to the
   Dashboard or Settings — the moment it reaches `AWAITING_APPROVAL` a toast
   appears wherever you are; clicking it jumps straight to the plan. The same

@@ -356,7 +356,7 @@ describe('AuditTrail', () => {
       },
     ]);
     const user = userEvent.setup();
-    render(<AuditTrail runId="run-1" />);
+    render(<AuditTrail runId="run-1" refreshSignal="v1" />);
 
     await user.click(screen.getByText('Load audit trail'));
 
@@ -371,7 +371,7 @@ describe('AuditTrail', () => {
   it('shows a hint when the run has no recorded entries', async () => {
     mockJsonFetch(200, []);
     const user = userEvent.setup();
-    render(<AuditTrail runId="run-1" />);
+    render(<AuditTrail runId="run-1" refreshSignal="v1" />);
 
     await user.click(screen.getByText('Load audit trail'));
 
@@ -381,11 +381,68 @@ describe('AuditTrail', () => {
   it('shows an error message if the audit trail fails to load', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
     const user = userEvent.setup();
-    render(<AuditTrail runId="run-1" />);
+    render(<AuditTrail runId="run-1" refreshSignal="v1" />);
 
     await user.click(screen.getByText('Load audit trail'));
 
     expect(await screen.findByText('network down')).toBeInTheDocument();
+  });
+
+  it('silently refetches once open when the refresh signal changes, and never fetches before then', async () => {
+    const fetchSpy = mockJsonFetch(200, [
+      {
+        id: 'a-1',
+        runId: 'run-1',
+        repositoryId: 'customer-consumer',
+        principal: 'operator',
+        eventType: 'STATE_TRANSITION',
+        detail: 'CREATED -> VALIDATING_INPUT',
+        planHash: null,
+        occurredAt: '2026-07-24T10:00:00Z',
+      },
+    ]);
+    const { rerender } = render(<AuditTrail runId="run-1" refreshSignal="v1" />);
+
+    // A run refreshing elsewhere on the page must not fetch audit data nobody asked to see yet.
+    rerender(<AuditTrail runId="run-1" refreshSignal="v2" />);
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByText('Load audit trail'));
+    expect(await screen.findByText('CREATED -> VALIDATING_INPUT')).toBeInTheDocument();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+    fetchSpy.mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          {
+            id: 'a-1',
+            runId: 'run-1',
+            repositoryId: 'customer-consumer',
+            principal: 'operator',
+            eventType: 'STATE_TRANSITION',
+            detail: 'CREATED -> VALIDATING_INPUT',
+            planHash: null,
+            occurredAt: '2026-07-24T10:00:00Z',
+          },
+          {
+            id: 'a-2',
+            runId: 'run-1',
+            repositoryId: 'customer-consumer',
+            principal: 'operator',
+            eventType: 'STATE_TRANSITION',
+            detail: 'VALIDATING_INPUT -> DIFFING',
+            planHash: null,
+            occurredAt: '2026-07-24T10:00:05Z',
+          },
+        ]),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    rerender(<AuditTrail runId="run-1" refreshSignal="v3" />);
+
+    expect(await screen.findByText('VALIDATING_INPUT -> DIFFING')).toBeInTheDocument();
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 });
 

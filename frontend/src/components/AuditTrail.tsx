@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { formatTimestamp, shortHash } from '../format';
 import type { AuditEntry } from '../types';
 
 interface AuditTrailProps {
   runId: string;
+  /** Changes whenever the run has moved on -- e.g. `${events.length}:${run.updatedAt}` --
+   * so an already-open trail picks up new entries without the user re-clicking Load. */
+  refreshSignal: unknown;
 }
 
 const EVENT_LABELS: Record<string, string> = {
@@ -14,8 +17,9 @@ const EVENT_LABELS: Record<string, string> = {
 };
 
 /** Read-only compliance trail (FR-025): state transitions, approval decisions and repository
- * mutations, principal-attributed. Loaded on demand, same pattern as the report view. */
-export function AuditTrail({ runId }: AuditTrailProps) {
+ * mutations, principal-attributed. Loaded on demand, same pattern as the report view; once
+ * loaded it stays live for the rest of the run instead of freezing at the first fetch. */
+export function AuditTrail({ runId, refreshSignal }: AuditTrailProps) {
   const [entries, setEntries] = useState<AuditEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,6 +31,14 @@ export function AuditTrail({ runId }: AuditTrailProps) {
       setError(e instanceof Error ? e.message : String(e));
     }
   };
+
+  // Silently refetch once the user has opted in by loading it the first time -- never before,
+  // so viewing a run never fetches audit data nobody asked to see.
+  useEffect(() => {
+    if (entries === null) return;
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshSignal]);
 
   return (
     <div>

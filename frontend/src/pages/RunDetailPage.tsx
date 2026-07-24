@@ -40,7 +40,12 @@ export function RunDetailPage() {
 
   const events = useRunEvents(runId ?? null, refreshRun);
 
-  useAutoScrollToBottom(runId ?? null, `${events.length}:${run?.updatedAt ?? ''}`);
+  // Shared "something about this run just changed" signal -- ticks on every pushed timeline
+  // event and every refetched run, so anything downstream that wants to stay live can key off
+  // one value instead of re-deriving it.
+  const activitySignal = `${events.length}:${run?.updatedAt ?? ''}`;
+
+  useAutoScrollToBottom(runId ?? null, activitySignal);
 
   // A notification click carries { scrollTo: <element id> } via navigation state -- e.g.
   // action-required toasts land the user on this exact spot instead of the page top. Guarded
@@ -155,7 +160,7 @@ export function RunDetailPage() {
 
       <section className="card">
         <h3>Audit trail</h3>
-        <AuditTrail runId={run.id} />
+        <AuditTrail runId={run.id} refreshSignal={activitySignal} />
       </section>
     </div>
   );

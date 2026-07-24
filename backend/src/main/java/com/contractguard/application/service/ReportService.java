@@ -20,6 +20,9 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 /**
  * Deterministic report generation (§9 node 11, FR-020). Reports are rendered
@@ -373,12 +376,50 @@ public class ReportService {
         if (potentially > 0) {
             limitations.add(potentially + " potentially-breaking change(s) were not remediated automatically.");
         }
+        limitations.addAll(unfulfilledPlanPromises(run));
         limitations.add("Evidence is text-search based; dynamically constructed references may be missed.");
         limitations.add("Remediation covers endpoint renames, property renames and enum removals; "
                 + "other breaking categories require manual migration.");
         limitations.add("At most one automated repair attempt is made after a failed validation.");
         limitations.add("The working branch is left uncommitted and unmerged for human review.");
         return limitations;
+    }
+
+    /**
+     * A plan item may name a file in {@code expectedFiles}/{@code testsToUpdate} that the
+     * implementation agent legitimately decides needs no change (e.g. it judges the README
+     * already accurate) — nothing blocks that, since the agent is only ever forbidden from
+     * touching files *outside* the approved set, never required to touch every one *inside*
+     * it. Flagged here, after execution, rather than never checked at all.
+     */
+    private List<String> unfulfilledPlanPromises(AnalysisRun run) {
+        boolean anyPatchApplied = run.patches().stream()
+                .anyMatch(patch -> patch.checkStatus() == PatchArtifact.CheckStatus.APPLIED);
+        if (!anyPatchApplied) {
+            return List.of();
+        }
+        Set<String> touchedFiles = touchedFiles(run);
+        List<String> promises = new ArrayList<>();
+        run.plan().ifPresent(plan -> {
+            for (PlanItem item : plan.items()) {
+                List<String> untouched = item.expectedFiles().stream()
+                        .filter(file -> !touchedFiles.contains(file))
+                        .toList();
+                if (!untouched.isEmpty()) {
+                    promises.add("Plan item %s (%s) expected changes to %s, but the applied patch left %s unmodified — review manually."
+                            .formatted(item.id(), item.objective(),
+                                    String.join(", ", item.expectedFiles()), String.join(", ", untouched)));
+                }
+            }
+        });
+        return promises;
+    }
+
+    private static Set<String> touchedFiles(AnalysisRun run) {
+        return run.patches().stream()
+                .filter(patch -> patch.checkStatus() == PatchArtifact.CheckStatus.APPLIED)
+                .flatMap(patch -> patch.changedPaths().stream())
+                .collect(Collectors.toCollection(TreeSet::new));
     }
 
     private static void row(StringBuilder md, String field, String value) {

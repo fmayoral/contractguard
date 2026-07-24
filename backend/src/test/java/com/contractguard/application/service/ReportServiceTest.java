@@ -6,6 +6,7 @@ import com.contractguard.domain.AnalysisRun;
 import com.contractguard.domain.Approval;
 import com.contractguard.domain.ContractGuardException;
 import com.contractguard.domain.Fixtures;
+import com.contractguard.domain.PlanItem;
 import com.contractguard.domain.RunState;
 import com.contractguard.testsupport.InMemoryRunEventLog;
 import com.contractguard.testsupport.InMemoryRunRepository;
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -133,6 +135,42 @@ class ReportServiceTest {
                 .contains("Repository mutated: no")
                 .contains("Commit or stash first")
                 .contains("_No plan generated._");
+    }
+
+    @Test
+    void limitationsFlagAPlanItemWhoseExpectedFileWasNeverTouched() {
+        PlanItem item = new PlanItem("it-1", "Rename DTO field",
+                List.of("src/main/java/App.java", "README.md"),
+                "Rename fullName to displayName", List.of(),
+                "maven-verify", "low", "Revert branch", List.of("ev-1"));
+        AnalysisRun run = Fixtures.newRun();
+        run.transitionTo(RunState.VALIDATING_INPUT, Fixtures.T0);
+        run.transitionTo(RunState.DIFFING, Fixtures.T0);
+        run.recordChanges(List.of(Fixtures.change("ch-1")), Fixtures.T0);
+        run.transitionTo(RunState.SEARCHING, Fixtures.T0);
+        run.recordEvidence(List.of(Fixtures.evidence("ev-1", "ch-1")), Fixtures.T0);
+        run.transitionTo(RunState.ASSESSING, Fixtures.T0);
+        run.recordAssessments(List.of(Fixtures.assessment("as-1", "ch-1", List.of("ev-1"))), Fixtures.T0);
+        run.transitionTo(RunState.PLANNING, Fixtures.T0);
+        run.attachPlan(Fixtures.plan(List.of(item)), Fixtures.T0);
+        run.transitionTo(RunState.AWAITING_APPROVAL, Fixtures.T0);
+        run.recordApproval(new Approval(run.id(), run.plan().orElseThrow().hash(),
+                Approval.Decision.APPROVED, Fixtures.T0), Fixtures.T0);
+        run.transitionTo(RunState.PREPARING_BRANCH, Fixtures.T0);
+        run.recordBranches("main", "contractguard/run-run", Fixtures.T0);
+        run.transitionTo(RunState.PATCHING, Fixtures.T0);
+        run.recordPatch(Fixtures.patch("p-1", 1), Fixtures.T0);
+        run.markPatchApplied("p-1", Fixtures.T0);
+        run.transitionTo(RunState.VALIDATING, Fixtures.T0);
+        run.recordValidation(Fixtures.validation(1, true), Fixtures.T0);
+        run.transitionTo(RunState.SUCCEEDED, Fixtures.T0);
+        runs.save(run);
+
+        String markdown = service.markdownReport(run.id());
+
+        assertThat(markdown).contains("Plan item it-1")
+                .contains("expected changes to src/main/java/App.java, README.md")
+                .contains("left README.md unmodified");
     }
 
     @Test

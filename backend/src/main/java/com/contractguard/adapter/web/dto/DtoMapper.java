@@ -3,6 +3,7 @@ package com.contractguard.adapter.web.dto;
 import com.contractguard.application.service.RunQueryService;
 import com.contractguard.application.service.SpecOption;
 import com.contractguard.domain.AnalysisRun;
+import com.contractguard.domain.ApiChange;
 import com.contractguard.domain.RemoteRepository;
 
 import java.util.ArrayList;
@@ -48,11 +49,18 @@ public final class DtoMapper {
                 run.approval().map(a -> new RunDtos.ApprovalInfo(a.decision().name(), a.planHash(),
                         a.decidedAt())).orElse(null),
                 toChanges(run), toEvidence(run), toAssessments(run),
-                toPlan(run), toPatches(run), toValidations(run));
+                toPlan(run), toPatches(run), toValidations(run),
+                run.oldSpecFile(), run.newSpecFile());
     }
 
     public static List<RunDtos.Change> toChanges(AnalysisRun run) {
-        return run.changes().stream().map(c -> new RunDtos.Change(c.id(), c.type().name(),
+        return toChanges(run.changes());
+    }
+
+    /** Shared with {@link RunDtos.Change}'s other producer, {@link SpecDiffDtos.Preview#from} --
+     * a preview has no {@code explanation} (that's the LLM's job, and no LLM runs for a preview). */
+    public static List<RunDtos.Change> toChanges(List<ApiChange> changes) {
+        return changes.stream().map(c -> new RunDtos.Change(c.id(), c.type().name(),
                 c.classification().name(), c.method(), c.path(), c.schema(), c.property(),
                 c.oldValue(), c.newValue(), c.reason(), c.explanation())).toList();
     }

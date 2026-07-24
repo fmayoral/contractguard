@@ -20,6 +20,8 @@ import com.contractguard.application.service.AuditTrailService;
 import com.contractguard.application.service.EvidenceCollector;
 import com.contractguard.application.service.RemoteRepositoryService;
 import com.contractguard.application.service.RunService;
+import com.contractguard.application.service.SpecPreviewService;
+import com.contractguard.application.service.SpecResolutionService;
 import com.contractguard.application.service.SpecSourceService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -90,12 +92,24 @@ public class PipelineConfiguration {
     }
 
     @Bean
+    public SpecResolutionService specResolutionService(SpecSourceService specSources, ContractGuardProperties properties) {
+        return new SpecResolutionService(Path.of(properties.specs().directory()),
+                StorageLayout.uploadedSpecs(properties), specSources);
+    }
+
+    @Bean
+    public SpecPreviewService specPreviewService(SpecResolutionService specResolution, OpenApiDiffPort diffPort) {
+        return new SpecPreviewService(specResolution, diffPort);
+    }
+
+    @Bean
     public RunService runService(RunRepository runs, RunEventLog events, WorkspacePolicy policy,
             RemoteRepositoryService remoteRepositories, SpecSourceService specSources,
-            RepositoryLock repositoryLock, AnalysisPipeline pipeline, ContractGuardProperties properties,
-            Executor analysisExecutor, Clock clock) {
-        return new RunService(runs, events, policy, remoteRepositories, specSources, repositoryLock, pipeline,
-                Path.of(properties.specs().directory()), StorageLayout.uploadedSpecs(properties),
-                analysisExecutor, properties.concurrency().maxActiveRuns(), clock);
+            SpecResolutionService specResolution, RepositoryLock repositoryLock, AnalysisPipeline pipeline,
+            ContractGuardProperties properties, Executor analysisExecutor, Clock clock) {
+        return new RunService(runs, events, policy, remoteRepositories, specSources, specResolution,
+                repositoryLock, pipeline, Path.of(properties.specs().directory()),
+                StorageLayout.uploadedSpecs(properties), analysisExecutor,
+                properties.concurrency().maxActiveRuns(), clock);
     }
 }

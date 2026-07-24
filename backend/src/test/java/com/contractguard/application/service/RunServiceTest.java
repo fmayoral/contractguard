@@ -48,8 +48,10 @@ class RunServiceTest {
                 new RemoteRepositoryService(registry, (RemoteGitPort) null, Clock.systemUTC());
         SpecSourceService specSources = new SpecSourceService(new InMemorySpecSourceRegistry(),
                 (RemoteGitPort) null, specsDir.resolve("spec-source-cache"), Clock.systemUTC());
-        return new RunService(runs, events, policy, remoteRepositories, specSources, lock, pipeline,
-                specsDir, specsDir.resolve("uploads"), submitted::add, maxActiveRuns, Clock.systemUTC());
+        SpecResolutionService specResolution =
+                new SpecResolutionService(specsDir, specsDir.resolve("uploads"), specSources);
+        return new RunService(runs, events, policy, remoteRepositories, specSources, specResolution, lock,
+                pipeline, specsDir, specsDir.resolve("uploads"), submitted::add, maxActiveRuns, Clock.systemUTC());
     }
 
     private static RemoteRepositoryRegistry noRemotesRegistry() {

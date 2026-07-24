@@ -10,6 +10,7 @@ import com.contractguard.application.service.RemoteRepositoryService;
 import com.contractguard.application.service.ReportService;
 import com.contractguard.application.service.RunQueryService;
 import com.contractguard.application.service.RunService;
+import com.contractguard.application.service.SpecResolutionService;
 import com.contractguard.application.service.SpecSourceService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -36,9 +37,13 @@ public class CliConfiguration {
             ReportService reports, Clock clock) {
         // A fresh, process-local lock and no queue bound: the gate runs exactly one analysis
         // and exits, so neither cross-request concurrency concern applies (FR-032).
+        Path specsDirectory = Path.of(properties.specs().directory());
+        Path uploadedSpecsDirectory = Path.of(properties.storage().directory()).resolve("uploaded-specs");
+        SpecResolutionService specResolution =
+                new SpecResolutionService(specsDirectory, uploadedSpecsDirectory, specSources);
         RunService synchronousRunService = new RunService(runs, events, policy, remoteRepositories, specSources,
-                new RepositoryLock(), pipeline, Path.of(properties.specs().directory()),
-                Path.of(properties.storage().directory()).resolve("uploaded-specs"), Runnable::run, 0, clock);
+                specResolution, new RepositoryLock(), pipeline, specsDirectory, uploadedSpecsDirectory,
+                Runnable::run, 0, clock);
         return new CliRunner(synchronousRunService, queries, reports, System.out);
     }
 

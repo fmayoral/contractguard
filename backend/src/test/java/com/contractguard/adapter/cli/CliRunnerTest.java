@@ -23,6 +23,7 @@ import com.contractguard.application.service.RemoteRepositoryService;
 import com.contractguard.application.service.ReportService;
 import com.contractguard.application.service.RunQueryService;
 import com.contractguard.application.service.RunService;
+import com.contractguard.application.service.SpecResolutionService;
 import com.contractguard.application.service.SpecSourceService;
 import com.contractguard.domain.RemoteRepository;
 import com.contractguard.testsupport.InMemoryAuditTrail;
@@ -139,8 +140,11 @@ class CliRunnerTest {
                 new RemoteRepositoryService(noRemotes, (RemoteGitPort) null, clock);
         SpecSourceService specSources = new SpecSourceService(new InMemorySpecSourceRegistry(),
                 (RemoteGitPort) null, SPECS_DIR.resolve("spec-source-cache"), clock);
+        SpecResolutionService specResolution =
+                new SpecResolutionService(SPECS_DIR, SPECS_DIR.resolve("uploads"), specSources);
         RunService runService = new RunService(runs, events, policy, remoteRepositories, specSources,
-                new RepositoryLock(), pipeline, SPECS_DIR, SPECS_DIR.resolve("uploads"), Runnable::run, 0, clock);
+                specResolution, new RepositoryLock(), pipeline, SPECS_DIR, SPECS_DIR.resolve("uploads"),
+                Runnable::run, 0, clock);
         cli = new CliRunner(runService,
                 new RunQueryService(runs, events, artifactStore),
                 new ReportService(runs, events, artifactStore, codec),

@@ -35,7 +35,11 @@ public final class RunDtos {
             String oldSpecHash, String newSpecHash, String originalBranch, String workingBranch,
             Failure failure, String pullRequestUrl, boolean remoteRepository, ApprovalInfo approval,
             List<Change> changes, List<Evidence> evidence, List<Assessment> assessments, Plan plan,
-            List<Patch> patches, List<Validation> validations) {
+            List<Patch> patches, List<Validation> validations,
+            // The qualified spec IDs the run was created with (e.g. "source:acme-repo:v1.yaml"), as
+            // opposed to oldSpecName/newSpecName above (display names only) -- lets "Run again" recreate
+            // the exact same run without guessing which origin a same-named file came from.
+            String oldSpecFile, String newSpecFile) {
     }
 
     public record RegisterRemoteRepositoryRequest(

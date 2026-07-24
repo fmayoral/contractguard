@@ -26,9 +26,10 @@ import java.util.concurrent.Executor;
 import java.util.stream.Stream;
 
 /**
- * Creates runs (FR-001) and launches the asynchronous analysis. Specification
- * files are restricted to the configured specs directory; repositories to the
- * workspace roots.
+ * Creates runs (FR-001) and launches the asynchronous analysis. Repositories are restricted to
+ * the workspace roots; qualified spec IDs are resolved via {@link SpecResolutionService}
+ * (extracted so {@link SpecPreviewService} can resolve them too, without depending on run
+ * creation).
  */
 public class RunService {
 
@@ -37,6 +38,7 @@ public class RunService {
     private final WorkspacePolicy workspacePolicy;
     private final RemoteRepositoryService remoteRepositories;
     private final SpecSourceService specSources;
+    private final SpecResolutionService specResolution;
     private final RepositoryLock repositoryLock;
     private final AnalysisPipeline pipeline;
     private final Path specsDirectory;
@@ -47,13 +49,14 @@ public class RunService {
 
     public RunService(RunRepository runs, RunEventLog events, WorkspacePolicy workspacePolicy,
             RemoteRepositoryService remoteRepositories, SpecSourceService specSources,
-            RepositoryLock repositoryLock, AnalysisPipeline pipeline, Path specsDirectory,
-            Path uploadedSpecsDirectory, Executor executor, int maxActiveRuns, Clock clock) {
+            SpecResolutionService specResolution, RepositoryLock repositoryLock, AnalysisPipeline pipeline,
+            Path specsDirectory, Path uploadedSpecsDirectory, Executor executor, int maxActiveRuns, Clock clock) {
         this.runs = runs;
         this.events = events;
         this.workspacePolicy = workspacePolicy;
         this.remoteRepositories = remoteRepositories;
         this.specSources = specSources;
+        this.specResolution = specResolution;
         this.repositoryLock = repositoryLock;
         this.pipeline = pipeline;
         this.specsDirectory = specsDirectory.toAbsolutePath().normalize();
@@ -64,8 +67,8 @@ public class RunService {
     }
 
     public AnalysisRun createRun(String name, String repositoryId, String oldSpecFile, String newSpecFile) {
-        Path oldSpec = resolveSpec(oldSpecFile);
-        Path newSpec = resolveSpec(newSpecFile);
+        Path oldSpec = specResolution.resolve(oldSpecFile);
+        Path newSpec = specResolution.resolve(newSpecFile);
         if (!repositoryLock.tryAcquire(repositoryId)) {
             throw ContractGuardException.of(FailureCategory.REPOSITORY_BUSY,
                     "repository '%s' is used by another active run".formatted(repositoryId),
@@ -239,8 +242,8 @@ public class RunService {
     /** @return true if the run was successfully re-dispatched, false if it had to be failed instead */
     private boolean resumeCreated(AnalysisRun run) {
         try {
-            Path oldSpec = resolveSpec(run.oldSpecFile());
-            Path newSpec = resolveSpec(run.newSpecFile());
+            Path oldSpec = specResolution.resolve(run.oldSpecFile());
+            Path newSpec = specResolution.resolve(run.newSpecFile());
             events.append(run.id(), "run", "RESUMED",
                     "Resuming analysis interrupted by the previous shutdown while still CREATED",
                     "{\"kind\":\"system\"}");
@@ -256,48 +259,5 @@ public class RunService {
     }
 
     public record InterruptedRunRecovery(int resumed, int failed) {
-    }
-
-    /**
-     * Resolves a qualified spec ID ({@code local:name}, {@code upload:name}, {@code source:sourceId:name})
-     * to a file. A bare name with no recognised prefix is treated as {@code local:} — the exact behaviour
-     * this method had before spec sources and uploads existed, so the headless CLI/CI gate (FR-026, which
-     * always passes bare file names) and every already-persisted run keep working unchanged (ADR-0012).
-     */
-    private Path resolveSpec(String specId) {
-        if (specId == null || specId.isBlank()) {
-            throw ContractGuardException.of(FailureCategory.INVALID_OPENAPI,
-                    "invalid specification file name: " + specId,
-                    "Choose a file from the specification listing.");
-        }
-        if (specId.startsWith("source:")) {
-            String[] parts = specId.substring("source:".length()).split(":", 2);
-            if (parts.length != 2) {
-                throw ContractGuardException.of(FailureCategory.INVALID_OPENAPI,
-                        "malformed spec source reference: " + specId,
-                        "Choose a file from the specification listing.");
-            }
-            return specSources.resolve(parts[0], parts[1]);
-        }
-        if (specId.startsWith("upload:")) {
-            return resolveInDirectory(uploadedSpecsDirectory, specId.substring("upload:".length()));
-        }
-        String fileName = specId.startsWith("local:") ? specId.substring("local:".length()) : specId;
-        return resolveInDirectory(specsDirectory, fileName);
-    }
-
-    private static Path resolveInDirectory(Path directory, String fileName) {
-        if (fileName.isBlank() || fileName.contains("/") || fileName.contains("\\") || fileName.contains("..")) {
-            throw ContractGuardException.of(FailureCategory.INVALID_OPENAPI,
-                    "invalid specification file name: " + fileName,
-                    "Choose a file from the specification listing.");
-        }
-        Path resolved = directory.resolve(fileName).normalize();
-        if (!resolved.startsWith(directory) || !Files.isRegularFile(resolved)) {
-            throw ContractGuardException.of(FailureCategory.INVALID_OPENAPI,
-                    "specification file not found: " + fileName,
-                    "Choose a file from the specification listing.");
-        }
-        return resolved;
     }
 }

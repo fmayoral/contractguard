@@ -32,6 +32,7 @@ public class RemoteGitCliAdapter implements RemoteGitPort {
     private static final int MAX_OUTPUT = 200_000;
     private static final String TOKEN_ENV_VAR = "CONTRACTGUARD_GIT_TOKEN";
     private static final String USERNAME = "x-access-token";
+    private static final String HTTPS_PREFIX = "https://";
 
     private final Path cacheRoot;
     private final ProcessRunner processRunner;
@@ -77,7 +78,9 @@ public class RemoteGitCliAdapter implements RemoteGitPort {
             for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
                 // Git marks loose object files read-only; on Windows (unlike POSIX, where a
                 // writable parent directory is enough) that attribute blocks deletion outright.
-                path.toFile().setWritable(true);
+                if (!path.toFile().setWritable(true)) {
+                    log.debug("could not mark {} writable before deleting; deletion may fail below", path);
+                }
                 Files.deleteIfExists(path);
             }
         } catch (IOException e) {
@@ -101,10 +104,10 @@ public class RemoteGitCliAdapter implements RemoteGitPort {
      * {@link RemoteRepository#forGitHub}), not this adapter's.
      */
     private static String authenticatedUrl(String cloneUrl, String credential) {
-        if (!cloneUrl.startsWith("https://") || credential == null || credential.isBlank()) {
+        if (!cloneUrl.startsWith(HTTPS_PREFIX) || credential == null || credential.isBlank()) {
             return cloneUrl;
         }
-        return "https://" + USERNAME + "@" + cloneUrl.substring("https://".length());
+        return HTTPS_PREFIX + USERNAME + "@" + cloneUrl.substring(HTTPS_PREFIX.length());
     }
 
     private void run(Path workingDirectory, String credential, String... command) {
@@ -132,12 +135,22 @@ public class RemoteGitCliAdapter implements RemoteGitPort {
         return output.strip();
     }
 
-    /** Installed lazily on first use so unrelated app startups never touch the filesystem. */
+    /**
+     * Installed lazily on first use so unrelated app startups never touch the filesystem.
+     * Double-checked locking: concurrent runs on different repositories can both reach here
+     * before the field is set, so the check-and-set itself (not just the field's visibility)
+     * needs to be atomic, or two threads could install the script concurrently.
+     */
     private Path askpassScript() {
         Path script = askpassScript;
         if (script == null) {
-            script = installAskpassScript(cacheRoot);
-            askpassScript = script;
+            synchronized (this) {
+                script = askpassScript;
+                if (script == null) {
+                    script = installAskpassScript(cacheRoot);
+                    askpassScript = script;
+                }
+            }
         }
         return script;
     }
@@ -151,16 +164,20 @@ public class RemoteGitCliAdapter implements RemoteGitPort {
             // substitute the platform line separator instead.
             String contents = "#!/bin/sh\nprintf '%s' \"$" + TOKEN_ENV_VAR + "\"\n";
             Files.writeString(script, contents);
-            try {
-                Files.setPosixFilePermissions(script,
-                        java.nio.file.attribute.PosixFilePermissions.fromString("rwx------"));
-            } catch (UnsupportedOperationException ignored) {
-                // Non-POSIX filesystem (e.g. Windows dev checkout); git for Windows can still
-                // run the script via its bundled sh without the executable bit.
-            }
+            restrictToOwner(script);
             return script;
         } catch (IOException e) {
             throw new UncheckedIOException("cannot install git askpass helper", e);
+        }
+    }
+
+    private static void restrictToOwner(Path script) throws IOException {
+        try {
+            Files.setPosixFilePermissions(script,
+                    java.nio.file.attribute.PosixFilePermissions.fromString("rwx------"));
+        } catch (UnsupportedOperationException ignored) {
+            // Non-POSIX filesystem (e.g. Windows dev checkout); git for Windows can still
+            // run the script via its bundled sh without the executable bit.
         }
     }
 }

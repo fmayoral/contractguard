@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
@@ -126,7 +127,8 @@ class RemoteGitCliAdapterTest {
 
     @Test
     void deleteLocalCloneIsANoOpWhenNothingWasEverCloned() {
-        adapter.deleteLocalClone("never-cloned");
+        assertThatCode(() -> adapter.deleteLocalClone("never-cloned")).doesNotThrowAnyException();
+        assertThat(cacheDir.resolve("never-cloned")).doesNotExist();
     }
 
     @Test

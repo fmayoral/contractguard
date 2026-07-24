@@ -139,6 +139,80 @@ docker compose down -v       # stop and wipe all persisted state
   (`127.0.0.1` port bindings). It is not a production hardening pass; see
   the roadmap's FR-024 (authentication) for what's still open there.
 
+## 7. Code quality: SonarQube (optional)
+
+An opt-in, containerised SonarQube instance for both the backend (Java) and
+frontend (TypeScript/React) — excluded from the default stack (§6 above) so a
+plain `docker compose up` stays fast; start it explicitly:
+
+```bash
+docker compose --profile quality up -d sonarqube
+```
+
+Wait for it to report healthy (first start takes 1-2 minutes; embedded H2
+storage — fine for this single-user, local dev-tool role, the same trade-off
+already made for the app's own database, §6):
+
+```bash
+docker compose ps sonarqube
+```
+
+Then open <http://localhost:9000>, sign in with the default `admin`/`admin`
+(you'll be prompted to change it), and generate a token: **My Account →
+Security → Generate Token**. Export it for the commands below:
+
+```bash
+export SONAR_TOKEN=squ_...
+```
+
+**Backend** — runs natively via Maven, so `localhost:9000` (the pom's
+default `sonar.host.url`) is correct as-is; reuses the JaCoCo report the
+existing `verify` build already produces, nothing new to install. Use
+`sonar.login`, not `sonar.token` — this SonarQube release's bundled scanner
+engine only recognises the former for token auth:
+
+```bash
+cd backend
+./mvnw verify sonar:sonar -Dsonar.login=$SONAR_TOKEN
+```
+
+**Frontend** — via the official `sonar-scanner-cli` Docker image, reading
+`frontend/sonar-project.properties`; no new npm dependency. The scanner runs
+*inside* its own container, so `localhost` there means the container, not
+your machine — point it at the host with `host.docker.internal` instead
+(`--add-host` makes that resolve on Linux too, not just Docker Desktop). On
+Windows Git Bash specifically, prefix with `MSYS_NO_PATHCONV=1` — otherwise
+Git Bash silently rewrites the container-side `/usr/src` path too, and the
+scanner analyses an empty directory instead of your project:
+
+```bash
+cd frontend
+npm run test:coverage   # produces coverage/lcov.info
+MSYS_NO_PATHCONV=1 docker run --rm \
+  --add-host=host.docker.internal:host-gateway \
+  -e SONAR_HOST_URL=http://host.docker.internal:9000 \
+  -e SONAR_TOKEN \
+  -v "$(pwd):/usr/src" \
+  sonarsource/sonar-scanner-cli
+```
+
+Some type-aware TypeScript rules may log a `--moduleResolution` error and
+get skipped — this project's `tsconfig.json` uses `"bundler"`, an option
+newer than the TypeScript version bundled in some SonarQube analyzer
+releases. ESLint-based rules, CSS, secrets scanning and coverage are
+unaffected; expect this gap to close as the `lts-community` image updates.
+
+Both commands set `sonar.qualitygate.wait=true`, so they fail (non-zero exit)
+if the analysis doesn't pass SonarQube's built-in **Sonar way** quality gate
+— zero new bugs/vulnerabilities, security hotspots reviewed, ≥80% coverage
+and <3% duplication on new code — rather than only ever showing up as a
+dashboard nobody checks. Each language gets its own project
+(`contractguard-backend`, `contractguard-frontend`) since they're analysed by
+different scanners; this is unrelated to, and doesn't replace, the existing
+Checkstyle/SpotBugs/JaCoCo checks already enforced on every `mvn verify` —
+SonarQube adds a broader, cross-cutting rule set and a trend view across
+runs, not a substitute for the fast, always-on local checks.
+
 ## Troubleshooting
 
 | Symptom | Fix |
@@ -149,3 +223,9 @@ docker compose down -v       # stop and wipe all persisted state
 | Want a completely clean slate | `docker compose down -v` then `docker compose up --build` |
 | `CREDENTIAL_KEY_NOT_CONFIGURED` registering a remote repository | Set `CONTRACTGUARD_CREDENTIAL_KEY` in `.env` (see §3 above) and recreate the backend container |
 | No traces showing up in Jaeger | Run at least one analysis first (span export only happens once something runs); confirm `docker compose ps` shows `jaeger` up, and that `.env` hasn't overridden `MANAGEMENT_OTLP_TRACING_ENDPOINT` to somewhere else |
+| `sonarqube` container exits or never becomes healthy | `docker compose logs sonarqube` — almost always the embedded Elasticsearch's bootstrap checks; `SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true` is already set for this dev-only setup, but a very low `vm.max_map_count` on the Docker host can still starve it. On Windows/Mac (Docker Desktop/WSL2): `wsl -d docker-desktop sysctl -w vm.max_map_count=262144`; on Linux: `sudo sysctl -w vm.max_map_count=262144` |
+| `mvn sonar:sonar` fails with a connection error | Confirm `docker compose ps sonarqube` shows healthy and `http://localhost:9000` loads in a browser first — the analysis step only ever uploads results to an already-running server, it never starts one |
+| `mvn sonar:sonar` fails with "Not authorized... provide a user token in sonar.login" | Use `-Dsonar.login=$SONAR_TOKEN`, not `-Dsonar.token` (§7) — this SonarQube release's scanner engine only recognises the older property name |
+| Frontend scan can't reach SonarQube | The scanner runs inside its own container, so `localhost` there means the container itself — use `SONAR_HOST_URL=http://host.docker.internal:9000` as shown in §7, not `localhost:9000` |
+| Frontend scan analyses an empty project (0 files) on Windows | Git Bash rewrote the container-side `/usr/src` mount path — prefix the `docker run` with `MSYS_NO_PATHCONV=1` as shown in §7 |
+| `sonar:sonar`/the frontend scan fails on the quality gate | Working as intended (`sonar.qualitygate.wait=true`, §7) — open the project in the SonarQube UI to see which new-code condition failed (coverage, bugs, hotspots, duplication) |

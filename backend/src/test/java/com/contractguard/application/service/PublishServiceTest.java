@@ -1,5 +1,6 @@
 package com.contractguard.application.service;
 
+import com.contractguard.adapter.notification.NoOpNotificationPort;
 import com.contractguard.application.port.GitWorkspacePort;
 import com.contractguard.application.port.PullRequestPort;
 import com.contractguard.application.port.RemoteGitPort;
@@ -133,7 +134,8 @@ class PublishServiceTest {
             }
         };
         service = new PublishService(runs, events, git, pushingRemoteGit, pullRequests, registry,
-                new AuditTrailService(audit, "test-operator", CLOCK), new NoOpObservability(), CLOCK);
+                new AuditTrailService(audit, new NoOpNotificationPort(), "test-operator", CLOCK),
+                new NoOpObservability(), CLOCK);
     }
 
     @Test

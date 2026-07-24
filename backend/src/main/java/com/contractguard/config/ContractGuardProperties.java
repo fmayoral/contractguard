@@ -16,7 +16,8 @@ public record ContractGuardProperties(
         Remote remote,
         Audit audit,
         Concurrency concurrency,
-        Cors cors) {
+        Cors cors,
+        Notifications notifications) {
 
     public record Workspace(List<String> roots) {
     }
@@ -61,5 +62,14 @@ public record ContractGuardProperties(
      * origins -- e.g. a LAN IP so the dashboard is reachable from another device.
      */
     public record Cors(List<String> extraOrigins) {
+    }
+
+    /**
+     * {@code webhookUrl} blank disables outbound notifications entirely (FR-031, opt-in, off by
+     * default like {@link Validation.Docker}). {@code dashboardBaseUrl} is optional and only adds
+     * a clickable {@code url} field to the payload — the server has no public URL of its own
+     * (same reasoning as the GitHub-blob-link choice in ADR-0007).
+     */
+    public record Notifications(String webhookUrl, String dashboardBaseUrl) {
     }
 }

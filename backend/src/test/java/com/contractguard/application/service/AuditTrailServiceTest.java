@@ -4,6 +4,7 @@ import com.contractguard.domain.AuditEventType;
 import com.contractguard.domain.Fixtures;
 import com.contractguard.domain.RunState;
 import com.contractguard.testsupport.InMemoryAuditTrail;
+import com.contractguard.testsupport.RecordingNotificationPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -18,12 +19,14 @@ class AuditTrailServiceTest {
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-07-20T10:00:00Z"), ZoneOffset.UTC);
 
     private InMemoryAuditTrail port;
+    private RecordingNotificationPort notifications;
     private AuditTrailService service;
 
     @BeforeEach
     void setUp() {
         port = new InMemoryAuditTrail();
-        service = new AuditTrailService(port, "test-operator", CLOCK);
+        notifications = new RecordingNotificationPort();
+        service = new AuditTrailService(port, notifications, "test-operator", CLOCK);
     }
 
     @Test
@@ -86,5 +89,38 @@ class AuditTrailServiceTest {
         assertThat(service.findByRepository(run.repositoryId())).hasSize(1);
         assertThat(service.findAll()).hasSize(1);
         assertThat(port.findAll()).hasSize(1);
+    }
+
+    @Test
+    void notifiesOnATransitionIntoAStateNeedingHumanAttention() {
+        var run = Fixtures.newRun();
+
+        service.recordTransition(run, RunState.PLANNING, RunState.AWAITING_APPROVAL);
+
+        assertThat(notifications.notifications()).singleElement().satisfies(n -> {
+            assertThat(n.runId()).isEqualTo(run.id());
+            assertThat(n.state()).isEqualTo(RunState.AWAITING_APPROVAL);
+        });
+    }
+
+    @Test
+    void doesNotNotifyOnATransitionThatDoesNotNeedHumanAttention() {
+        var run = Fixtures.newRun();
+
+        service.recordTransition(run, RunState.CREATED, RunState.VALIDATING_INPUT);
+
+        assertThat(notifications.notifications()).isEmpty();
+    }
+
+    @Test
+    void stillRecordsTheAuditEntryEvenThoughTheTransitionAlsoNotifies() {
+        var run = Fixtures.newRun();
+
+        service.recordTransition(run, RunState.PATCHING, RunState.VALIDATING);
+        service.recordTransition(run, RunState.VALIDATING, RunState.SUCCEEDED);
+
+        assertThat(service.findByRun(run.id())).hasSize(2);
+        assertThat(notifications.notifications()).singleElement()
+                .extracting("state").isEqualTo(RunState.SUCCEEDED);
     }
 }

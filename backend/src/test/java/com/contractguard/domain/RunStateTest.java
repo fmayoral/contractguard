@@ -80,4 +80,21 @@ class RunStateTest {
             }
         }
     }
+
+    @Test
+    void onlyTheStatesAHumanMustActOnOrLearnAboutNeedAttention() {
+        // Drives both the in-app toast and the outbound webhook (FR-031) off one set: the plan
+        // gate, plus every way a run can finish that isn't the user's own REJECTED/CANCELLED/
+        // PUBLISHED action a moment before.
+        for (RunState state : new RunState[] {
+                RunState.AWAITING_APPROVAL, RunState.SUCCEEDED, RunState.FAILED, RunState.PUBLISH_FAILED}) {
+            assertThat(state.needsHumanAttention()).as("%s needs attention", state).isTrue();
+        }
+        for (RunState state : RunState.values()) {
+            if (state != RunState.AWAITING_APPROVAL && state != RunState.SUCCEEDED
+                    && state != RunState.FAILED && state != RunState.PUBLISH_FAILED) {
+                assertThat(state.needsHumanAttention()).as("%s does not need attention", state).isFalse();
+            }
+        }
+    }
 }

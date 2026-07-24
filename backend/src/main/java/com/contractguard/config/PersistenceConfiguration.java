@@ -7,6 +7,7 @@ import com.contractguard.adapter.persistence.JdbcRunEventLog;
 import com.contractguard.adapter.persistence.JdbcRunRepository;
 import com.contractguard.application.port.ArtifactStore;
 import com.contractguard.application.port.AuditTrailPort;
+import com.contractguard.application.port.NotificationPort;
 import com.contractguard.application.port.RunEventLog;
 import com.contractguard.application.port.RunRepository;
 import com.contractguard.application.service.AuditTrailService;
@@ -46,8 +47,8 @@ public class PersistenceConfiguration {
     }
 
     @Bean
-    public AuditTrailService auditTrailService(AuditTrailPort port, ContractGuardProperties properties,
-            Clock clock) {
-        return new AuditTrailService(port, properties.audit().defaultPrincipal(), clock);
+    public AuditTrailService auditTrailService(AuditTrailPort port, NotificationPort notifications,
+            ContractGuardProperties properties, Clock clock) {
+        return new AuditTrailService(port, notifications, properties.audit().defaultPrincipal(), clock);
     }
 }

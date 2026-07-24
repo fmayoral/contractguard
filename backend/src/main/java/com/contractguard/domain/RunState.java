@@ -31,6 +31,16 @@ public enum RunState {
     private static final Set<RunState> TERMINAL =
             EnumSet.of(SUCCEEDED, FAILED, REJECTED, CANCELLED, PUBLISHED, PUBLISH_FAILED);
 
+    /**
+     * States where a human needs to look at the run: decide a plan, publish (or retry
+     * publishing) a success, or understand a failure. Every other state either progresses on
+     * its own or is an outcome the acting user already knows about because they just caused it
+     * (REJECTED/CANCELLED/PUBLISHED). Drives both the in-app notification and the outbound
+     * webhook (FR-031) off one authoritative set.
+     */
+    private static final Set<RunState> NEEDS_ATTENTION =
+            EnumSet.of(AWAITING_APPROVAL, SUCCEEDED, FAILED, PUBLISH_FAILED);
+
     public Set<RunState> successors() {
         return switch (this) {
             case CREATED -> withAbort(VALIDATING_INPUT);
@@ -59,6 +69,10 @@ public enum RunState {
 
     public boolean isTerminal() {
         return TERMINAL.contains(this);
+    }
+
+    public boolean needsHumanAttention() {
+        return NEEDS_ATTENTION.contains(this);
     }
 
     private static Set<RunState> withAbort(RunState... regular) {

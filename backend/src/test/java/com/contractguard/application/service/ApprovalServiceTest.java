@@ -1,5 +1,6 @@
 package com.contractguard.application.service;
 
+import com.contractguard.adapter.notification.NoOpNotificationPort;
 import com.contractguard.domain.AnalysisRun;
 import com.contractguard.domain.Approval;
 import com.contractguard.domain.ContractGuardException;
@@ -30,7 +31,8 @@ class ApprovalServiceTest {
         runs = new InMemoryRunRepository();
         events = new InMemoryRunEventLog();
         audit = new InMemoryAuditTrail();
-        service = new ApprovalService(runs, events, new AuditTrailService(audit, "test-operator", Clock.systemUTC()),
+        service = new ApprovalService(runs, events,
+                new AuditTrailService(audit, new NoOpNotificationPort(), "test-operator", Clock.systemUTC()),
                 Clock.systemUTC());
     }
 

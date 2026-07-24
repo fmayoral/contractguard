@@ -3,6 +3,7 @@ package com.contractguard.application.service;
 import com.contractguard.adapter.diff.SwaggerOpenApiDiffAdapter;
 import com.contractguard.adapter.json.JacksonJsonCodec;
 import com.contractguard.adapter.llm.ScriptedLlmGateway;
+import com.contractguard.adapter.notification.NoOpNotificationPort;
 import com.contractguard.adapter.search.BoundedSourceReaderAdapter;
 import com.contractguard.adapter.search.FilesystemRepositorySearchAdapter;
 import com.contractguard.application.agent.ChangeExplainer;
@@ -74,7 +75,8 @@ class AnalysisPipelineTest {
                 new ImpactInvestigator(client, prompts, codec, search,
                         new BoundedSourceReaderAdapter(policy), 10),
                 new MigrationPlanner(client, prompts, codec, policy, List.of("maven-verify"), clock),
-                codec, new AuditTrailService(audit, "test-operator", clock), new NoOpObservability(), clock);
+                codec, new AuditTrailService(audit, new NoOpNotificationPort(), "test-operator", clock),
+                new NoOpObservability(), clock);
     }
 
     private AnalysisRun newRun() {

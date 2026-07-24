@@ -3,6 +3,7 @@ package com.contractguard.adapter.cli;
 import com.contractguard.adapter.diff.SwaggerOpenApiDiffAdapter;
 import com.contractguard.adapter.json.JacksonJsonCodec;
 import com.contractguard.adapter.llm.ScriptedLlmGateway;
+import com.contractguard.adapter.notification.NoOpNotificationPort;
 import com.contractguard.adapter.search.BoundedSourceReaderAdapter;
 import com.contractguard.adapter.search.FilesystemRepositorySearchAdapter;
 import com.contractguard.application.agent.ChangeExplainer;
@@ -80,7 +81,8 @@ class CliRunnerTest {
         LlmJsonClient client = new LlmJsonClient(new ScriptedLlmGateway(), codec, new NoOpObservability());
         FilesystemRepositorySearchAdapter search = new FilesystemRepositorySearchAdapter(policy);
         Clock clock = Clock.systemUTC();
-        AuditTrailService audit = new AuditTrailService(new InMemoryAuditTrail(), "test-operator", clock);
+        AuditTrailService audit = new AuditTrailService(new InMemoryAuditTrail(), new NoOpNotificationPort(),
+                "test-operator", clock);
         AnalysisPipeline pipeline = new AnalysisPipeline(runs, events, policy,
                 new SwaggerOpenApiDiffAdapter(),
                 new EvidenceCollector(search),

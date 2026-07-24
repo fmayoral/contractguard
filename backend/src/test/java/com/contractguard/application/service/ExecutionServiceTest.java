@@ -1,6 +1,7 @@
 package com.contractguard.application.service;
 
 import com.contractguard.adapter.json.JacksonJsonCodec;
+import com.contractguard.adapter.notification.NoOpNotificationPort;
 import com.contractguard.application.agent.ImplementationAgent;
 import com.contractguard.application.llm.LlmJsonClient;
 import com.contractguard.application.llm.PromptLibrary;
@@ -143,7 +144,8 @@ class ExecutionServiceTest {
         service = new ExecutionService(runs, events, fakeGit, fakePatch, builds, reader,
                 new ImplementationAgent(new LlmJsonClient(gateway, codec, new NoOpObservability()), new PromptLibrary(), codec),
                 artifacts, "maven-verify",
-                new AuditTrailService(audit, "test-operator", Clock.systemUTC()), new NoOpObservability(), Clock.systemUTC());
+                new AuditTrailService(audit, new NoOpNotificationPort(), "test-operator", Clock.systemUTC()),
+                new NoOpObservability(), Clock.systemUTC());
     }
 
     private AnalysisRun approvedRun() {

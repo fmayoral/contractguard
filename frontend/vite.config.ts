@@ -16,6 +16,9 @@ export default defineConfig({
     setupFiles: ['src/test-setup.ts'],
     coverage: {
       provider: 'v8',
+      // lcov is added (on top of v8's own text/html/json defaults) so
+      // SonarQube's JS/TS analyser can ingest it -- see frontend/sonar-project.properties.
+      reporter: ['text', 'html', 'json', 'lcov'],
       include: ['src/**/*.{ts,tsx}'],
       exclude: ['src/main.tsx', 'src/test-setup.ts', 'src/types.ts'],
       thresholds: {

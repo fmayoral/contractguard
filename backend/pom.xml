@@ -26,6 +26,19 @@
     <checkstyle-plugin.version>3.5.0</checkstyle-plugin.version>
     <checkstyle.version>10.18.2</checkstyle.version>
     <spotbugs-plugin.version>4.8.6.4</spotbugs-plugin.version>
+    <sonar-plugin.version>4.0.0.4121</sonar-plugin.version>
+    <!-- Overridable per-invocation; matches the opt-in `sonarqube` compose
+         service (docs/deployment.md §7). Only ever consumed by the explicit
+         `sonar:sonar` goal below, never bound to a lifecycle phase, so a
+         plain `mvn verify` neither needs nor touches a SonarQube instance. -->
+    <sonar.host.url>http://localhost:9000</sonar.host.url>
+    <sonar.projectKey>contractguard-backend</sonar.projectKey>
+    <sonar.projectName>ContractGuard Backend</sonar.projectName>
+    <sonar.coverage.jacoco.xmlReportPaths>${project.build.directory}/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+    <!-- Fails `sonar:sonar` itself if the (built-in "Sonar way") quality gate
+         doesn't pass, so a regression is caught at analysis time, not just
+         shown on a dashboard nobody checks. -->
+    <sonar.qualitygate.wait>true</sonar.qualitygate.wait>
     <!-- Excluded from all E2E-less builds; the e2e CI profile clears it. -->
     <e2e.excludes>**/*E2ETest.java</e2e.excludes>
     <!-- Excluded unless the pg profile is active; needs a Docker daemon. -->
@@ -253,6 +266,15 @@
             <goals><goal>check</goal></goals>
           </execution>
         </executions>
+      </plugin>
+
+      <!-- No <executions>: never bound to a lifecycle phase, so it only ever
+           runs via the explicit `mvn sonar:sonar` goal (docs/deployment.md §7),
+           after `verify` has produced the JaCoCo report it reads. -->
+      <plugin>
+        <groupId>org.sonarsource.scanner.maven</groupId>
+        <artifactId>sonar-maven-plugin</artifactId>
+        <version>${sonar-plugin.version}</version>
       </plugin>
     </plugins>
   </build>

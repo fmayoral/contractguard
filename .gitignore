@@ -4,6 +4,7 @@ dist/
 build/
 node_modules/
 coverage/
+.scannerwork/
 
 # Runtime state (created by the app / demo scripts)
 workspace/

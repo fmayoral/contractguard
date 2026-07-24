@@ -63,6 +63,39 @@ services:
       backend:
         condition: service_healthy
 
+  # Opt-in code-quality server (docs/deployment.md §7) -- excluded from a
+  # plain `docker compose up` so the everyday demo stays fast and light;
+  # start it explicitly with `docker compose --profile quality up -d sonarqube`.
+  # Embedded H2 storage (SonarQube's own default): fine for this single-user,
+  # local dev-tool role, matching the same trade-off this compose file already
+  # makes for the app's own database (see §6, "What's intentionally not wired in").
+  sonarqube:
+    image: sonarqube:lts-community
+    profiles: ["quality"]
+    ports:
+      - "127.0.0.1:9000:9000"
+    environment:
+      # SonarQube's embedded Elasticsearch normally refuses to start unless the
+      # host raises vm.max_map_count/ulimits -- not reliably settable from a
+      # non-privileged container on every Docker Desktop setup. This is
+      # SonarSource's own documented dev-mode escape hatch (never for
+      # production); if analysis feels slow, raising the host's
+      # vm.max_map_count instead is the real fix (§7 troubleshooting).
+      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
+    volumes:
+      - sonarqube-data:/opt/sonarqube/data
+      - sonarqube-extensions:/opt/sonarqube/extensions
+      - sonarqube-logs:/opt/sonarqube/logs
+    healthcheck:
+      # The image ships wget, not curl (unlike the backend's own healthcheck above).
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9000/api/system/status | grep -q '\"status\":\"UP\"' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
 volumes:
   contractguard-data:
   maven-cache:
+  sonarqube-data:
+  sonarqube-extensions:
+  sonarqube-logs:

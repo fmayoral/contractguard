@@ -1,6 +1,7 @@
 package com.contractguard.application.port;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * Read/branch/commit operations on a workspace repository (FR-011/FR-012).
@@ -18,8 +19,13 @@ public interface GitWorkspacePort {
     /** Creates and checks out the branch; the caller records the original branch from {@link #status}. */
     void createBranch(String repositoryId, String branchName);
 
-    /** Stages and commits all working-tree changes under a fixed ContractGuard bot identity (FR-027). */
-    void commit(String repositoryId, String message);
+    /**
+     * Stages exactly {@code paths} and commits them under a fixed ContractGuard bot identity
+     * (FR-027) — deliberately never {@code git add -A}: an incidental working-tree change
+     * unrelated to the approved patch (e.g. {@code mvnw}'s executable bit, flipped by validation
+     * so the wrapper can even run) must never ride along into the committed diff.
+     */
+    void commit(String repositoryId, String message, Set<String> paths);
 
     record GitStatus(String currentBranch, boolean clean, List<String> dirtyEntries) {
     }

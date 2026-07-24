@@ -19,6 +19,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 
 /**
@@ -68,9 +69,11 @@ public class GitCliAdapter implements GitWorkspacePort, PatchPort {
     }
 
     @Override
-    public void commit(String repositoryId, String message) {
+    public void commit(String repositoryId, String message, Set<String> paths) {
         Path repo = policy.resolveRepository(repositoryId);
-        git(repo, "add", "-A");
+        List<String> addArgs = new ArrayList<>(List.of("add", "--"));
+        addArgs.addAll(paths);
+        git(repo, addArgs.toArray(new String[0]));
         git(repo, "-c", "user.name=" + BOT_NAME, "-c", "user.email=" + BOT_EMAIL, "commit", "-m", message);
     }
 

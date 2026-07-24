@@ -35,6 +35,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -76,7 +77,7 @@ class ExecutionServiceTest {
         }
 
         @Override
-        public void commit(String repositoryId, String message) {
+        public void commit(String repositoryId, String message, Set<String> paths) {
             // not exercised by ExecutionService; FR-027 publish flow has its own tests
         }
     }

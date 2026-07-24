@@ -27,6 +27,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -41,6 +42,7 @@ class PublishServiceTest {
     private InMemoryRunEventLog events;
     private InMemoryAuditTrail audit;
     private List<String> commits;
+    private List<Set<String>> committedPaths;
     private List<String> pushedBranches;
     private PullRequestPort.PullRequestResult prResult;
     private RuntimeException pushFailure;
@@ -54,6 +56,7 @@ class PublishServiceTest {
         events = new InMemoryRunEventLog();
         audit = new InMemoryAuditTrail();
         commits = new ArrayList<>();
+        committedPaths = new ArrayList<>();
         pushedBranches = new ArrayList<>();
         prResult = new PullRequestPort.PullRequestResult("https://github.com/acme/widgets/pull/7", 7);
         pushFailure = null;
@@ -78,8 +81,9 @@ class PublishServiceTest {
             }
 
             @Override
-            public void commit(String repositoryId, String message) {
+            public void commit(String repositoryId, String message, Set<String> paths) {
                 commits.add(message);
+                committedPaths.add(paths);
             }
         };
         RemoteGitPort pushingRemoteGit = new RemoteGitPort() {
@@ -150,6 +154,7 @@ class PublishServiceTest {
         assertThat(published.state()).isEqualTo(RunState.PUBLISHED);
         assertThat(published.pullRequestUrl()).contains("https://github.com/acme/widgets/pull/7");
         assertThat(commits).hasSize(1);
+        assertThat(committedPaths).containsExactly(Set.of("src/main/java/App.java"));
         assertThat(pushedBranches).containsExactly(run.workingBranch());
         assertThat(events.all()).anySatisfy(event -> assertThat(event.status()).isEqualTo("PR_OPENED"));
 

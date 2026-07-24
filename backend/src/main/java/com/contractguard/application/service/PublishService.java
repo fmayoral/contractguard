@@ -11,12 +11,16 @@ import com.contractguard.domain.AnalysisRun;
 import com.contractguard.domain.ContractGuardException;
 import com.contractguard.domain.FailureCategory;
 import com.contractguard.domain.Ids;
+import com.contractguard.domain.PatchArtifact;
 import com.contractguard.domain.RemoteRepository;
 import com.contractguard.domain.RunFailure;
 import com.contractguard.domain.RunState;
 
 import java.time.Clock;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 /**
  * Pushes an already-validated remediation branch and opens a draft pull
@@ -99,11 +103,24 @@ public class PublishService {
     private void commitBranch(AnalysisRun run) {
         try (ObservabilityPort.SpanHandle span = startSpan(run, "publish-commit")) {
             git.commit(run.repositoryId(), "ContractGuard: remediate %s (run %s)"
-                    .formatted(run.name(), Ids.shortId(run.id())));
+                    .formatted(run.name(), Ids.shortId(run.id())), changedPaths(run));
             events.append(run.id(), "publish", "COMMITTED",
                     "Committed working branch " + run.workingBranch(), "{\"kind\":\"tool\"}");
             audit.recordRepositoryMutation(run, "Committed working branch " + run.workingBranch());
         }
+    }
+
+    /**
+     * Exactly the files the applied patch actually wrote — never {@code git add -A}, which
+     * would also sweep up incidental working-tree changes unrelated to the approved
+     * remediation (e.g. {@code mvnw}'s executable bit, flipped by validation so the wrapper
+     * can even run).
+     */
+    private static Set<String> changedPaths(AnalysisRun run) {
+        return run.patches().stream()
+                .filter(patch -> patch.checkStatus() == PatchArtifact.CheckStatus.APPLIED)
+                .flatMap(patch -> patch.changedPaths().stream())
+                .collect(Collectors.toCollection(TreeSet::new));
     }
 
     private void pushBranch(AnalysisRun run, RemoteRepository remote, String credential) {

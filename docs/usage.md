@@ -1,9 +1,9 @@
 # ContractGuard AI — Usage Guide
 
-The web app is organised into four pages: a statistics **Dashboard**, **Runs**
-(history and per-run detail), **New run**, and **Settings** (source
-registration, theme). This guide walks through a full run end to end, then
-covers each feature area in depth.
+The web app is organised into five pages: a statistics **Dashboard**, **Runs**
+(history and per-run detail), **New run**, the org-wide **Audit log**, and
+**Settings** (source registration, theme). This guide walks through a full
+run end to end, then covers each feature area in depth.
 
 ## Dashboard
 
@@ -199,6 +199,15 @@ recorded to a separate, append-only audit log — distinct from the
 operational timeline: it is never purged by the retention policy that
 deletes finished runs, and there is no API route to edit or delete an entry.
 
+Each run's detail page has its own **Audit trail** section (load-on-demand,
+staying live for the rest of the run); the **Audit log** page shows every
+entry across every run, filterable by repository, event type or free text,
+each row linking back to its run:
+
+![Audit log: every state transition, approval decision and repository mutation, across every run](screenshots/7-audit-log.png)
+
+The same data is available directly from the API:
+
 ```bash
 curl 'http://localhost:7080/api/audit?runId=<runId>'          # one run
 curl 'http://localhost:7080/api/audit?repositoryId=<repoId>'  # one repository, across runs
@@ -208,6 +217,17 @@ curl 'http://localhost:7080/api/audit'                        # everything
 `principal` is a single operator-configured placeholder
 (`contractguard.audit.default-principal`) until FR-024 (authentication)
 lands — see [ADR-0008](adr/0008-audit-trail.md).
+
+## Notifications
+
+A run reaching a state that needs a human's attention — awaiting approval,
+succeeded, failed, or failed to publish — raises an in-app toast wherever
+you are in the dashboard, and can also POST to a webhook (Slack-compatible
+out of the box) so a team doesn't have to keep it open. The webhook is
+opt-in and off by default; see
+[Outbound notifications](configuration.md#outbound-notifications) to
+configure it. See [ADR-0016](adr/0016-outbound-run-notifications.md) for
+the design.
 
 ## Verification
 

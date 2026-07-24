@@ -67,6 +67,28 @@ tracks prompt/completion token volume per prompt. Structured JSON logging
 Spring Boot 3.4, and this project is pinned to 3.3.5; see ADR-0011 for why
 that was deferred rather than half-built.
 
+## Outbound notifications
+
+A run reaching a state that needs a human's attention — awaiting approval,
+succeeded, failed, or failed to publish — can also POST a small JSON payload
+to a webhook, so a team doesn't have to keep the dashboard open to notice.
+Off by default; set a URL to enable it:
+
+```bash
+export CONTRACTGUARD_NOTIFICATIONS_WEBHOOK_URL=https://hooks.slack.com/services/...
+```
+
+The payload's top-level `text` field alone is enough for a Slack incoming
+webhook; `runId`, `runName`, `repositoryId` and `state` are also included for
+any other receiver. Optionally set `CONTRACTGUARD_NOTIFICATIONS_DASHBOARD_URL`
+(e.g. `http://localhost:5173`) to add a clickable `url` field pointing at the
+run — the server has no public URL of its own to assume one, the same
+reasoning behind the GitHub-blob links used in pull request bodies (see
+[ADR-0007](adr/0007-remote-repository-access.md)). Delivery is best-effort
+and asynchronous: a slow or unreachable endpoint never adds latency to the
+run, and a failed delivery is only logged, never retried — see
+[ADR-0016](adr/0016-outbound-run-notifications.md).
+
 ## Using a real LLM
 
 Automated tests and the default demo never call a live model. To run the
@@ -103,6 +125,8 @@ All settings live under `contractguard.*` in
 | `spring.servlet.multipart.max-file-size` / `.max-request-size` | `2MB` / `2MB` | Uploaded specification file size cap |
 | `audit.default-principal` | `local-operator` | Attributed to every audit entry until FR-024 adds real authentication |
 | `concurrency.max-active-runs` | `10` | System-wide bound on non-terminal runs; `0` disables the limit |
+| `notifications.webhook-url` | unset (disabled) | Outbound webhook fired on AWAITING_APPROVAL/SUCCEEDED/FAILED/PUBLISH_FAILED; see [Outbound notifications](#outbound-notifications) |
+| `notifications.dashboard-base-url` | unset | Optional; adds a clickable `url` field to the webhook payload |
 | `management.tracing.sampling.probability` | `1.0` | Fraction of spans sampled; full sampling is fine at this tool's scale |
 | `management.otlp.tracing.endpoint` | unset (log export only) | Point at a real OpenTelemetry collector; see [Observability](#observability) |
 

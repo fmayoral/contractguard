@@ -34,6 +34,11 @@ services:
       # Bundled Jaeger is the default trace viewer for this compose setup;
       # point elsewhere (or unset to fall back to log-only export) via .env.
       MANAGEMENT_OTLP_TRACING_ENDPOINT: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:-http://jaeger:4318/v1/traces}
+      # Outbound webhook fired when a run needs approval or finishes (FR-031);
+      # unset disables it entirely. dashboard-url adds a clickable link to the
+      # payload -- e.g. http://localhost:5173 for this compose setup.
+      CONTRACTGUARD_NOTIFICATIONS_WEBHOOK_URL: ${CONTRACTGUARD_NOTIFICATIONS_WEBHOOK_URL:-}
+      CONTRACTGUARD_NOTIFICATIONS_DASHBOARD_URL: ${CONTRACTGUARD_NOTIFICATIONS_DASHBOARD_URL:-}
     depends_on:
       - jaeger
     volumes:

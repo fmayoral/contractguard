@@ -42,6 +42,7 @@ bounded, schema-validated loop it can never bypass.
 - A full **audit trail** records every state transition, approval decision
   and repository mutation with principal, timestamp, run ID and plan hash —
   independent of run retention, so it survives even after a run is purged.
+  Viewable per-run and as an org-wide, filterable **Audit log** page.
 
 ## 4. Automated Remediation
 
@@ -176,6 +177,22 @@ bounded, schema-validated loop it can never bypass.
   the light/dark theme choice, and the quick reference.
 - A first-run **onboarding banner** naming the three-step workflow, and an
   in-app **quick-reference panel** for anyone who gets lost mid-workflow.
+- A site-wide **notification** the moment any run needs attention (awaiting
+  approval, succeeded, failed, or failed to publish), wherever the dashboard
+  is open — clicking one jumps straight to the exact section to act on.
+
+## 15. Notifications
+
+- A run reaching a state needing human attention raises an **in-app toast**
+  from anywhere in the dashboard, deep-linking to the exact section to act
+  on (approve, publish, or see why it failed) with a brief highlight so it's
+  obvious where the page landed.
+- The same signal can also fire an **outbound webhook** — a Slack-incoming-
+  webhook-compatible JSON payload — so a team doesn't have to keep the
+  dashboard open. Off by default; a single URL enables it.
+- Delivery is **asynchronous and best-effort**: a slow or unreachable
+  endpoint never adds latency to the run, and a failed delivery is logged,
+  never retried — the audit trail and dashboard remain the durable record.
 
 ---
 
@@ -190,8 +207,9 @@ Honesty about what isn't built yet is part of the product:
 - **Identity**: single-operator trust model — no authentication, SSO, or
   per-user role separation yet (every action is attributed to one
   configured principal).
-- **Notifications**: no Slack/Teams/email alerts on approval-pending or
-  terminal states yet.
+- **Notifications**: a generic outbound webhook covers Slack (and anything
+  else that accepts a JSON POST) today; no email delivery or per-repository
+  configuration yet.
 - **Fleet intelligence**: no org-wide consumer registry, watch mode, or
   blast-radius dashboard yet — each run analyses one API change against one
   consumer at a time.

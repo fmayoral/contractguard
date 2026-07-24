@@ -13,9 +13,9 @@ tool loop, plans and proposes code; everything it produces is schema-validated
 and enforced by backend state. The default **mock mode** uses a deterministic
 scripted gateway, so the whole demo runs without any API key or network.
 
-The web app is organised into four pages — a statistics **Dashboard**, **Runs**
-(history and per-run detail), **New run**, and **Settings** — with dark and
-light themes:
+The web app is organised into five pages — a statistics **Dashboard**, **Runs**
+(history and per-run detail), **New run**, an org-wide **Audit log**, and
+**Settings** — with dark and light themes:
 
 ![Dashboard: activity, outcomes, contract changes and remediation stats](docs/screenshots/0-dashboard.png)
 

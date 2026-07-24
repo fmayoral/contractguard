@@ -80,6 +80,9 @@ Open <http://localhost:5173>.
 ## 7. Review the results
 
 - Load the **Report** and download the Markdown/JSON artifacts.
+- Load the **Audit trail** section on the same page — every state
+  transition, the approval decision with its plan hash, and the branch/patch
+  mutations, all principal-attributed.
 - Inspect the consumer: `git -C workspace/customer-consumer log --oneline`
   shows the original commit only; `git -C workspace/customer-consumer diff main`
   shows the applied patch on the working branch. `main` is untouched, and no
@@ -96,6 +99,16 @@ Open <http://localhost:5173>.
   `planHash` returns HTTP 409 `APPROVAL_MISMATCH`.
 - **Run history**: restart the backend — completed runs and their reports
   remain available.
+- **Site-wide notification**: start a run, then navigate away to the
+  Dashboard or Settings — the moment it reaches `AWAITING_APPROVAL` a toast
+  appears wherever you are; clicking it jumps straight to the plan. The same
+  toast fires again on `SUCCEEDED`/`FAILED`, deep-linking to Publish or the
+  failure explanation respectively.
+- **Audit log**: open the **Audit log** page for the org-wide view across
+  every run, and filter it by repository or event type. Optionally set
+  `CONTRACTGUARD_NOTIFICATIONS_WEBHOOK_URL` (see
+  [Outbound notifications](configuration.md#outbound-notifications)) before
+  starting the backend to also see the same events land on a real webhook.
 
 ## 9. Test remote repositories and publishing (FR-027)
 

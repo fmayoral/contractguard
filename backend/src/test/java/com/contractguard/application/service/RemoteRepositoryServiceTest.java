@@ -88,7 +88,7 @@ class RemoteRepositoryServiceTest {
         assertThat(remote.owner()).isEqualTo("acme");
         assertThat(remote.name()).isEqualTo("widgets");
         assertThat(registered).containsKey("customer-consumer");
-        assertThat(tokens.get("customer-consumer")).isEqualTo("gh-token");
+        assertThat(tokens).containsEntry("customer-consumer", "gh-token");
     }
 
     @Test

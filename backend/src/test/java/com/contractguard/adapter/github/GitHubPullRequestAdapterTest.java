@@ -74,8 +74,10 @@ class GitHubPullRequestAdapterTest {
         status = 422;
         responseBody = """
                 {"message":"Validation Failed"}""";
+        GitHubPullRequestAdapter adapter = adapter();
+        PullRequestRequest request = request();
 
-        assertThatThrownBy(() -> adapter().openDraftPullRequest(request()))
+        assertThatThrownBy(() -> adapter.openDraftPullRequest(request))
                 .isInstanceOf(ContractGuardException.class)
                 .satisfies(e -> assertThat(((ContractGuardException) e).failure().category())
                         .isEqualTo(FailureCategory.PULL_REQUEST_FAILED));

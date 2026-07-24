@@ -106,8 +106,8 @@ class ScriptedLlmGatewayTest {
 
     @Test
     void unknownPromptIsRejected() {
-        assertThatThrownBy(() -> gateway.complete(
-                new LlmRequest("mystery-prompt", "v1", "s", "{}")))
+        LlmRequest request = new LlmRequest("mystery-prompt", "v1", "s", "{}");
+        assertThatThrownBy(() -> gateway.complete(request))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }

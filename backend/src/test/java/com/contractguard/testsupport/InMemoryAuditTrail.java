@@ -12,7 +12,7 @@ public class InMemoryAuditTrail implements AuditTrailPort {
     private final List<AuditEntry> entries = new ArrayList<>();
 
     @Override
-    public void record(AuditEntry entry) {
+    public void append(AuditEntry entry) {
         entries.add(entry);
     }
 

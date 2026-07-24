@@ -1,5 +1,6 @@
 package com.contractguard.domain;
 
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Set;
 
@@ -77,9 +78,7 @@ public enum RunState {
 
     private static Set<RunState> withAbort(RunState... regular) {
         Set<RunState> set = EnumSet.of(FAILED, CANCELLED);
-        for (RunState state : regular) {
-            set.add(state);
-        }
+        Collections.addAll(set, regular);
         return set;
     }
 }

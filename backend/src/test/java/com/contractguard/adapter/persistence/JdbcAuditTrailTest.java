@@ -37,7 +37,7 @@ class JdbcAuditTrailTest {
         AuditEntry entry = new AuditEntry("audit-1", "run-1", "customer-consumer", "test-operator",
                 AuditEventType.APPROVAL_DECISION, "Plan approved", "hash-abc", T0);
 
-        auditTrail.record(entry);
+        auditTrail.append(entry);
 
         assertThat(auditTrail.findByRun("run-1")).containsExactly(entry);
         assertThat(auditTrail.findByRepository("customer-consumer")).containsExactly(entry);
@@ -52,8 +52,8 @@ class JdbcAuditTrailTest {
                 AuditEventType.STATE_TRANSITION, "CREATED -> VALIDATING_INPUT", null, T0);
 
         // Recorded out of order; findByRun must still return them oldest-first.
-        auditTrail.record(second);
-        auditTrail.record(first);
+        auditTrail.append(second);
+        auditTrail.append(first);
 
         assertThat(auditTrail.findByRun("run-1")).extracting(AuditEntry::id)
                 .containsExactly("audit-1", "audit-2");
@@ -61,7 +61,7 @@ class JdbcAuditTrailTest {
 
     @Test
     void unrelatedRunsAndRepositoriesAreNotReturned() {
-        auditTrail.record(new AuditEntry("audit-1", "run-1", "customer-consumer", "test-operator",
+        auditTrail.append(new AuditEntry("audit-1", "run-1", "customer-consumer", "test-operator",
                 AuditEventType.STATE_TRANSITION, "CREATED -> VALIDATING_INPUT", null, T0));
 
         assertThat(auditTrail.findByRun("run-2")).isEmpty();

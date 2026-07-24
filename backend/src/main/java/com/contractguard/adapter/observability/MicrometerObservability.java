@@ -15,6 +15,8 @@ import java.util.Map;
  */
 public class MicrometerObservability implements ObservabilityPort {
 
+    private static final String TAG_PROMPT = "prompt";
+
     private final ObservationRegistry observations;
     private final MeterRegistry meters;
 
@@ -37,11 +39,11 @@ public class MicrometerObservability implements ObservabilityPort {
     @Override
     public void recordLlmUsage(String promptName, int promptTokens, int completionTokens) {
         if (promptTokens >= 0) {
-            meters.summary("contractguard.llm.tokens", "prompt", promptName, "type", "prompt")
+            meters.summary("contractguard.llm.tokens", TAG_PROMPT, promptName, "type", TAG_PROMPT)
                     .record(promptTokens);
         }
         if (completionTokens >= 0) {
-            meters.summary("contractguard.llm.tokens", "prompt", promptName, "type", "completion")
+            meters.summary("contractguard.llm.tokens", TAG_PROMPT, promptName, "type", "completion")
                     .record(completionTokens);
         }
     }

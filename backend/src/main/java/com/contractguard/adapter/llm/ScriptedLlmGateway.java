@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -21,6 +22,19 @@ import java.util.Set;
  * workflow including schema validation runs identically in both modes.
  */
 public class ScriptedLlmGateway implements LlmGateway {
+
+    // JSON field names shared across the request/response payloads this mock gateway builds.
+    private static final String FIELD_CHANGES = "changes";
+    private static final String FIELD_CLASSIFICATION = "classification";
+    private static final String FIELD_OLD_VALUE = "oldValue";
+    private static final String FIELD_NEW_VALUE = "newValue";
+    private static final String FIELD_RELATIVE_PATH = "relativePath";
+    private static final String FIELD_API_CHANGE_ID = "apiChangeId";
+    // ApiChange.type() values this mock gateway gives mechanical, scripted treatment.
+    private static final String TYPE_ENDPOINT_RENAMED = "ENDPOINT_RENAMED";
+    private static final String TYPE_PROPERTY_RENAMED = "PROPERTY_RENAMED";
+    private static final String TYPE_ENUM_VALUE_REMOVED = "ENUM_VALUE_REMOVED";
+    private static final String TYPE_PROPERTY_ADDED = "PROPERTY_ADDED";
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -51,11 +65,11 @@ public class ScriptedLlmGateway implements LlmGateway {
     private String explain(JsonNode payload) {
         ObjectNode response = mapper.createObjectNode();
         ArrayNode explanations = response.putArray("explanations");
-        for (JsonNode change : payload.path("changes")) {
+        for (JsonNode change : payload.path(FIELD_CHANGES)) {
             ObjectNode item = explanations.addObject();
             item.put("changeId", change.path("id").asText());
             item.put("explanation", explanationFor(change));
-            item.put("uncertainty", change.path("classification").asText().equals("UNKNOWN")
+            item.put("uncertainty", change.path(FIELD_CLASSIFICATION).asText().equals("UNKNOWN")
                     ? "The change category is outside the analysed set; manual review advised." : "");
         }
         return response.toString();
@@ -63,19 +77,19 @@ public class ScriptedLlmGateway implements LlmGateway {
 
     private String explanationFor(JsonNode change) {
         String type = change.path("type").asText();
-        String oldValue = change.path("oldValue").asText();
-        String newValue = change.path("newValue").asText();
+        String oldValue = change.path(FIELD_OLD_VALUE).asText();
+        String newValue = change.path(FIELD_NEW_VALUE).asText();
         return switch (type) {
-            case "ENDPOINT_RENAMED" -> ("Callers of %s now receive 404 responses because the endpoint moved to %s. "
+            case TYPE_ENDPOINT_RENAMED -> ("Callers of %s now receive 404 responses because the endpoint moved to %s. "
                     + "Every client URL, constant and documentation reference must be updated.")
                     .formatted(oldValue, newValue);
-            case "PROPERTY_RENAMED" -> ("Responses no longer contain '%s'; the value is serialised as '%s'. "
+            case TYPE_PROPERTY_RENAMED -> ("Responses no longer contain '%s'; the value is serialised as '%s'. "
                     + "Consumers deserialising by field name will read null and may fail downstream.")
                     .formatted(oldValue, newValue);
-            case "ENUM_VALUE_REMOVED" -> ("The value '%s' can no longer appear in responses. Handling code becomes "
+            case TYPE_ENUM_VALUE_REMOVED -> ("The value '%s' can no longer appear in responses. Handling code becomes "
                     + "unreachable, and consumer enums declaring it drift from the contract.")
                     .formatted(oldValue);
-            case "PROPERTY_ADDED" -> ("The optional field '%s' was added. Existing consumers ignore unknown fields "
+            case TYPE_PROPERTY_ADDED -> ("The optional field '%s' was added. Existing consumers ignore unknown fields "
                     + "by default, so no action is required.").formatted(newValue);
             default -> "Change of type %s from '%s' to '%s'.".formatted(type, oldValue, newValue);
         };
@@ -91,7 +105,7 @@ public class ScriptedLlmGateway implements LlmGateway {
             ObjectNode response = mapper.createObjectNode();
             response.put("action", "read_source_file");
             ObjectNode read = response.putObject("read");
-            read.put("path", first.path("relativePath").asText());
+            read.put("path", first.path(FIELD_RELATIVE_PATH).asText());
             read.put("startLine", Math.max(1, first.path("startLine").asInt(1) - 2));
             read.put("endLine", first.path("endLine").asInt(1) + 2);
             response.putNull("search");
@@ -100,22 +114,22 @@ public class ScriptedLlmGateway implements LlmGateway {
         }
         Map<String, List<JsonNode>> evidenceByChange = new LinkedHashMap<>();
         for (JsonNode item : evidence) {
-            evidenceByChange.computeIfAbsent(item.path("apiChangeId").asText(), k -> new ArrayList<>()).add(item);
+            evidenceByChange.computeIfAbsent(item.path(FIELD_API_CHANGE_ID).asText(), k -> new ArrayList<>()).add(item);
         }
         ObjectNode response = mapper.createObjectNode();
         response.put("action", "finish");
         response.putNull("search");
         response.putNull("read");
         ArrayNode assessments = response.putArray("assessments");
-        for (JsonNode change : payload.path("changes")) {
+        for (JsonNode change : payload.path(FIELD_CHANGES)) {
             List<JsonNode> items = evidenceByChange.get(change.path("id").asText());
             if (items == null || items.isEmpty()) {
                 continue;
             }
             ObjectNode assessment = assessments.addObject();
-            assessment.put("apiChangeId", change.path("id").asText());
-            assessment.put("component", items.get(0).path("relativePath").asText());
-            assessment.put("severity", severityFor(change.path("classification").asText()));
+            assessment.put(FIELD_API_CHANGE_ID, change.path("id").asText());
+            assessment.put("component", items.get(0).path(FIELD_RELATIVE_PATH).asText());
+            assessment.put("severity", severityFor(change.path(FIELD_CLASSIFICATION).asText()));
             assessment.put("confidence", "HIGH");
             assessment.put("failureMode", failureModeFor(change));
             assessment.put("recommendedAction", recommendedActionFor(change));
@@ -137,23 +151,23 @@ public class ScriptedLlmGateway implements LlmGateway {
 
     private String failureModeFor(JsonNode change) {
         return switch (change.path("type").asText()) {
-            case "ENDPOINT_RENAMED" -> "HTTP 404 on every call to the old path at runtime";
-            case "PROPERTY_RENAMED" -> "Deserialised field is null; assertions and business logic misbehave";
-            case "ENUM_VALUE_REMOVED" -> "Dead handling branch and contract drift in the consumer enum";
-            case "PROPERTY_ADDED" -> "None expected; unknown fields are ignored";
+            case TYPE_ENDPOINT_RENAMED -> "HTTP 404 on every call to the old path at runtime";
+            case TYPE_PROPERTY_RENAMED -> "Deserialised field is null; assertions and business logic misbehave";
+            case TYPE_ENUM_VALUE_REMOVED -> "Dead handling branch and contract drift in the consumer enum";
+            case TYPE_PROPERTY_ADDED -> "None expected; unknown fields are ignored";
             default -> "Unclassified failure mode";
         };
     }
 
     private String recommendedActionFor(JsonNode change) {
         return switch (change.path("type").asText()) {
-            case "ENDPOINT_RENAMED" -> "Update the client path constant, built URLs and endpoint documentation to "
-                    + change.path("newValue").asText();
-            case "PROPERTY_RENAMED" -> "Rename the DTO field and accessors to "
-                    + change.path("newValue").asText() + " and update tests";
-            case "ENUM_VALUE_REMOVED" -> "Remove the " + change.path("oldValue").asText()
+            case TYPE_ENDPOINT_RENAMED -> "Update the client path constant, built URLs and endpoint documentation to "
+                    + change.path(FIELD_NEW_VALUE).asText();
+            case TYPE_PROPERTY_RENAMED -> "Rename the DTO field and accessors to "
+                    + change.path(FIELD_NEW_VALUE).asText() + " and update tests";
+            case TYPE_ENUM_VALUE_REMOVED -> "Remove the " + change.path(FIELD_OLD_VALUE).asText()
                     + " constant and its handling branches and tests";
-            case "PROPERTY_ADDED" -> "Optionally map the new field; no change required";
+            case TYPE_PROPERTY_ADDED -> "Optionally map the new field; no change required";
             default -> "Review the change manually";
         };
     }
@@ -162,70 +176,77 @@ public class ScriptedLlmGateway implements LlmGateway {
         String validationCommand = payload.path("validationCommands").path(0).asText("maven-verify");
         Map<String, List<JsonNode>> evidenceByChange = new LinkedHashMap<>();
         for (JsonNode item : payload.path("evidence")) {
-            evidenceByChange.computeIfAbsent(item.path("apiChangeId").asText(), k -> new ArrayList<>()).add(item);
+            evidenceByChange.computeIfAbsent(item.path(FIELD_API_CHANGE_ID).asText(), k -> new ArrayList<>()).add(item);
         }
         ObjectNode response = mapper.createObjectNode();
         ArrayNode items = response.putArray("items");
-        for (JsonNode change : payload.path("changes")) {
-            if (!"BREAKING".equals(change.path("classification").asText())) {
-                continue;
-            }
-            List<JsonNode> evidence = evidenceByChange.get(change.path("id").asText());
-            if (evidence == null || evidence.isEmpty()) {
-                continue;
-            }
-            Set<String> sourceFiles = new LinkedHashSet<>();
-            Set<String> testFiles = new LinkedHashSet<>();
-            Set<String> evidenceIds = new LinkedHashSet<>();
-            for (JsonNode item : evidence) {
-                String path = item.path("relativePath").asText();
-                if (path.contains("src/test/")) {
-                    testFiles.add(path);
-                } else {
-                    sourceFiles.add(path);
-                }
-                evidenceIds.add(item.path("id").asText());
-            }
-            if (sourceFiles.isEmpty() && testFiles.isEmpty()) {
-                continue;
-            }
-            ObjectNode item = items.addObject();
-            item.put("objective", objectiveFor(change));
-            ArrayNode expected = item.putArray("expectedFiles");
-            (sourceFiles.isEmpty() ? testFiles : sourceFiles).forEach(expected::add);
-            item.put("proposedAction", recommendedActionFor(change));
-            ArrayNode tests = item.putArray("testsToUpdate");
-            if (!sourceFiles.isEmpty()) {
-                testFiles.forEach(tests::add);
-            }
-            item.put("validationCommand", validationCommand);
-            item.put("risk", "low: mechanical rename/removal with test coverage");
-            item.put("rollback", "Discard the working branch; the original branch is untouched");
-            ArrayNode ids = item.putArray("evidenceIds");
-            evidenceIds.forEach(ids::add);
+        for (JsonNode change : payload.path(FIELD_CHANGES)) {
+            planItemFor(change, evidenceByChange, validationCommand).ifPresent(items::add);
         }
         return response.toString();
     }
 
+    /** @return the plan item for this change, or empty if it's non-breaking or has no usable evidence */
+    private Optional<ObjectNode> planItemFor(JsonNode change, Map<String, List<JsonNode>> evidenceByChange,
+            String validationCommand) {
+        if (!"BREAKING".equals(change.path(FIELD_CLASSIFICATION).asText())) {
+            return Optional.empty();
+        }
+        List<JsonNode> evidence = evidenceByChange.get(change.path("id").asText());
+        if (evidence == null || evidence.isEmpty()) {
+            return Optional.empty();
+        }
+        Set<String> sourceFiles = new LinkedHashSet<>();
+        Set<String> testFiles = new LinkedHashSet<>();
+        Set<String> evidenceIds = new LinkedHashSet<>();
+        for (JsonNode item : evidence) {
+            String path = item.path(FIELD_RELATIVE_PATH).asText();
+            if (path.contains("src/test/")) {
+                testFiles.add(path);
+            } else {
+                sourceFiles.add(path);
+            }
+            evidenceIds.add(item.path("id").asText());
+        }
+        if (sourceFiles.isEmpty() && testFiles.isEmpty()) {
+            return Optional.empty();
+        }
+        ObjectNode item = mapper.createObjectNode();
+        item.put("objective", objectiveFor(change));
+        ArrayNode expected = item.putArray("expectedFiles");
+        (sourceFiles.isEmpty() ? testFiles : sourceFiles).forEach(expected::add);
+        item.put("proposedAction", recommendedActionFor(change));
+        ArrayNode tests = item.putArray("testsToUpdate");
+        if (!sourceFiles.isEmpty()) {
+            testFiles.forEach(tests::add);
+        }
+        item.put("validationCommand", validationCommand);
+        item.put("risk", "low: mechanical rename/removal with test coverage");
+        item.put("rollback", "Discard the working branch; the original branch is untouched");
+        ArrayNode ids = item.putArray("evidenceIds");
+        evidenceIds.forEach(ids::add);
+        return Optional.of(item);
+    }
+
     private String objectiveFor(JsonNode change) {
         return switch (change.path("type").asText()) {
-            case "ENDPOINT_RENAMED" -> "Migrate client calls from %s to %s"
-                    .formatted(change.path("oldValue").asText(), change.path("newValue").asText());
-            case "PROPERTY_RENAMED" -> "Rename consumer field %s to %s"
-                    .formatted(change.path("oldValue").asText(), change.path("newValue").asText());
-            case "ENUM_VALUE_REMOVED" -> "Remove handling of retired enum value %s"
-                    .formatted(change.path("oldValue").asText());
+            case TYPE_ENDPOINT_RENAMED -> "Migrate client calls from %s to %s"
+                    .formatted(change.path(FIELD_OLD_VALUE).asText(), change.path(FIELD_NEW_VALUE).asText());
+            case TYPE_PROPERTY_RENAMED -> "Rename consumer field %s to %s"
+                    .formatted(change.path(FIELD_OLD_VALUE).asText(), change.path(FIELD_NEW_VALUE).asText());
+            case TYPE_ENUM_VALUE_REMOVED -> "Remove handling of retired enum value %s"
+                    .formatted(change.path(FIELD_OLD_VALUE).asText());
             default -> "Address change " + change.path("id").asText();
         };
     }
 
     private String rewrite(JsonNode payload) {
         List<DeterministicRemediation.ChangeSpec> specs = new ArrayList<>();
-        for (JsonNode change : payload.path("changes")) {
+        for (JsonNode change : payload.path(FIELD_CHANGES)) {
             specs.add(new DeterministicRemediation.ChangeSpec(
                     change.path("type").asText(),
-                    change.path("oldValue").asText(),
-                    change.path("newValue").asText()));
+                    change.path(FIELD_OLD_VALUE).asText(),
+                    change.path(FIELD_NEW_VALUE).asText()));
         }
         ObjectNode response = mapper.createObjectNode();
         ArrayNode files = response.putArray("files");

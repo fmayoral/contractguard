@@ -115,7 +115,8 @@ class WorkspacePolicyTest {
 
     @Test
     void requiresAtLeastOneRoot() {
-        assertThatThrownBy(() -> new WorkspacePolicy(List.of()))
+        List<Path> noRoots = List.of();
+        assertThatThrownBy(() -> new WorkspacePolicy(noRoots))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }

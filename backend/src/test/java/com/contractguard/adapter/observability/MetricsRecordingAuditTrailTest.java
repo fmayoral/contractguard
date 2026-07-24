@@ -19,7 +19,7 @@ class MetricsRecordingAuditTrailTest {
 
     @Test
     void stateTransitionsIncrementACounterTaggedByTargetState() {
-        trail.record(new AuditEntry("id-1", "run-1", "customer-consumer", "local-operator",
+        trail.append(new AuditEntry("id-1", "run-1", "customer-consumer", "local-operator",
                 AuditEventType.STATE_TRANSITION, "PLANNING -> AWAITING_APPROVAL", null, Instant.now()));
 
         assertThat(meters.get("contractguard.runs.transitions")
@@ -29,7 +29,7 @@ class MetricsRecordingAuditTrailTest {
 
     @Test
     void nonTransitionEventsAreDelegatedWithoutIncrementingTheCounter() {
-        trail.record(new AuditEntry("id-1", "run-1", "customer-consumer", "local-operator",
+        trail.append(new AuditEntry("id-1", "run-1", "customer-consumer", "local-operator",
                 AuditEventType.REPOSITORY_MUTATION, "Branch created", null, Instant.now()));
 
         assertThat(meters.find("contractguard.runs.transitions").counter()).isNull();
@@ -40,7 +40,7 @@ class MetricsRecordingAuditTrailTest {
     void findMethodsDelegateToTheWrappedTrail() {
         AuditEntry entry = new AuditEntry("id-1", "run-1", "customer-consumer", "local-operator",
                 AuditEventType.APPROVAL_DECISION, "Plan approved", "hash-1", Instant.now());
-        trail.record(entry);
+        trail.append(entry);
 
         assertThat(trail.findByRun("run-1")).containsExactly(entry);
         assertThat(trail.findByRepository("customer-consumer")).containsExactly(entry);

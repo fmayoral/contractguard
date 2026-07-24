@@ -31,6 +31,14 @@ import java.util.Map;
  */
 public class AnalysisPipeline {
 
+    // Step names shared between span names, event-log "step" tags and the transition/complete
+    // helpers below -- named once so the three always agree.
+    private static final String STEP_INPUT_VALIDATION = "input-validation";
+    private static final String STEP_CHANGE_EXPLAINER = "change-explainer";
+    private static final String STEP_SEARCH = "search";
+    private static final String STEP_ASSESSMENT = "assessment";
+    private static final String STEP_PLANNING = "planning";
+
     private final RunRepository runs;
     private final RunEventLog events;
     private final WorkspacePolicy workspacePolicy;
@@ -85,8 +93,8 @@ public class AnalysisPipeline {
     }
 
     private void validateInputs(AnalysisRun run, Path oldSpec, Path newSpec) {
-        try (ObservabilityPort.SpanHandle span = startSpan(run, "input-validation")) {
-            transition(run, RunState.VALIDATING_INPUT, "input-validation", "Validating inputs");
+        try (ObservabilityPort.SpanHandle span = startSpan(run, STEP_INPUT_VALIDATION)) {
+            transition(run, RunState.VALIDATING_INPUT, STEP_INPUT_VALIDATION, "Validating inputs");
             if (!Files.isRegularFile(oldSpec) || !Files.isRegularFile(newSpec)) {
                 throw ContractGuardException.of(FailureCategory.INVALID_OPENAPI,
                         "one or both specification files do not exist",
@@ -110,7 +118,7 @@ public class AnalysisPipeline {
                         "repository '%s' is used by another active run".formatted(run.repositoryId()),
                         "Wait for the other run to finish or cancel it.");
             }
-            complete(run, "input-validation", "Inputs validated", null);
+            complete(run, STEP_INPUT_VALIDATION, "Inputs validated", null);
         }
     }
 
@@ -126,54 +134,54 @@ public class AnalysisPipeline {
                     Map.of("changes", result.changes().size(), "warnings", result.warnings()));
         }
 
-        try (ObservabilityPort.SpanHandle span = startSpan(run, "change-explainer")) {
-            events.append(run.id(), "change-explainer", "STARTED",
-                    "Explaining changes", "{\"kind\":\"llm\"}");
+        try (ObservabilityPort.SpanHandle span = startSpan(run, STEP_CHANGE_EXPLAINER)) {
+            events.append(run.id(), STEP_CHANGE_EXPLAINER, "STARTED",
+                    "Explaining changes", RunEventLog.KIND_LLM);
             Map<String, String> explanations = changeExplainer.explain(run.changes());
             explanations.forEach((changeId, text) -> run.attachExplanation(changeId, text, clock.instant()));
             runs.save(run);
-            events.append(run.id(), "change-explainer", "COMPLETED",
-                    "%d change(s) explained".formatted(explanations.size()), "{\"kind\":\"llm\"}");
+            events.append(run.id(), STEP_CHANGE_EXPLAINER, "COMPLETED",
+                    "%d change(s) explained".formatted(explanations.size()), RunEventLog.KIND_LLM);
         }
     }
 
     private void collectEvidence(AnalysisRun run) {
-        try (ObservabilityPort.SpanHandle span = startSpan(run, "search")) {
-            transition(run, RunState.SEARCHING, "search", "Searching consumer repository");
+        try (ObservabilityPort.SpanHandle span = startSpan(run, STEP_SEARCH)) {
+            transition(run, RunState.SEARCHING, STEP_SEARCH, "Searching consumer repository");
             List<ImpactEvidence> evidence = evidenceCollector.collect(run.repositoryId(), run.changes());
             run.recordEvidence(evidence, clock.instant());
             runs.save(run);
-            complete(run, "search", "%d evidence match(es) collected".formatted(evidence.size()),
+            complete(run, STEP_SEARCH, "%d evidence match(es) collected".formatted(evidence.size()),
                     Map.of("evidence", evidence.size()));
         }
     }
 
     private void assess(AnalysisRun run) {
-        try (ObservabilityPort.SpanHandle span = startSpan(run, "assessment")) {
-            transition(run, RunState.ASSESSING, "assessment", "Assessing impact");
+        try (ObservabilityPort.SpanHandle span = startSpan(run, STEP_ASSESSMENT)) {
+            transition(run, RunState.ASSESSING, STEP_ASSESSMENT, "Assessing impact");
             List<ImpactAssessment> assessments = investigator.investigate(
                     run.id(), run.repositoryId(), run.changes(), run.evidence(), events);
             run.recordAssessments(assessments, clock.instant());
             runs.save(run);
-            complete(run, "assessment", "%d impact assessment(s) produced".formatted(assessments.size()),
+            complete(run, STEP_ASSESSMENT, "%d impact assessment(s) produced".formatted(assessments.size()),
                     Map.of("assessments", assessments.size(), "kind", "llm"));
         }
     }
 
     private void plan(AnalysisRun run) {
-        try (ObservabilityPort.SpanHandle span = startSpan(run, "planning")) {
-            transition(run, RunState.PLANNING, "planning", "Generating migration plan");
+        try (ObservabilityPort.SpanHandle span = startSpan(run, STEP_PLANNING)) {
+            transition(run, RunState.PLANNING, STEP_PLANNING, "Generating migration plan");
             MigrationPlan plan = planner.plan(run);
             run.attachPlan(plan, clock.instant());
             run.transitionTo(RunState.AWAITING_APPROVAL, clock.instant());
             runs.save(run);
             audit.recordTransition(run, RunState.PLANNING, RunState.AWAITING_APPROVAL);
-            complete(run, "planning", "Plan v%d with %d item(s) ready".formatted(
+            complete(run, STEP_PLANNING, "Plan v%d with %d item(s) ready".formatted(
                     plan.version(), plan.items().size()),
                     Map.of("planHash", plan.hash(), "items", plan.items().size(), "kind", "llm"));
             events.append(run.id(), "approval", "WAITING",
                     "Awaiting human approval; no modification will happen before an approval is recorded",
-                    "{\"kind\":\"system\"}");
+                    RunEventLog.KIND_SYSTEM);
         }
     }
 
@@ -190,7 +198,7 @@ public class AnalysisPipeline {
         RunState from = run.state();
         run.transitionTo(state, clock.instant());
         runs.save(run);
-        events.append(run.id(), step, "STARTED", message, "{\"kind\":\"tool\"}");
+        events.append(run.id(), step, "STARTED", message, RunEventLog.KIND_TOOL);
         audit.recordTransition(run, from, state);
     }
 
@@ -215,6 +223,6 @@ public class AnalysisPipeline {
             audit.recordTransition(run, from, RunState.FAILED);
         }
         events.append(run.id(), "run", "FAILED",
-                "%s: %s".formatted(failure.category(), failure.message()), "{\"kind\":\"system\"}");
+                "%s: %s".formatted(failure.category(), failure.message()), RunEventLog.KIND_SYSTEM);
     }
 }

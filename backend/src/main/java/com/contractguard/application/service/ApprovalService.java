@@ -38,7 +38,7 @@ public class ApprovalService {
                 decision == Approval.Decision.APPROVED
                         ? "Plan approved (hash %s); execution may start".formatted(shortHash(planHash))
                         : "Plan rejected; the repository was not modified",
-                "{\"kind\":\"human\"}");
+                RunEventLog.KIND_HUMAN);
         audit.recordApprovalDecision(run, decision.name(), planHash);
         return run;
     }

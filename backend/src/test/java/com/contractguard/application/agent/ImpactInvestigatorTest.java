@@ -82,9 +82,11 @@ class ImpactInvestigatorTest {
         QueuedLlmGateway gateway = new QueuedLlmGateway().enqueue(
                 "{\"action\":\"delete_repository\",\"search\":null,\"read\":null,\"assessments\":null}",
                 "{\"action\":\"format_disk\",\"search\":null,\"read\":null,\"assessments\":null}");
+        ImpactInvestigator investigator = investigator(gateway, 5);
+        List<ApiChange> changes = List.of(change());
+        List<ImpactEvidence> evidenceList = List.of(evidence());
 
-        assertThatThrownBy(() -> investigator(gateway, 5)
-                .investigate("run-1", "demo", List.of(change()), List.of(evidence()), events))
+        assertThatThrownBy(() -> investigator.investigate("run-1", "demo", changes, evidenceList, events))
                 .isInstanceOf(ContractGuardException.class)
                 .satisfies(e -> assertThat(((ContractGuardException) e).failure().category())
                         .isEqualTo(FailureCategory.INVALID_LLM_RESPONSE));
@@ -96,9 +98,11 @@ class ImpactInvestigatorTest {
         QueuedLlmGateway gateway = new QueuedLlmGateway().enqueue(
                 FINISH.replace("ev-1", "ev-fabricated"),
                 FINISH.replace("ev-1", "ev-fabricated"));
+        ImpactInvestigator investigator = investigator(gateway, 5);
+        List<ApiChange> changes = List.of(change());
+        List<ImpactEvidence> evidenceList = List.of(evidence());
 
-        assertThatThrownBy(() -> investigator(gateway, 5)
-                .investigate("run-1", "demo", List.of(change()), List.of(evidence()), events))
+        assertThatThrownBy(() -> investigator.investigate("run-1", "demo", changes, evidenceList, events))
                 .isInstanceOf(ContractGuardException.class);
         assertThat(gateway.requests().get(1).userPayload()).contains("unknown evidence");
     }
@@ -121,9 +125,11 @@ class ImpactInvestigatorTest {
         String search = "{\"action\":\"search_repository\",\"search\":{\"query\":\"x\",\"glob\":null,"
                 + "\"maxResults\":5},\"read\":null,\"assessments\":null}";
         QueuedLlmGateway gateway = new QueuedLlmGateway().enqueue(search, search);
+        ImpactInvestigator investigator = investigator(gateway, 2);
+        List<ApiChange> changes = List.of(change());
+        List<ImpactEvidence> evidenceList = List.of(evidence());
 
-        assertThatThrownBy(() -> investigator(gateway, 2)
-                .investigate("run-1", "demo", List.of(change()), List.of(evidence()), events))
+        assertThatThrownBy(() -> investigator.investigate("run-1", "demo", changes, evidenceList, events))
                 .isInstanceOf(ContractGuardException.class)
                 .satisfies(e -> assertThat(((ContractGuardException) e).failure().category())
                         .isEqualTo(FailureCategory.POLICY_VIOLATION));

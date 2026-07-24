@@ -73,7 +73,9 @@ class OpenAiCompatibleLlmGatewayTest {
     @Test
     void nonSuccessStatusFailsAsLlmUnavailable() {
         status = 500;
-        assertThatThrownBy(() -> gateway().complete(new LlmRequest("p", "v1", "s", "{}")))
+        OpenAiCompatibleLlmGateway gateway = gateway();
+        LlmRequest request = new LlmRequest("p", "v1", "s", "{}");
+        assertThatThrownBy(() -> gateway.complete(request))
                 .isInstanceOf(ContractGuardException.class)
                 .satisfies(e -> assertThat(((ContractGuardException) e).failure().category())
                         .isEqualTo(FailureCategory.LLM_UNAVAILABLE));
@@ -82,7 +84,9 @@ class OpenAiCompatibleLlmGatewayTest {
     @Test
     void missingContentFailsAsInvalidResponse() {
         responseBody = "{\"choices\":[]}";
-        assertThatThrownBy(() -> gateway().complete(new LlmRequest("p", "v1", "s", "{}")))
+        OpenAiCompatibleLlmGateway gateway = gateway();
+        LlmRequest request = new LlmRequest("p", "v1", "s", "{}");
+        assertThatThrownBy(() -> gateway.complete(request))
                 .isInstanceOf(ContractGuardException.class)
                 .satisfies(e -> assertThat(((ContractGuardException) e).failure().category())
                         .isEqualTo(FailureCategory.INVALID_LLM_RESPONSE));
@@ -92,7 +96,8 @@ class OpenAiCompatibleLlmGatewayTest {
     void unreachableHostFailsAsLlmUnavailable() {
         OpenAiCompatibleLlmGateway unreachable = new OpenAiCompatibleLlmGateway(new LlmSettings(
                 "http://127.0.0.1:1/v1", "k", "m", Duration.ofMillis(500), 16, 0.0));
-        assertThatThrownBy(() -> unreachable.complete(new LlmRequest("p", "v1", "s", "{}")))
+        LlmRequest request = new LlmRequest("p", "v1", "s", "{}");
+        assertThatThrownBy(() -> unreachable.complete(request))
                 .isInstanceOf(ContractGuardException.class)
                 .satisfies(e -> assertThat(((ContractGuardException) e).failure().category())
                         .isEqualTo(FailureCategory.LLM_UNAVAILABLE));

@@ -14,8 +14,8 @@ class SecretRedactorTest {
                 client_secret = xyz123
                 """;
         String redacted = SecretRedactor.redact(input);
-        assertThat(redacted).doesNotContain("hunter2").doesNotContain("xyz123");
-        assertThat(redacted).contains("password=[REDACTED]");
+        assertThat(redacted).doesNotContain("hunter2").doesNotContain("xyz123")
+                .contains("password=[REDACTED]");
     }
 
     @Test

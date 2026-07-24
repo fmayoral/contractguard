@@ -61,8 +61,9 @@ class ChangeExplainerTest {
                 "{\"explanations\":[]}");
         ChangeExplainer explainer = new ChangeExplainer(
                 new LlmJsonClient(gateway, codec, new NoOpObservability()), prompts, codec);
+        List<ApiChange> changes = List.of(change("c1"));
 
-        assertThatThrownBy(() -> explainer.explain(List.of(change("c1"))))
+        assertThatThrownBy(() -> explainer.explain(changes))
                 .isInstanceOf(ContractGuardException.class);
         assertThat(gateway.requests()).hasSize(2);
         assertThat(gateway.requests().get(1).userPayload()).contains("unknown changeId");

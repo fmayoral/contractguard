@@ -21,7 +21,8 @@ class OpenApiSpecReaderTest {
 
     @Test
     void missingFileFailsTyped() {
-        assertThatThrownBy(() -> reader.read(tempDir.resolve("nope.yaml")))
+        Path missing = tempDir.resolve("nope.yaml");
+        assertThatThrownBy(() -> reader.read(missing))
                 .isInstanceOf(ContractGuardException.class)
                 .satisfies(e -> assertThat(((ContractGuardException) e).failure().category())
                         .isEqualTo(FailureCategory.INVALID_OPENAPI));

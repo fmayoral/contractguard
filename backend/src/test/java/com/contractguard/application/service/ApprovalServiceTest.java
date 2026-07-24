@@ -76,20 +76,22 @@ class ApprovalServiceTest {
     @Test
     void staleHashIsRejectedTyped() {
         AnalysisRun run = awaitingApproval();
+        String runId = run.id();
 
-        assertThatThrownBy(() -> service.decide(run.id(), Approval.Decision.APPROVED, "stale"))
+        assertThatThrownBy(() -> service.decide(runId, Approval.Decision.APPROVED, "stale"))
                 .isInstanceOf(ContractGuardException.class)
                 .satisfies(e -> assertThat(((ContractGuardException) e).failure().category())
                         .isEqualTo(FailureCategory.APPROVAL_MISMATCH));
-        assertThat(runs.findById(run.id()).orElseThrow().isApproved()).isFalse();
+        assertThat(runs.findById(runId).orElseThrow().isApproved()).isFalse();
     }
 
     @Test
     void decisionOutsideAwaitingApprovalIsRejected() {
         AnalysisRun run = Fixtures.newRun();
         runs.save(run);
+        String runId = run.id();
 
-        assertThatThrownBy(() -> service.decide(run.id(), Approval.Decision.APPROVED, "any"))
+        assertThatThrownBy(() -> service.decide(runId, Approval.Decision.APPROVED, "any"))
                 .isInstanceOf(ContractGuardException.class)
                 .satisfies(e -> assertThat(((ContractGuardException) e).failure().category())
                         .isEqualTo(FailureCategory.ILLEGAL_STATE));

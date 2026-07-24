@@ -34,8 +34,9 @@ class DockerBuildValidationAdapterTest {
     @Test
     void unknownCommandKeyIsRejectedWithoutTouchingDocker() throws IOException {
         Files.createDirectories(workspace.resolve("demo/.git"));
+        DockerBuildValidationAdapter adapter = adapter(workspace);
 
-        assertThatThrownBy(() -> adapter(workspace).run("demo", "not-allow-listed"))
+        assertThatThrownBy(() -> adapter.run("demo", "not-allow-listed"))
                 .isInstanceOf(ContractGuardException.class)
                 .satisfies(e -> assertThat(((ContractGuardException) e).failure().category())
                         .isEqualTo(FailureCategory.POLICY_VIOLATION));
@@ -44,8 +45,9 @@ class DockerBuildValidationAdapterTest {
     @Test
     void missingWrapperIsRejectedWithoutTouchingDocker() throws IOException {
         Files.createDirectories(workspace.resolve("demo/.git"));
+        DockerBuildValidationAdapter adapter = adapter(workspace);
 
-        assertThatThrownBy(() -> adapter(workspace).run("demo", "maven-verify"))
+        assertThatThrownBy(() -> adapter.run("demo", "maven-verify"))
                 .isInstanceOf(ContractGuardException.class)
                 .satisfies(e -> assertThat(((ContractGuardException) e).failure().category())
                         .isEqualTo(FailureCategory.UNSUPPORTED_FEATURE));

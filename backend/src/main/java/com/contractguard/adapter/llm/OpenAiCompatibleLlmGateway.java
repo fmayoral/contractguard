@@ -21,6 +21,8 @@ import java.nio.charset.StandardCharsets;
  */
 public class OpenAiCompatibleLlmGateway implements LlmGateway {
 
+    private static final String FIELD_CONTENT = "content";
+
     private final LlmSettings settings;
     private final HttpClient client;
     private final ObjectMapper mapper = new ObjectMapper();
@@ -37,8 +39,8 @@ public class OpenAiCompatibleLlmGateway implements LlmGateway {
         body.put("temperature", settings.temperature());
         body.put("max_tokens", settings.maxTokens());
         var messages = body.putArray("messages");
-        messages.addObject().put("role", "system").put("content", request.systemPrompt());
-        messages.addObject().put("role", "user").put("content", request.userPayload());
+        messages.addObject().put("role", "system").put(FIELD_CONTENT, request.systemPrompt());
+        messages.addObject().put("role", "user").put(FIELD_CONTENT, request.userPayload());
 
         HttpRequest httpRequest = HttpRequest.newBuilder()
                 .uri(URI.create(settings.baseUrl() + "/chat/completions"))
@@ -70,7 +72,7 @@ public class OpenAiCompatibleLlmGateway implements LlmGateway {
 
     private LlmResponse parse(String body, String promptName) throws IOException {
         JsonNode root = mapper.readTree(body);
-        JsonNode content = root.path("choices").path(0).path("message").path("content");
+        JsonNode content = root.path("choices").path(0).path("message").path(FIELD_CONTENT);
         if (content.isMissingNode() || content.isNull()) {
             throw ContractGuardException.of(FailureCategory.INVALID_LLM_RESPONSE,
                     "LLM provider response for prompt '%s' has no message content".formatted(promptName),

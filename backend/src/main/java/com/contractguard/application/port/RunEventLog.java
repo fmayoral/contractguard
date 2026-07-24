@@ -11,6 +11,13 @@ import java.util.function.Consumer;
  */
 public interface RunEventLog {
 
+    // The fixed vocabulary for metadataJson's "kind" tag -- shared here rather than
+    // re-typed as a raw literal at every call site across the pipeline/execution/publish services.
+    String KIND_TOOL = "{\"kind\":\"tool\"}";
+    String KIND_LLM = "{\"kind\":\"llm\"}";
+    String KIND_SYSTEM = "{\"kind\":\"system\"}";
+    String KIND_HUMAN = "{\"kind\":\"human\"}";
+
     RunEvent append(String runId, String step, String status, String message, String metadataJson);
 
     List<RunEvent> eventsAfter(String runId, long afterSeq);

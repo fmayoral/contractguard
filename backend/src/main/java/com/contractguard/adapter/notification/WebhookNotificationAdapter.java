@@ -31,6 +31,7 @@ public class WebhookNotificationAdapter implements NotificationPort {
 
     private static final Logger log = LoggerFactory.getLogger(WebhookNotificationAdapter.class);
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
+    private static final String MESSAGE_PREFIX = "ContractGuard: ";
 
     private final String webhookUrl;
     private final String dashboardBaseUrl;
@@ -82,11 +83,11 @@ public class WebhookNotificationAdapter implements NotificationPort {
     private String message(AnalysisRun run, RunState state) {
         String subject = "%s (%s)".formatted(run.name(), run.repositoryId());
         return switch (state) {
-            case AWAITING_APPROVAL -> "ContractGuard: " + subject + " is awaiting your approval";
-            case SUCCEEDED -> "ContractGuard: " + subject + " succeeded";
-            case FAILED -> "ContractGuard: " + subject + " failed";
-            case PUBLISH_FAILED -> "ContractGuard: " + subject + " publish failed";
-            default -> "ContractGuard: " + subject + " is now " + state;
+            case AWAITING_APPROVAL -> MESSAGE_PREFIX + subject + " is awaiting your approval";
+            case SUCCEEDED -> MESSAGE_PREFIX + subject + " succeeded";
+            case FAILED -> MESSAGE_PREFIX + subject + " failed";
+            case PUBLISH_FAILED -> MESSAGE_PREFIX + subject + " publish failed";
+            default -> MESSAGE_PREFIX + subject + " is now " + state;
         };
     }
 }

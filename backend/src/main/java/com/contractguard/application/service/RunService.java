@@ -110,7 +110,7 @@ public class RunService {
         runs.save(run);
         events.append(runId, "run", "CREATED",
                 "Run '%s' created for repository '%s'".formatted(runName, repositoryId),
-                "{\"kind\":\"system\"}");
+                RunEventLog.KIND_SYSTEM);
         return run;
     }
 
@@ -224,17 +224,17 @@ public class RunService {
                 } else {
                     failed++;
                 }
-                continue;
+            } else {
+                run.markFailed(new RunFailure(FailureCategory.INTERNAL_ERROR,
+                        "run was interrupted by an application restart while in state " + state,
+                        false, null,
+                        "Start a new run; the repository was not left mid-mutation by the analysis phase."),
+                        clock.instant());
+                runs.save(run);
+                events.append(run.id(), "run", "FAILED",
+                        "Run interrupted by application restart", RunEventLog.KIND_SYSTEM);
+                failed++;
             }
-            run.markFailed(new RunFailure(FailureCategory.INTERNAL_ERROR,
-                    "run was interrupted by an application restart while in state " + state,
-                    false, null,
-                    "Start a new run; the repository was not left mid-mutation by the analysis phase."),
-                    clock.instant());
-            runs.save(run);
-            events.append(run.id(), "run", "FAILED",
-                    "Run interrupted by application restart", "{\"kind\":\"system\"}");
-            failed++;
         }
         return new InterruptedRunRecovery(resumed, failed);
     }
@@ -246,14 +246,14 @@ public class RunService {
             Path newSpec = specResolution.resolve(run.newSpecFile());
             events.append(run.id(), "run", "RESUMED",
                     "Resuming analysis interrupted by the previous shutdown while still CREATED",
-                    "{\"kind\":\"system\"}");
+                    RunEventLog.KIND_SYSTEM);
             executor.execute(() -> pipeline.analyse(run.id(), oldSpec, newSpec));
             return true;
         } catch (ContractGuardException e) {
             run.markFailed(e.failure(), clock.instant());
             runs.save(run);
             events.append(run.id(), "run", "FAILED",
-                    "Cannot resume: " + e.failure().message(), "{\"kind\":\"system\"}");
+                    "Cannot resume: " + e.failure().message(), RunEventLog.KIND_SYSTEM);
             return false;
         }
     }

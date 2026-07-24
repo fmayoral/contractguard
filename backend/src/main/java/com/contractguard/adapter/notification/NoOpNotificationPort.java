@@ -9,5 +9,7 @@ public class NoOpNotificationPort implements NotificationPort {
 
     @Override
     public void notify(AnalysisRun run, RunState state) {
+        // Intentionally a no-op: this is the selected implementation exactly when
+        // notifications are disabled (no webhook URL configured).
     }
 }

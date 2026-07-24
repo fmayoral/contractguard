@@ -24,7 +24,7 @@ public class JdbcAuditTrail implements AuditTrailPort {
     }
 
     @Override
-    public void record(AuditEntry entry) {
+    public void append(AuditEntry entry) {
         jdbc.update("""
                 INSERT INTO audit_log (id, run_id, repository_id, principal, event_type,
                     detail, plan_hash, occurred_at)

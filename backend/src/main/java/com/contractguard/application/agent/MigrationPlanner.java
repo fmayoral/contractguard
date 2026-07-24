@@ -88,27 +88,32 @@ public class MigrationPlanner {
         }
         List<String> violations = new ArrayList<>();
         for (PlanDraft.Item item : draft.items()) {
-            if (item.expectedFiles() == null || item.expectedFiles().isEmpty()) {
-                violations.add("plan item '%s' lists no files".formatted(item.objective()));
-                continue;
+            violations.addAll(validateItem(item, evidencePaths, evidenceIds));
+        }
+        return violations;
+    }
+
+    private List<String> validateItem(PlanDraft.Item item, Set<String> evidencePaths, Set<String> evidenceIds) {
+        if (item.expectedFiles() == null || item.expectedFiles().isEmpty()) {
+            return List.of("plan item '%s' lists no files".formatted(item.objective()));
+        }
+        List<String> violations = new ArrayList<>();
+        for (String file : concat(item.expectedFiles(), item.testsToUpdate())) {
+            if (!evidencePaths.contains(file)) {
+                violations.add("file '%s' is not backed by evidence and cannot be planned".formatted(file));
+            } else if (workspacePolicy.isBlockedFile(file)) {
+                violations.add("file '%s' is blocked by policy".formatted(file));
             }
-            for (String file : concat(item.expectedFiles(), item.testsToUpdate())) {
-                if (!evidencePaths.contains(file)) {
-                    violations.add("file '%s' is not backed by evidence and cannot be planned".formatted(file));
-                } else if (workspacePolicy.isBlockedFile(file)) {
-                    violations.add("file '%s' is blocked by policy".formatted(file));
-                }
-            }
-            if (!allowedCommands.contains(item.validationCommand())) {
-                violations.add("validation command '%s' is not allow-listed".formatted(item.validationCommand()));
-            }
-            if (item.evidenceIds() == null || item.evidenceIds().isEmpty()) {
-                violations.add("plan item '%s' cites no evidence".formatted(item.objective()));
-            } else {
-                for (String id : item.evidenceIds()) {
-                    if (!evidenceIds.contains(id)) {
-                        violations.add("plan item cites unknown evidence '%s'".formatted(id));
-                    }
+        }
+        if (!allowedCommands.contains(item.validationCommand())) {
+            violations.add("validation command '%s' is not allow-listed".formatted(item.validationCommand()));
+        }
+        if (item.evidenceIds() == null || item.evidenceIds().isEmpty()) {
+            violations.add("plan item '%s' cites no evidence".formatted(item.objective()));
+        } else {
+            for (String id : item.evidenceIds()) {
+                if (!evidenceIds.contains(id)) {
+                    violations.add("plan item cites unknown evidence '%s'".formatted(id));
                 }
             }
         }

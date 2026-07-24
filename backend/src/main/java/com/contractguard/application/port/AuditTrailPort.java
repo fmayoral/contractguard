@@ -7,7 +7,7 @@ import java.util.List;
 /** Append-only audit log storage (FR-025). No update/delete method exists on this port by design. */
 public interface AuditTrailPort {
 
-    void record(AuditEntry entry);
+    void append(AuditEntry entry);
 
     /** Entries for one run, oldest first. */
     List<AuditEntry> findByRun(String runId);

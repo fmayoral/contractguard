@@ -35,6 +35,14 @@ import java.util.Set;
 public class ExecutionService {
 
     private static final int MAX_FAILURE_OUTPUT_CHARS = 6_000;
+    // Step/tag vocabulary shared between span names, event-log "step" tags and
+    // observability tag maps below -- named once so the three always agree.
+    private static final String STEP_BRANCH = "branch";
+    private static final String STEP_PATCH = "patch";
+    private static final String STEP_VALIDATION = "validation";
+    private static final String STATUS_STARTED = "STARTED";
+    private static final String TAG_RUN_ID = "runId";
+    private static final String TAG_REPOSITORY_ID = "repositoryId";
 
     private final RunRepository runs;
     private final RunEventLog events;
@@ -104,8 +112,8 @@ public class ExecutionService {
     }
 
     private void prepareBranch(AnalysisRun run) {
-        try (ObservabilityPort.SpanHandle span = startSpan(run, "branch")) {
-            events.append(run.id(), "branch", "STARTED", "Checking repository safety", "{\"kind\":\"tool\"}");
+        try (ObservabilityPort.SpanHandle span = startSpan(run, STEP_BRANCH)) {
+            events.append(run.id(), STEP_BRANCH, STATUS_STARTED, "Checking repository safety", RunEventLog.KIND_TOOL);
             GitWorkspacePort.GitStatus status = git.status(run.repositoryId());
             if (!status.clean()) {
                 throw ContractGuardException.of(FailureCategory.DIRTY_REPOSITORY,
@@ -122,9 +130,9 @@ public class ExecutionService {
             git.createBranch(run.repositoryId(), branchName);
             run.recordBranches(status.currentBranch(), branchName, clock.instant());
             runs.save(run);
-            events.append(run.id(), "branch", "COMPLETED",
+            events.append(run.id(), STEP_BRANCH, "COMPLETED",
                     "Working branch %s created from %s".formatted(branchName, status.currentBranch()),
-                    "{\"kind\":\"tool\"}");
+                    RunEventLog.KIND_TOOL);
             audit.recordRepositoryMutation(run, "Branch %s created from %s"
                     .formatted(branchName, status.currentBranch()));
         }
@@ -150,8 +158,8 @@ public class ExecutionService {
         run.transitionTo(RunState.REPAIRING, clock.instant());
         runs.save(run);
         audit.recordTransition(run, fromValidating, RunState.REPAIRING);
-        events.append(run.id(), "repair", "STARTED",
-                "First validation failed; attempting the single bounded repair", "{\"kind\":\"llm\"}");
+        events.append(run.id(), "repair", STATUS_STARTED,
+                "First validation failed; attempting the single bounded repair", RunEventLog.KIND_LLM);
         String failureOutput = boundedFailureOutput(run, first);
         applyPatch(run, plan, ImplementationAgent.REPAIR_PROMPT, failureOutput, 2);
         ValidationResult second = validate(run, 2);
@@ -164,8 +172,8 @@ public class ExecutionService {
 
     private void applyPatch(AnalysisRun run, MigrationPlan plan, String promptName,
             String failureOutput, int attempt) {
-        try (ObservabilityPort.SpanHandle span = observability.startSpan("patch",
-                Map.of("runId", run.id(), "repositoryId", run.repositoryId(), "attempt", String.valueOf(attempt)))) {
+        try (ObservabilityPort.SpanHandle span = observability.startSpan(STEP_PATCH,
+                Map.of(TAG_RUN_ID, run.id(), TAG_REPOSITORY_ID, run.repositoryId(), "attempt", String.valueOf(attempt)))) {
             Set<String> approvedFiles = plan.approvedFiles();
             Map<String, String> currentFiles = readApprovedFiles(run, approvedFiles);
             Map<String, String> rewrites = proposeRewrites(run, plan, promptName, failureOutput,
@@ -180,16 +188,16 @@ public class ExecutionService {
                     check.changedPaths(), PatchArtifact.CheckStatus.VALID, null);
             run.recordPatch(artifact, clock.instant());
             runs.save(run);
-            events.append(run.id(), "patch", "CHECKED",
+            events.append(run.id(), STEP_PATCH, "CHECKED",
                     "Patch verified with git apply --check (+%d/-%d lines across %d file(s))"
                             .formatted(check.addedLines(), check.removedLines(), check.changedPaths().size()),
-                    "{\"kind\":\"tool\"}");
+                    RunEventLog.KIND_TOOL);
 
             patches.apply(run.repositoryId(), unifiedDiff);
             run.markPatchApplied(artifact.id(), clock.instant());
             runs.save(run);
-            events.append(run.id(), "patch", "APPLIED",
-                    "Patch applied to %s".formatted(run.workingBranch()), "{\"kind\":\"tool\"}");
+            events.append(run.id(), STEP_PATCH, "APPLIED",
+                    "Patch applied to %s".formatted(run.workingBranch()), RunEventLog.KIND_TOOL);
             audit.recordRepositoryMutation(run, "Patch attempt %d applied to %s (%d file(s))"
                     .formatted(attempt, run.workingBranch(), check.changedPaths().size()));
         }
@@ -206,16 +214,16 @@ public class ExecutionService {
         Map<String, String> deterministicRewrites =
                 DeterministicRemediation.applyToChangedFiles(currentFiles, run.changes());
         if (!deterministicRewrites.isEmpty()) {
-            events.append(run.id(), "patch", "MECHANICAL",
+            events.append(run.id(), STEP_PATCH, "MECHANICAL",
                     "Applied deterministic fixes to %d file(s) before the model"
-                            .formatted(deterministicRewrites.size()), "{\"kind\":\"tool\"}");
+                            .formatted(deterministicRewrites.size()), RunEventLog.KIND_TOOL);
         }
         Map<String, String> agentBaseline = new LinkedHashMap<>(currentFiles);
         agentBaseline.putAll(deterministicRewrites);
 
-        events.append(run.id(), "patch", "STARTED",
+        events.append(run.id(), STEP_PATCH, STATUS_STARTED,
                 "Attempt %d: generating file changes for %d approved file(s)"
-                        .formatted(attempt, approvedFiles.size()), "{\"kind\":\"llm\"}");
+                        .formatted(attempt, approvedFiles.size()), RunEventLog.KIND_LLM);
         Map<String, String> rewrites = new LinkedHashMap<>(deterministicRewrites);
         rewrites.putAll(agent.propose(promptName, run.changes(), plan,
                 agentBaseline, failureOutput, !deterministicRewrites.isEmpty()));
@@ -263,14 +271,14 @@ public class ExecutionService {
     }
 
     private ValidationResult validate(AnalysisRun run, int attempt) {
-        try (ObservabilityPort.SpanHandle span = observability.startSpan("validation",
-                Map.of("runId", run.id(), "repositoryId", run.repositoryId(), "attempt", String.valueOf(attempt)))) {
+        try (ObservabilityPort.SpanHandle span = observability.startSpan(STEP_VALIDATION,
+                Map.of(TAG_RUN_ID, run.id(), TAG_REPOSITORY_ID, run.repositoryId(), "attempt", String.valueOf(attempt)))) {
             RunState from = run.state();
             run.transitionTo(RunState.VALIDATING, clock.instant());
             runs.save(run);
             audit.recordTransition(run, from, RunState.VALIDATING);
-            events.append(run.id(), "validation", "STARTED",
-                    "Attempt %d: running %s".formatted(attempt, validationCommandKey), "{\"kind\":\"tool\"}");
+            events.append(run.id(), STEP_VALIDATION, STATUS_STARTED,
+                    "Attempt %d: running %s".formatted(attempt, validationCommandKey), RunEventLog.KIND_TOOL);
             BuildValidationPort.BuildResult result = builds.run(run.repositoryId(), validationCommandKey);
             String artifactId = artifacts.save(run.id(), "validation-attempt-%d.log".formatted(attempt),
                     SecretRedactor.redact(result.output()));
@@ -285,10 +293,10 @@ public class ExecutionService {
                     summarise(result), artifactId, result.exitCode() == 0);
             run.recordValidation(validation, clock.instant());
             runs.save(run);
-            events.append(run.id(), "validation", validation.successful() ? "PASSED" : "FAILED",
+            events.append(run.id(), STEP_VALIDATION, validation.successful() ? "PASSED" : "FAILED",
                     "Attempt %d: %s (%d ms)".formatted(attempt, validation.summary(),
                             result.duration().toMillis()),
-                    "{\"kind\":\"tool\"}");
+                    RunEventLog.KIND_TOOL);
             if (!validation.successful()) {
                 span.recordError(validation.summary());
             }
@@ -297,7 +305,7 @@ public class ExecutionService {
     }
 
     private ObservabilityPort.SpanHandle startSpan(AnalysisRun run, String name) {
-        return observability.startSpan(name, Map.of("runId", run.id(), "repositoryId", run.repositoryId()));
+        return observability.startSpan(name, Map.of(TAG_RUN_ID, run.id(), TAG_REPOSITORY_ID, run.repositoryId()));
     }
 
     private void succeed(AnalysisRun run) {
@@ -308,7 +316,7 @@ public class ExecutionService {
         events.append(run.id(), "run", "SUCCEEDED",
                 "Remediation validated on %s; original branch %s untouched"
                         .formatted(run.workingBranch(), run.originalBranch()),
-                "{\"kind\":\"system\"}");
+                RunEventLog.KIND_SYSTEM);
     }
 
     private ContractGuardException validationFailed(ValidationResult result) {
@@ -353,6 +361,6 @@ public class ExecutionService {
                 "%s: %s%s".formatted(failure.category(), failure.message(),
                         failure.mutationOccurred()
                                 ? " (working branch modified; original branch untouched)" : ""),
-                "{\"kind\":\"system\"}");
+                RunEventLog.KIND_SYSTEM);
     }
 }

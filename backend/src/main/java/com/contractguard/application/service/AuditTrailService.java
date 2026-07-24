@@ -41,7 +41,7 @@ public class AuditTrailService {
     }
 
     public void recordTransition(AnalysisRun run, RunState from, RunState to) {
-        port.record(new AuditEntry(Ids.newId(), run.id(), run.repositoryId(), principal,
+        port.append(new AuditEntry(Ids.newId(), run.id(), run.repositoryId(), principal,
                 AuditEventType.STATE_TRANSITION, "%s -> %s".formatted(from, to), null, clock.instant()));
         if (to.needsHumanAttention()) {
             notifications.notify(run, to);
@@ -49,13 +49,13 @@ public class AuditTrailService {
     }
 
     public void recordApprovalDecision(AnalysisRun run, String decision, String planHash) {
-        port.record(new AuditEntry(Ids.newId(), run.id(), run.repositoryId(), principal,
+        port.append(new AuditEntry(Ids.newId(), run.id(), run.repositoryId(), principal,
                 AuditEventType.APPROVAL_DECISION, "Plan " + decision.toLowerCase(Locale.ROOT),
                 planHash, clock.instant()));
     }
 
     public void recordRepositoryMutation(AnalysisRun run, String detail) {
-        port.record(new AuditEntry(Ids.newId(), run.id(), run.repositoryId(), principal,
+        port.append(new AuditEntry(Ids.newId(), run.id(), run.repositoryId(), principal,
                 AuditEventType.REPOSITORY_MUTATION, detail, null, clock.instant()));
     }
 

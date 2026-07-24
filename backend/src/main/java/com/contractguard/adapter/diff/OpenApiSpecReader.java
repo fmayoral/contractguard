@@ -56,6 +56,7 @@ public class OpenApiSpecReader {
         return messages == null || messages.isEmpty() ? "no parser detail" : messages.get(0);
     }
 
+    @SuppressWarnings("rawtypes") // Components.getSchemas() is raw in swagger-parser itself
     private SpecModel toModel(OpenAPI api) {
         Map<String, SpecModel.Endpoint> endpoints = new LinkedHashMap<>();
         if (api.getPaths() != null) {
@@ -78,6 +79,8 @@ public class OpenApiSpecReader {
         }
         Map<String, SpecModel.SchemaShape> schemas = new LinkedHashMap<>();
         if (api.getComponents() != null && api.getComponents().getSchemas() != null) {
+            // Components.getSchemas() is declared Map<String, Schema> (raw) by swagger-parser
+            // itself -- not our own generics sloppiness, and not fixable at this call site.
             for (Map.Entry<String, Schema> entry : new TreeMap<>(api.getComponents().getSchemas()).entrySet()) {
                 schemas.put(entry.getKey(), toShape(entry.getValue()));
             }
@@ -85,8 +88,11 @@ public class OpenApiSpecReader {
         return new SpecModel(endpoints, schemas);
     }
 
+    @SuppressWarnings("rawtypes") // Schema.getProperties() is raw in swagger-parser itself
     private SpecModel.SchemaShape toShape(Schema<?> schema) {
         Map<String, SpecModel.PropertyShape> properties = new LinkedHashMap<>();
+        // Schema.getProperties() is declared Map<String, Schema> (raw) by swagger-parser itself --
+        // not our own generics sloppiness, and not fixable at this call site.
         Map<String, Schema> raw = schema.getProperties();
         if (raw != null) {
             for (Map.Entry<String, Schema> entry : new TreeMap<>(raw).entrySet()) {

@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RunServiceTest {
@@ -306,7 +307,8 @@ class RunServiceTest {
 
     @Test
     void deletingAnUploadThatNeverExistedIsANoOp() {
-        service.deleteUploadedSpecification("ghost.yaml");
+        assertThatCode(() -> service.deleteUploadedSpecification("ghost.yaml")).doesNotThrowAnyException();
+        assertThat(service.listSpecOptions().stream().noneMatch(o -> o.label().equals("ghost.yaml"))).isTrue();
     }
 
     @Test

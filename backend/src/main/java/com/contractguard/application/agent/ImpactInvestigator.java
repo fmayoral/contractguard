@@ -72,11 +72,11 @@ public class ImpactInvestigator {
                     a -> validateAction(a, changeIds, evidenceIds));
 
             switch (action.action()) {
-                case InvestigatorAction.SEARCH -> toolResults.add(executeSearch(
+                case InvestigatorAction.ACTION_SEARCH -> toolResults.add(executeSearch(
                         runId, repositoryId, action.search(), events));
-                case InvestigatorAction.READ -> toolResults.add(executeRead(
+                case InvestigatorAction.ACTION_READ -> toolResults.add(executeRead(
                         runId, repositoryId, action.read(), events));
-                case InvestigatorAction.FINISH -> {
+                case InvestigatorAction.ACTION_FINISH -> {
                     return toAssessments(action.assessments());
                 }
                 default -> throw new IllegalStateException("validator let through " + action.action());
@@ -91,14 +91,14 @@ public class ImpactInvestigator {
             InvestigatorAction.SearchArgs args, RunEventLog events) {
         int maxResults = Math.min(args.maxResults() == null ? 30 : args.maxResults(), MAX_SEARCH_RESULTS);
         events.append(runId, "assessment", "TOOL",
-                "search_repository: \"%s\"".formatted(args.query()), "{\"kind\":\"tool\"}");
+                "search_repository: \"%s\"".formatted(args.query()), RunEventLog.KIND_TOOL);
         List<RepositorySearchPort.SearchMatch> matches =
                 searchPort.search(repositoryId, args.query(), args.glob(), maxResults);
         String rendered = matches.stream()
                 .map(m -> "%s:%d: %s".formatted(m.relativePath(), m.lineNumber(), m.lineText()))
                 .collect(Collectors.joining("\n"));
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("tool", InvestigatorAction.SEARCH);
+        result.put("tool", InvestigatorAction.ACTION_SEARCH);
         result.put("detail", args.query());
         result.put("content", bounded(rendered));
         return result;
@@ -107,11 +107,11 @@ public class ImpactInvestigator {
     private Map<String, Object> executeRead(String runId, String repositoryId,
             InvestigatorAction.ReadArgs args, RunEventLog events) {
         events.append(runId, "assessment", "TOOL",
-                "read_source_file: %s".formatted(args.path()), "{\"kind\":\"tool\"}");
+                "read_source_file: %s".formatted(args.path()), RunEventLog.KIND_TOOL);
         SourceReaderPort.FileContent content =
                 sourceReader.read(repositoryId, args.path(), args.startLine(), args.endLine());
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("tool", InvestigatorAction.READ);
+        result.put("tool", InvestigatorAction.ACTION_READ);
         result.put("detail", "%s:%d-%d".formatted(content.relativePath(), content.startLine(), content.endLine()));
         result.put("content", bounded(content.content()));
         return result;
@@ -128,11 +128,11 @@ public class ImpactInvestigator {
             return List.of("'action' is missing");
         }
         return switch (action.action()) {
-            case InvestigatorAction.SEARCH -> action.search() == null || isBlank(action.search().query())
+            case InvestigatorAction.ACTION_SEARCH -> action.search() == null || isBlank(action.search().query())
                     ? List.of("search_repository requires a non-empty 'search.query'") : List.of();
-            case InvestigatorAction.READ -> action.read() == null || isBlank(action.read().path())
+            case InvestigatorAction.ACTION_READ -> action.read() == null || isBlank(action.read().path())
                     ? List.of("read_source_file requires a non-empty 'read.path'") : List.of();
-            case InvestigatorAction.FINISH -> validateAssessments(action.assessments(), changeIds, evidenceIds);
+            case InvestigatorAction.ACTION_FINISH -> validateAssessments(action.assessments(), changeIds, evidenceIds);
             default -> List.of("'%s' is not a registered tool; allowed: search_repository, read_source_file, finish"
                     .formatted(action.action()));
         };
@@ -145,24 +145,31 @@ public class ImpactInvestigator {
         }
         List<String> violations = new ArrayList<>();
         for (AssessmentDraft draft : drafts) {
-            if (draft.apiChangeId() == null || !changeIds.contains(draft.apiChangeId())) {
-                violations.add("assessment references unknown change '%s'".formatted(draft.apiChangeId()));
-            }
-            if (draft.evidenceIds() == null || draft.evidenceIds().isEmpty()) {
-                violations.add("assessment for '%s' cites no evidence".formatted(draft.apiChangeId()));
-            } else {
-                for (String id : draft.evidenceIds()) {
-                    if (!evidenceIds.contains(id)) {
-                        violations.add("assessment cites unknown evidence '%s'".formatted(id));
-                    }
+            violations.addAll(validateAssessmentDraft(draft, changeIds, evidenceIds));
+        }
+        return violations;
+    }
+
+    private List<String> validateAssessmentDraft(AssessmentDraft draft, Set<String> changeIds,
+            Set<String> evidenceIds) {
+        List<String> violations = new ArrayList<>();
+        if (draft.apiChangeId() == null || !changeIds.contains(draft.apiChangeId())) {
+            violations.add("assessment references unknown change '%s'".formatted(draft.apiChangeId()));
+        }
+        if (draft.evidenceIds() == null || draft.evidenceIds().isEmpty()) {
+            violations.add("assessment for '%s' cites no evidence".formatted(draft.apiChangeId()));
+        } else {
+            for (String id : draft.evidenceIds()) {
+                if (!evidenceIds.contains(id)) {
+                    violations.add("assessment cites unknown evidence '%s'".formatted(id));
                 }
             }
-            if (parseEnum(Severity.class, draft.severity()) == null) {
-                violations.add("invalid severity '%s'".formatted(draft.severity()));
-            }
-            if (parseEnum(Confidence.class, draft.confidence()) == null) {
-                violations.add("invalid confidence '%s'".formatted(draft.confidence()));
-            }
+        }
+        if (parseEnum(Severity.class, draft.severity()) == null) {
+            violations.add("invalid severity '%s'".formatted(draft.severity()));
+        }
+        if (parseEnum(Confidence.class, draft.confidence()) == null) {
+            violations.add("invalid confidence '%s'".formatted(draft.confidence()));
         }
         return violations;
     }

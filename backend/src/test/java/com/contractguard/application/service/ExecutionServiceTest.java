@@ -202,8 +202,9 @@ class ExecutionServiceTest {
     void executionWithoutApprovalIsImpossible() {
         AnalysisRun run = Fixtures.runAwaitingApproval();
         runs.save(run);
+        String runId = run.id();
 
-        assertThatThrownBy(() -> service.beginExecution(run.id()))
+        assertThatThrownBy(() -> service.beginExecution(runId))
                 .isInstanceOf(ContractGuardException.class)
                 .satisfies(e -> assertThat(((ContractGuardException) e).failure().category())
                         .isEqualTo(FailureCategory.ILLEGAL_STATE));

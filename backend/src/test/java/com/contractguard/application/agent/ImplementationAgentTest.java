@@ -3,6 +3,7 @@ package com.contractguard.application.agent;
 import com.contractguard.adapter.json.JacksonJsonCodec;
 import com.contractguard.application.llm.LlmJsonClient;
 import com.contractguard.application.llm.PromptLibrary;
+import com.contractguard.domain.ApiChange;
 import com.contractguard.domain.ContractGuardException;
 import com.contractguard.domain.Fixtures;
 import com.contractguard.domain.MigrationPlan;
@@ -57,10 +58,11 @@ class ImplementationAgentTest {
         String sneaky = """
                 {"files":[{"path":"src/main/java/Backdoor.java","newContent":"x"}],"notes":"n"}""";
         QueuedLlmGateway gateway = new QueuedLlmGateway().enqueue(sneaky, sneaky);
+        ImplementationAgent agent = agent(gateway);
+        List<ApiChange> changes = List.of(Fixtures.change("ch-1"));
 
-        assertThatThrownBy(() -> agent(gateway).propose(
-                ImplementationAgent.IMPLEMENTATION_PROMPT,
-                List.of(Fixtures.change("ch-1")), plan, files, null, false))
+        assertThatThrownBy(() -> agent.propose(
+                ImplementationAgent.IMPLEMENTATION_PROMPT, changes, plan, files, null, false))
                 .isInstanceOf(ContractGuardException.class);
         assertThat(gateway.requests().get(1).userPayload()).contains("not in the approved set");
     }
@@ -69,10 +71,11 @@ class ImplementationAgentTest {
     void emptyProposalsAreRejectedByDefault() {
         String empty = "{\"files\":[],\"notes\":\"nothing\"}";
         QueuedLlmGateway gateway = new QueuedLlmGateway().enqueue(empty, empty);
+        ImplementationAgent agent = agent(gateway);
+        List<ApiChange> changes = List.of(Fixtures.change("ch-1"));
 
-        assertThatThrownBy(() -> agent(gateway).propose(
-                ImplementationAgent.IMPLEMENTATION_PROMPT,
-                List.of(Fixtures.change("ch-1")), plan, files, null, false))
+        assertThatThrownBy(() -> agent.propose(
+                ImplementationAgent.IMPLEMENTATION_PROMPT, changes, plan, files, null, false))
                 .isInstanceOf(ContractGuardException.class);
     }
 

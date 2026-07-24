@@ -20,6 +20,10 @@ import java.util.Set;
 public class EvidenceCollector {
 
     private static final int MAX_RESULTS_PER_TERM = 30;
+    // Request-body changes affect any caller of the endpoint, regardless of which
+    // content-type/status/security-requirement branch below identifies it (3 sites).
+    private static final String REL_CALLS_ENDPOINT_WITH_CHANGED_REQUEST_BODY =
+            "CALLS_ENDPOINT_WITH_CHANGED_REQUEST_BODY";
 
     private record Term(String value, String relationship) {
     }
@@ -84,7 +88,7 @@ public class EvidenceCollector {
             case PARAMETER_TYPE_CHANGED, PARAMETER_REQUIRED_CHANGED -> List.of(
                     new Term(change.property(), "SENDS_CHANGED_PARAMETER"));
             case REQUEST_BODY_ADDED, REQUEST_BODY_REMOVED -> List.of(
-                    new Term(templateFreePrefix(change.path()), "CALLS_ENDPOINT_WITH_CHANGED_REQUEST_BODY"));
+                    new Term(templateFreePrefix(change.path()), REL_CALLS_ENDPOINT_WITH_CHANGED_REQUEST_BODY));
             case REQUEST_BODY_SCHEMA_CHANGED -> requestBodySchemaChangedTerms(change);
             case RESPONSE_STATUS_ADDED, RESPONSE_STATUS_REMOVED -> List.of(
                     new Term(templateFreePrefix(change.path()), "CALLS_ENDPOINT_WITH_CHANGED_RESPONSE_STATUS"));
@@ -92,7 +96,7 @@ public class EvidenceCollector {
                     new Term(change.property(), "READS_CHANGED_PROPERTY"),
                     new Term(capitalise(change.property()), "READS_CHANGED_PROPERTY_ACCESSOR"));
             case REQUEST_BODY_CONTENT_TYPE_ADDED, REQUEST_BODY_CONTENT_TYPE_REMOVED -> List.of(
-                    new Term(templateFreePrefix(change.path()), "CALLS_ENDPOINT_WITH_CHANGED_REQUEST_BODY"));
+                    new Term(templateFreePrefix(change.path()), REL_CALLS_ENDPOINT_WITH_CHANGED_REQUEST_BODY));
             case SECURITY_REQUIREMENT_ADDED, SECURITY_REQUIREMENT_REMOVED -> List.of(
                     new Term(templateFreePrefix(change.path()), "CALLS_ENDPOINT_WITH_CHANGED_SECURITY_REQUIREMENT"));
             case UNKNOWN_CHANGE -> unknownTerms(change);
@@ -103,7 +107,7 @@ public class EvidenceCollector {
     private List<Term> requestBodySchemaChangedTerms(ApiChange change) {
         Map<String, Term> terms = new LinkedHashMap<>();
         String prefix = templateFreePrefix(change.path());
-        terms.put(prefix, new Term(prefix, "CALLS_ENDPOINT_WITH_CHANGED_REQUEST_BODY"));
+        terms.put(prefix, new Term(prefix, REL_CALLS_ENDPOINT_WITH_CHANGED_REQUEST_BODY));
         if (change.oldValue() != null) {
             terms.put(change.oldValue(), new Term(change.oldValue(), "BUILDS_STALE_REQUEST_PAYLOAD"));
         }

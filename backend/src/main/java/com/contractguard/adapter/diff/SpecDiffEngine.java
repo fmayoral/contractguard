@@ -26,6 +26,10 @@ import java.util.TreeSet;
  */
 public class SpecDiffEngine {
 
+    // Evidence JSON field names, reused across several parameter/request-body change types below.
+    private static final String EVIDENCE_FIELD_PARAMETER = "parameter";
+    private static final String EVIDENCE_FIELD_REQUIRED = "required";
+
     private final ObjectMapper mapper = new ObjectMapper();
 
     public record EngineResult(List<ApiChange> changes, List<String> warnings) {
@@ -120,7 +124,7 @@ public class SpecDiffEngine {
             changes.add(endpointDetailChange(ChangeType.PARAMETER_REMOVED, before.method(), before.path(),
                     name, name, null, false,
                     evidence(e -> {
-                        e.put("parameter", name);
+                        e.put(EVIDENCE_FIELD_PARAMETER, name);
                         e.put("in", removed.location());
                     })));
         }
@@ -129,9 +133,9 @@ public class SpecDiffEngine {
             changes.add(endpointDetailChange(ChangeType.PARAMETER_ADDED, after.method(), after.path(),
                     name, null, name, added.required(),
                     evidence(e -> {
-                        e.put("parameter", name);
+                        e.put(EVIDENCE_FIELD_PARAMETER, name);
                         e.put("in", added.location());
-                        e.put("required", added.required());
+                        e.put(EVIDENCE_FIELD_REQUIRED, added.required());
                     })));
         }
         diffSharedParameters(before, after, changes);
@@ -148,7 +152,7 @@ public class SpecDiffEngine {
                 changes.add(endpointDetailChange(ChangeType.PARAMETER_TYPE_CHANGED, before.method(), before.path(),
                         name, typeLabel(oldParam.shape()), typeLabel(newParam.shape()), false,
                         evidence(e -> {
-                            e.put("parameter", name);
+                            e.put(EVIDENCE_FIELD_PARAMETER, name);
                             e.put("oldType", typeLabel(oldParam.shape()));
                             e.put("newType", typeLabel(newParam.shape()));
                         })));
@@ -157,7 +161,7 @@ public class SpecDiffEngine {
                 changes.add(endpointDetailChange(ChangeType.PARAMETER_REQUIRED_CHANGED, before.method(), before.path(),
                         name, String.valueOf(oldParam.required()), String.valueOf(newParam.required()), false,
                         evidence(e -> {
-                            e.put("parameter", name);
+                            e.put(EVIDENCE_FIELD_PARAMETER, name);
                             e.put("wasRequired", oldParam.required());
                             e.put("isRequired", newParam.required());
                         })));
@@ -177,7 +181,7 @@ public class SpecDiffEngine {
                     null, null, newSchema, after.requestBodyRequired(),
                     evidence(e -> {
                         e.put("schema", newSchema);
-                        e.put("required", after.requestBodyRequired());
+                        e.put(EVIDENCE_FIELD_REQUIRED, after.requestBodyRequired());
                     })));
         } else if (newSchema == null) {
             changes.add(endpointDetailChange(ChangeType.REQUEST_BODY_REMOVED, before.method(), before.path(),
@@ -284,7 +288,7 @@ public class SpecDiffEngine {
             changes.add(propertyAdded(schemaName, addedName, required,
                     evidence(e -> {
                         e.put("type", String.valueOf(after.properties().get(addedName).type()));
-                        e.put("required", required);
+                        e.put(EVIDENCE_FIELD_REQUIRED, required);
                     })));
         }
         diffSharedProperties(schemaName, before, after, changes);
@@ -309,14 +313,14 @@ public class SpecDiffEngine {
                     evidence(e -> {
                         e.put("pairedBy", "identical type and required status");
                         e.put("type", String.valueOf(removed.type()));
-                        e.put("required", removedWasRequired);
+                        e.put(EVIDENCE_FIELD_REQUIRED, removedWasRequired);
                     })));
         } else {
             changes.add(schemaChange(ChangeType.PROPERTY_REMOVED, schemaName, removedName,
                     removedName, null,
                     evidence(e -> {
                         e.put("renameCandidates", candidates.size());
-                        e.put("required", removedWasRequired);
+                        e.put(EVIDENCE_FIELD_REQUIRED, removedWasRequired);
                     })));
         }
     }

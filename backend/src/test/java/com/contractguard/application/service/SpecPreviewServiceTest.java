@@ -51,7 +51,8 @@ class SpecPreviewServiceTest {
 
     @Test
     void surfacesResolutionFailuresRatherThanSwallowingThem(@TempDir Path uploads) {
-        assertThatThrownBy(() -> previewService(uploads).preview("ghost.yaml", "customer-api-v2.yaml"))
+        SpecPreviewService service = previewService(uploads);
+        assertThatThrownBy(() -> service.preview("ghost.yaml", "customer-api-v2.yaml"))
                 .isInstanceOf(ContractGuardException.class)
                 .satisfies(e -> assertThat(((ContractGuardException) e).failure().category())
                         .isEqualTo(FailureCategory.INVALID_OPENAPI));

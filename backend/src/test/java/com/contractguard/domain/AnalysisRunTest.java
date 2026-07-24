@@ -38,8 +38,8 @@ class AnalysisRunTest {
         void markFailedOnTerminalRunIsRejected() {
             AnalysisRun run = Fixtures.newRun();
             run.markCancelled(T0);
-            assertThatThrownBy(() -> run.markFailed(
-                    new RunFailure(FailureCategory.INTERNAL_ERROR, "late", false, null, "none"), T0))
+            RunFailure lateFailure = new RunFailure(FailureCategory.INTERNAL_ERROR, "late", false, null, "none");
+            assertThatThrownBy(() -> run.markFailed(lateFailure, T0))
                     .isInstanceOf(ContractGuardException.class);
         }
     }
@@ -50,7 +50,8 @@ class AnalysisRunTest {
         @Test
         void recordingChangesOutsideDiffingIsRejected() {
             AnalysisRun run = Fixtures.newRun();
-            assertThatThrownBy(() -> run.recordChanges(List.of(Fixtures.change("ch-1")), T0))
+            List<ApiChange> changes = List.of(Fixtures.change("ch-1"));
+            assertThatThrownBy(() -> run.recordChanges(changes, T0))
                     .isInstanceOf(ContractGuardException.class);
         }
 
@@ -99,8 +100,8 @@ class AnalysisRunTest {
         @Test
         void approvalWithStaleHashIsRejected() {
             AnalysisRun run = Fixtures.runAwaitingApproval();
-            assertThatThrownBy(() -> run.recordApproval(
-                    new Approval(run.id(), "stale-hash", Approval.Decision.APPROVED, T0), T0))
+            Approval staleApproval = new Approval(run.id(), "stale-hash", Approval.Decision.APPROVED, T0);
+            assertThatThrownBy(() -> run.recordApproval(staleApproval, T0))
                     .isInstanceOf(ContractGuardException.class)
                     .satisfies(e -> assertThat(((ContractGuardException) e).failure().category())
                             .isEqualTo(FailureCategory.APPROVAL_MISMATCH));
@@ -145,8 +146,8 @@ class AnalysisRunTest {
         @Test
         void approvalBeforePlanningIsImpossible() {
             AnalysisRun run = Fixtures.newRun();
-            assertThatThrownBy(() -> run.recordApproval(
-                    new Approval(run.id(), "any", Approval.Decision.APPROVED, T0), T0))
+            Approval tooEarly = new Approval(run.id(), "any", Approval.Decision.APPROVED, T0);
+            assertThatThrownBy(() -> run.recordApproval(tooEarly, T0))
                     .isInstanceOf(ContractGuardException.class);
         }
     }
@@ -182,7 +183,8 @@ class AnalysisRunTest {
             run.recordPatch(Fixtures.patch("p-2", 2), T0);
             run.transitionTo(RunState.VALIDATING, T0);
             run.recordValidation(Fixtures.validation(2, false), T0);
-            assertThatThrownBy(() -> run.recordValidation(Fixtures.validation(2, false), T0))
+            ValidationResult thirdAttempt = Fixtures.validation(2, false);
+            assertThatThrownBy(() -> run.recordValidation(thirdAttempt, T0))
                     .isInstanceOf(ContractGuardException.class)
                     .satisfies(e -> assertThat(((ContractGuardException) e).failure().category())
                             .isEqualTo(FailureCategory.POLICY_VIOLATION));
@@ -191,11 +193,11 @@ class AnalysisRunTest {
         @Test
         void patchAttemptsMustArriveInOrder() {
             AnalysisRun run = approvedRunInValidating();
-            assertThatThrownBy(() -> {
-                run.transitionTo(RunState.REPAIRING, T0);
-                run.recordPatch(Fixtures.patch("p-9", 2), T0);
-                run.recordPatch(Fixtures.patch("p-10", 2), T0);
-            }).isInstanceOf(ContractGuardException.class);
+            run.transitionTo(RunState.REPAIRING, T0);
+            run.recordPatch(Fixtures.patch("p-9", 2), T0);
+            PatchArtifact outOfOrder = Fixtures.patch("p-10", 2);
+            assertThatThrownBy(() -> run.recordPatch(outOfOrder, T0))
+                    .isInstanceOf(ContractGuardException.class);
         }
 
         private AnalysisRun approvedRunInValidating() {

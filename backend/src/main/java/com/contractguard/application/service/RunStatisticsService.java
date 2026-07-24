@@ -86,16 +86,7 @@ public class RunStatisticsService {
         Map<LocalDate, Integer> byDay = new LinkedHashMap<>();
         int totalChanges = 0;
         int activeRuns = 0;
-
-        int validatedRuns = 0;
-        int firstPassRuns = 0;
-        int repairAttempts = 0;
-        int repairedRuns = 0;
-        long validationMillisTotal = 0;
-        int validationCount = 0;
-        int linesAdded = 0;
-        int linesRemoved = 0;
-        Set<String> filesTouched = new LinkedHashSet<>();
+        RemediationAccumulator remediation = new RemediationAccumulator();
 
         for (AnalysisRun run : all) {
             byState.merge(run.state(), 1, Integer::sum);
@@ -108,7 +99,30 @@ public class RunStatisticsService {
                 byType.merge(change.type(), 1, Integer::sum);
                 byClassification.merge(change.classification(), 1, Integer::sum);
             });
+            remediation.accumulate(run);
+        }
 
+        return new Statistics(all.size(), activeRuns, byState, activityWindow(byDay), totalChanges,
+                sortedByCountDescending(byType), sortedByCountDescending(byClassification),
+                remediation.toRemediation());
+    }
+
+    /**
+     * Running totals for {@link Remediation}, updated one run at a time -- pulled out of
+     * {@link #statistics()} so that method's own loop stays flat and readable.
+     */
+    private static final class RemediationAccumulator {
+        private int validatedRuns;
+        private int firstPassRuns;
+        private int repairAttempts;
+        private int repairedRuns;
+        private long validationMillisTotal;
+        private int validationCount;
+        private int linesAdded;
+        private int linesRemoved;
+        private final Set<String> filesTouched = new LinkedHashSet<>();
+
+        void accumulate(AnalysisRun run) {
             if (!run.validations().isEmpty()) {
                 validatedRuns++;
             }
@@ -135,11 +149,19 @@ public class RunStatisticsService {
             }
         }
 
-        Remediation remediation = new Remediation(validatedRuns, firstPassRuns, repairAttempts,
-                repairedRuns, validationCount == 0 ? 0 : validationMillisTotal / validationCount,
-                linesAdded, linesRemoved, filesTouched.size());
-        return new Statistics(all.size(), activeRuns, byState, activityWindow(byDay), totalChanges,
-                sortedByCountDescending(byType), sortedByCountDescending(byClassification), remediation);
+        Remediation toRemediation() {
+            return new Remediation(validatedRuns, firstPassRuns, repairAttempts, repairedRuns,
+                    validationCount == 0 ? 0 : validationMillisTotal / validationCount,
+                    linesAdded, linesRemoved, filesTouched.size());
+        }
+
+        /** Hunk content lines only: {@code +++}/{@code ---} file headers are not additions/removals. */
+        private static int countPrefixed(String unifiedDiff, char prefix) {
+            return (int) unifiedDiff.lines()
+                    .filter(line -> !line.isEmpty() && line.charAt(0) == prefix)
+                    .filter(line -> !line.startsWith("+++") && !line.startsWith("---"))
+                    .count();
+        }
     }
 
     /** A dense window (empty days included) so a chart's time axis never has holes. */
@@ -160,13 +182,5 @@ public class RunStatisticsService {
                 .sorted(Map.Entry.<K, Integer>comparingByValue(Comparator.reverseOrder()))
                 .forEach(entry -> sorted.put(entry.getKey(), entry.getValue()));
         return sorted;
-    }
-
-    /** Hunk content lines only: {@code +++}/{@code ---} file headers are not additions/removals. */
-    private static int countPrefixed(String unifiedDiff, char prefix) {
-        return (int) unifiedDiff.lines()
-                .filter(line -> !line.isEmpty() && line.charAt(0) == prefix)
-                .filter(line -> !line.startsWith("+++") && !line.startsWith("---"))
-                .count();
     }
 }

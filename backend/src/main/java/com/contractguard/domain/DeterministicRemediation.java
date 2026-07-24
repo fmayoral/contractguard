@@ -196,18 +196,32 @@ public final class DeterministicRemediation {
             }
         }
         if (removedLastConstant) {
-            for (int i = lines.size() - 1; i >= 0; i--) {
-                String trimmed = lines.get(i).strip();
-                if (trimmed.endsWith(",")) {
-                    lines.set(i, lines.get(i).substring(0, lines.get(i).lastIndexOf(',')));
-                    break;
-                }
-                if (!trimmed.isEmpty() && !trimmed.equals("}")) {
-                    break;
-                }
-            }
+            stripTrailingCommaOfLastConstant(lines);
         }
         String joined = String.join("\n", lines);
         return content.endsWith("\n") && !joined.endsWith("\n") ? joined + "\n" : joined;
+    }
+
+    /** After removing the last enum constant, its former predecessor's trailing comma is now dangling. */
+    private static void stripTrailingCommaOfLastConstant(List<String> lines) {
+        int i = lastMeaningfulLineIndex(lines);
+        if (i < 0) {
+            return;
+        }
+        String trimmed = lines.get(i).strip();
+        if (trimmed.endsWith(",")) {
+            lines.set(i, lines.get(i).substring(0, lines.get(i).lastIndexOf(',')));
+        }
+    }
+
+    /** @return the index of the last line that isn't blank or a bare closing brace, or -1 if none */
+    private static int lastMeaningfulLineIndex(List<String> lines) {
+        for (int i = lines.size() - 1; i >= 0; i--) {
+            String trimmed = lines.get(i).strip();
+            if (!trimmed.isEmpty() && !trimmed.equals("}")) {
+                return i;
+            }
+        }
+        return -1;
     }
 }

@@ -176,8 +176,9 @@ class PublishServiceTest {
                 run.changes(), run.evidence(), run.assessments(), run.plan().orElse(null),
                 run.approval().orElse(null), run.patches(), run.validations());
         runs.save(otherRepo);
+        String otherRepoRunId = otherRepo.id();
 
-        assertThatThrownBy(() -> service.beginPublish(otherRepo.id()))
+        assertThatThrownBy(() -> service.beginPublish(otherRepoRunId))
                 .isInstanceOf(ContractGuardException.class)
                 .satisfies(e -> assertThat(((ContractGuardException) e).failure().category())
                         .isEqualTo(FailureCategory.REMOTE_REPOSITORY_NOT_REGISTERED));

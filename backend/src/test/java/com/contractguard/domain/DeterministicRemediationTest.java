@@ -17,8 +17,8 @@ class DeterministicRemediationTest {
                 """;
         String result = DeterministicRemediation.replaceEndpointPath(
                 content, "/customers/{id}", "/v2/customers/{id}");
-        assertThat(result).contains("\"/v2/customers/{id}\"");
-        assertThat(result).contains("api.example.com/v2/customers/42");
+        assertThat(result).contains("\"/v2/customers/{id}\"")
+                .contains("api.example.com/v2/customers/42");
     }
 
     @Test
@@ -40,8 +40,8 @@ class DeterministicRemediationTest {
                 json = "{\\"fullName\\":\\"x\\"}";
                 """;
         String result = DeterministicRemediation.renameProperty(content, "fullName", "displayName");
-        assertThat(result).doesNotContain("fullName").doesNotContain("FullName");
-        assertThat(result).contains("private String displayName;")
+        assertThat(result).doesNotContain("fullName").doesNotContain("FullName")
+                .contains("private String displayName;")
                 .contains("getDisplayName")
                 .contains("setDisplayName")
                 .contains("\\\"displayName\\\"");
@@ -69,8 +69,8 @@ class DeterministicRemediationTest {
                 };
                 """;
         String result = DeterministicRemediation.removeEnumValue(content, "SUSPENDED");
-        assertThat(result).doesNotContain("SUSPENDED");
-        assertThat(result).contains("ACTIVE,").contains("CLOSED");
+        assertThat(result).doesNotContain("SUSPENDED")
+                .contains("ACTIVE,").contains("CLOSED");
     }
 
     @Test
@@ -82,8 +82,8 @@ class DeterministicRemediationTest {
                 }
                 """;
         String result = DeterministicRemediation.removeEnumValueLines(content, "SUSPENDED");
-        assertThat(result).doesNotContain("SUSPENDED");
-        assertThat(result).contains("    ACTIVE\n");
+        assertThat(result).doesNotContain("SUSPENDED")
+                .contains("    ACTIVE\n");
     }
 
     @Test
@@ -109,8 +109,8 @@ class DeterministicRemediationTest {
                 }
                 """;
         String result = DeterministicRemediation.removeTestMethodsReferencing(content, "SUSPENDED");
-        assertThat(result).doesNotContain("suspendedBlocked").doesNotContain("SUSPENDED");
-        assertThat(result).contains("activeWorks").contains("closedBlocked");
+        assertThat(result).doesNotContain("suspendedBlocked").doesNotContain("SUSPENDED")
+                .contains("activeWorks").contains("closedBlocked");
     }
 
     @Test

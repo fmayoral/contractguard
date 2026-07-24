@@ -29,6 +29,8 @@ import java.util.stream.Collectors;
  */
 public class PublishService {
 
+    private static final String STEP_PUBLISH = "publish";
+
     private final RunRepository runs;
     private final RunEventLog events;
     private final GitWorkspacePort git;
@@ -62,15 +64,15 @@ public class PublishService {
         run.transitionTo(RunState.PUBLISHING, clock.instant());
         runs.save(run);
         audit.recordTransition(run, from, RunState.PUBLISHING);
-        events.append(run.id(), "publish", "STARTED",
+        events.append(run.id(), STEP_PUBLISH, "STARTED",
                 "Publishing %s to %s/%s".formatted(run.workingBranch(), remote.owner(), remote.name()),
-                "{\"kind\":\"tool\"}");
+                RunEventLog.KIND_TOOL);
         return run;
     }
 
     public void publish(String runId) {
         AnalysisRun run = RunLookup.require(runs, runId);
-        try (ObservabilityPort.SpanHandle span = startSpan(run, "publish")) {
+        try (ObservabilityPort.SpanHandle span = startSpan(run, STEP_PUBLISH)) {
             try {
                 RemoteRepository remote = requireRemote(run);
                 String credential = remoteRepositories.credentialFor(run.repositoryId()).orElseThrow(() ->
@@ -86,8 +88,8 @@ public class PublishService {
                 run.recordPublished(result.url(), clock.instant());
                 runs.save(run);
                 audit.recordTransition(run, from, RunState.PUBLISHED);
-                events.append(run.id(), "publish", "PR_OPENED",
-                        "Draft pull request opened: " + result.url(), "{\"kind\":\"tool\"}");
+                events.append(run.id(), STEP_PUBLISH, "PR_OPENED",
+                        "Draft pull request opened: " + result.url(), RunEventLog.KIND_TOOL);
             } catch (ContractGuardException e) {
                 span.recordError(e.getMessage());
                 failPublish(run, e.failure());
@@ -104,8 +106,8 @@ public class PublishService {
         try (ObservabilityPort.SpanHandle span = startSpan(run, "publish-commit")) {
             git.commit(run.repositoryId(), "ContractGuard: remediate %s (run %s)"
                     .formatted(run.name(), Ids.shortId(run.id())), changedPaths(run));
-            events.append(run.id(), "publish", "COMMITTED",
-                    "Committed working branch " + run.workingBranch(), "{\"kind\":\"tool\"}");
+            events.append(run.id(), STEP_PUBLISH, "COMMITTED",
+                    "Committed working branch " + run.workingBranch(), RunEventLog.KIND_TOOL);
             audit.recordRepositoryMutation(run, "Committed working branch " + run.workingBranch());
         }
     }
@@ -126,8 +128,8 @@ public class PublishService {
     private void pushBranch(AnalysisRun run, RemoteRepository remote, String credential) {
         try (ObservabilityPort.SpanHandle span = startSpan(run, "publish-push")) {
             remoteGit.push(run.repositoryId(), run.workingBranch(), remote, credential);
-            events.append(run.id(), "publish", "PUSHED",
-                    "Pushed %s to origin".formatted(run.workingBranch()), "{\"kind\":\"tool\"}");
+            events.append(run.id(), STEP_PUBLISH, "PUSHED",
+                    "Pushed %s to origin".formatted(run.workingBranch()), RunEventLog.KIND_TOOL);
             audit.recordRepositoryMutation(run, "Pushed %s to %s/%s"
                     .formatted(run.workingBranch(), remote.owner(), remote.name()));
         }
@@ -162,7 +164,7 @@ public class PublishService {
             runs.save(run);
             audit.recordTransition(run, RunState.PUBLISHING, RunState.PUBLISH_FAILED);
         }
-        events.append(run.id(), "publish", "FAILED",
-                "%s: %s".formatted(failure.category(), failure.message()), "{\"kind\":\"system\"}");
+        events.append(run.id(), STEP_PUBLISH, "FAILED",
+                "%s: %s".formatted(failure.category(), failure.message()), RunEventLog.KIND_SYSTEM);
     }
 }

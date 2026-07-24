@@ -30,7 +30,7 @@ class ContractDecodingTest {
                  "read":{"path":"src/A.java","startLine":1,"endLine":40},"assessments":null}""",
                 InvestigatorAction.class);
         assertThat(result.ok()).isTrue();
-        assertThat(result.value().action()).isEqualTo(InvestigatorAction.READ);
+        assertThat(result.value().action()).isEqualTo(InvestigatorAction.ACTION_READ);
         assertThat(result.value().read().path()).isEqualTo("src/A.java");
         assertThat(result.value().read().startLine()).isEqualTo(1);
         assertThat(result.value().read().endLine()).isEqualTo(40);
@@ -42,7 +42,7 @@ class ContractDecodingTest {
                 {"action":"search_repository","search":{"query":"fullName","glob":null,"maxResults":30},
                  "read":null,"assessments":null}""", InvestigatorAction.class);
         assertThat(search.ok()).isTrue();
-        assertThat(search.value().action()).isEqualTo(InvestigatorAction.SEARCH);
+        assertThat(search.value().action()).isEqualTo(InvestigatorAction.ACTION_SEARCH);
         assertThat(search.value().search().query()).isEqualTo("fullName");
         assertThat(search.value().search().maxResults()).isEqualTo(30);
 
@@ -52,7 +52,7 @@ class ContractDecodingTest {
                    "failureMode":"404","recommendedAction":"update path",
                    "assumptions":["live code"],"evidenceIds":["e1"]}]}""", InvestigatorAction.class);
         assertThat(finish.ok()).isTrue();
-        assertThat(finish.value().action()).isEqualTo(InvestigatorAction.FINISH);
+        assertThat(finish.value().action()).isEqualTo(InvestigatorAction.ACTION_FINISH);
         AssessmentDraft draft = finish.value().assessments().get(0);
         assertThat(draft.apiChangeId()).isEqualTo("c1");
         assertThat(draft.severity()).isEqualTo("HIGH");

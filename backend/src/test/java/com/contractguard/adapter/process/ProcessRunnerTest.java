@@ -75,9 +75,10 @@ class ProcessRunnerTest {
 
     @Test
     void unknownExecutableFailsFast() {
-        assertThatThrownBy(() -> runner.run(
-                List.of("definitely-not-a-real-binary-xyz"), cwd, Map.of(),
-                Duration.ofSeconds(5), 1_000))
+        List<String> command = List.of("definitely-not-a-real-binary-xyz");
+        Map<String, String> noEnv = Map.of();
+        Duration timeout = Duration.ofSeconds(5);
+        assertThatThrownBy(() -> runner.run(command, cwd, noEnv, timeout, 1_000))
                 .isInstanceOf(IllegalStateException.class);
     }
 

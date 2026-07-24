@@ -84,8 +84,10 @@ class MigrationPlannerTest {
         QueuedLlmGateway gateway = new QueuedLlmGateway().enqueue(
                 VALID_PLAN.replace("src/main/java/App.java", "src/main/java/Sneaky.java"),
                 VALID_PLAN.replace("src/main/java/App.java", "src/main/java/Sneaky.java"));
+        MigrationPlanner planner = planner(gateway);
+        AnalysisRun run = runReadyForPlanning();
 
-        assertThatThrownBy(() -> planner(gateway).plan(runReadyForPlanning()))
+        assertThatThrownBy(() -> planner.plan(run))
                 .isInstanceOf(ContractGuardException.class)
                 .satisfies(e -> assertThat(((ContractGuardException) e).failure().category())
                         .isEqualTo(FailureCategory.INVALID_LLM_RESPONSE));
@@ -107,8 +109,10 @@ class MigrationPlannerTest {
     @Test
     void emptyPlanMeansNothingActionable() throws Exception {
         QueuedLlmGateway gateway = new QueuedLlmGateway().enqueue("{\"items\":[]}");
+        MigrationPlanner planner = planner(gateway);
+        AnalysisRun run = runReadyForPlanning();
 
-        assertThatThrownBy(() -> planner(gateway).plan(runReadyForPlanning()))
+        assertThatThrownBy(() -> planner.plan(run))
                 .isInstanceOf(ContractGuardException.class)
                 .satisfies(e -> assertThat(((ContractGuardException) e).failure().category())
                         .isEqualTo(FailureCategory.UNSUPPORTED_FEATURE));

@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 class WebhookNotificationAdapterTest {
 
@@ -127,15 +128,17 @@ class WebhookNotificationAdapterTest {
         WebhookNotificationAdapter adapter =
                 new WebhookNotificationAdapter("http://127.0.0.1:" + deadPort + "/hook", null);
 
-        adapter.notify(Fixtures.newRun(), RunState.AWAITING_APPROVAL);
-        // No assertion beyond "this line was reached and the JVM is still standing" --
-        // the point is that a connection refused never surfaces past notify().
+        // notify() dispatches asynchronously (ADR-0016): the real guarantee under test is that
+        // a connection refused never surfaces synchronously back to the caller.
+        assertThatCode(() -> adapter.notify(Fixtures.newRun(), RunState.AWAITING_APPROVAL))
+                .doesNotThrowAnyException();
     }
 
     @Test
     void aMalformedUrlNeverThrows() {
         WebhookNotificationAdapter adapter = new WebhookNotificationAdapter("not a valid url", null);
 
-        adapter.notify(Fixtures.newRun(), RunState.AWAITING_APPROVAL);
+        assertThatCode(() -> adapter.notify(Fixtures.newRun(), RunState.AWAITING_APPROVAL))
+                .doesNotThrowAnyException();
     }
 }

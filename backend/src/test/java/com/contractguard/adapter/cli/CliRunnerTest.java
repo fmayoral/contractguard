@@ -159,9 +159,7 @@ class CliRunnerTest {
 
         assertThat(exit).isEqualTo(CliRunner.EXIT_GATE_TRIPPED);
         String report = stdout.toString(StandardCharsets.UTF_8);
-        assertThat(report).contains("\"state\":\"AWAITING_APPROVAL\"");
-        assertThat(report).contains("BREAKING");
-        assertThat(report).contains("ENDPOINT_RENAMED");
+        assertThat(report).contains("\"state\":\"AWAITING_APPROVAL\"", "BREAKING", "ENDPOINT_RENAMED");
     }
 
     @Test

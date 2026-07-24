@@ -25,8 +25,8 @@ public class MetricsRecordingAuditTrail implements AuditTrailPort {
     }
 
     @Override
-    public void record(AuditEntry entry) {
-        delegate.record(entry);
+    public void append(AuditEntry entry) {
+        delegate.append(entry);
         if (entry.eventType() == AuditEventType.STATE_TRANSITION) {
             meters.counter("contractguard.runs.transitions", "to_state", toState(entry.detail())).increment();
         }

@@ -20,6 +20,8 @@ import java.nio.file.Path;
  */
 public class SpecResolutionService {
 
+    private static final String CHOOSE_FROM_LISTING = "Choose a file from the specification listing.";
+
     private final Path specsDirectory;
     private final Path uploadedSpecsDirectory;
     private final SpecSourceService specSources;
@@ -34,14 +36,14 @@ public class SpecResolutionService {
         if (specId == null || specId.isBlank()) {
             throw ContractGuardException.of(FailureCategory.INVALID_OPENAPI,
                     "invalid specification file name: " + specId,
-                    "Choose a file from the specification listing.");
+                    CHOOSE_FROM_LISTING);
         }
         if (specId.startsWith("source:")) {
             String[] parts = specId.substring("source:".length()).split(":", 2);
             if (parts.length != 2) {
                 throw ContractGuardException.of(FailureCategory.INVALID_OPENAPI,
                         "malformed spec source reference: " + specId,
-                        "Choose a file from the specification listing.");
+                        CHOOSE_FROM_LISTING);
             }
             return specSources.resolve(parts[0], parts[1]);
         }
@@ -56,13 +58,13 @@ public class SpecResolutionService {
         if (fileName.isBlank() || fileName.contains("/") || fileName.contains("\\") || fileName.contains("..")) {
             throw ContractGuardException.of(FailureCategory.INVALID_OPENAPI,
                     "invalid specification file name: " + fileName,
-                    "Choose a file from the specification listing.");
+                    CHOOSE_FROM_LISTING);
         }
         Path resolved = directory.resolve(fileName).normalize();
         if (!resolved.startsWith(directory) || !Files.isRegularFile(resolved)) {
             throw ContractGuardException.of(FailureCategory.INVALID_OPENAPI,
                     "specification file not found: " + fileName,
-                    "Choose a file from the specification listing.");
+                    CHOOSE_FROM_LISTING);
         }
         return resolved;
     }

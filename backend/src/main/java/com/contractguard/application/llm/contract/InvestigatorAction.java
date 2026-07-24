@@ -12,9 +12,9 @@ public record InvestigatorAction(
         ReadArgs read,
         List<AssessmentDraft> assessments) {
 
-    public static final String SEARCH = "search_repository";
-    public static final String READ = "read_source_file";
-    public static final String FINISH = "finish";
+    public static final String ACTION_SEARCH = "search_repository";
+    public static final String ACTION_READ = "read_source_file";
+    public static final String ACTION_FINISH = "finish";
 
     public record SearchArgs(String query, String glob, Integer maxResults) {
     }

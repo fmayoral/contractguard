@@ -162,7 +162,8 @@ class GitCliAdapterTest {
 
     @Test
     void patchingAMissingFileFailsTyped() {
-        assertThatThrownBy(() -> adapter.buildUnifiedDiff("demo", Map.of("Ghost.java", "x\n")))
+        Map<String, String> ghostFile = Map.of("Ghost.java", "x\n");
+        assertThatThrownBy(() -> adapter.buildUnifiedDiff("demo", ghostFile))
                 .isInstanceOf(ContractGuardException.class);
     }
 

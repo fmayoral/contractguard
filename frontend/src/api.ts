@@ -141,4 +141,7 @@ export const api = {
   auditTrail(runId: string): Promise<AuditEntry[]> {
     return request(`/api/audit?runId=${encodeURIComponent(runId)}`);
   },
+  auditLog(): Promise<AuditEntry[]> {
+    return request('/api/audit');
+  },
 };

@@ -78,6 +78,15 @@ export function formatTimestamp(iso: string): string {
   return date.toLocaleTimeString(undefined, { hour12: false });
 }
 
+/** Date + time for lists that can span more than one day (unlike a single run's own timeline,
+ * where the date is always implicit). */
+export function formatDateTime(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime())
+    ? iso
+    : date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
 /** Human label for a change row: endpoint or schema.property. */
 export function changeTarget(change: {
   method: string | null;

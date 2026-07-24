@@ -1,17 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { isTerminal, stateTone } from '../format';
+import { formatDateTime, isTerminal, stateTone } from '../format';
 import { useLiveRuns } from '../useLiveRuns';
 import { Badge } from '../components/Badge';
 
 type StateFilter = 'all' | 'active' | 'finished';
-
-function formatWhen(iso: string): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime())
-    ? iso
-    : date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-}
 
 export function RunsPage() {
   const { runs } = useLiveRuns();
@@ -104,8 +97,8 @@ export function RunsPage() {
                   <td>
                     <Badge tone={stateTone(run.state)}>{run.state}</Badge>
                   </td>
-                  <td className="muted nowrap">{formatWhen(run.createdAt)}</td>
-                  <td className="muted nowrap">{formatWhen(run.updatedAt)}</td>
+                  <td className="muted nowrap">{formatDateTime(run.createdAt)}</td>
+                  <td className="muted nowrap">{formatDateTime(run.updatedAt)}</td>
                   <td>
                     {run.pullRequestUrl && (
                       <a

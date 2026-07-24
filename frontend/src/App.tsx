@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { BrowserRouter, NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { applyTheme, initialTheme } from './theme';
 import { ActionRequiredNotifications } from './components/ActionRequiredNotifications';
+import { AuditLogPage } from './pages/AuditLogPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { NewRunPage } from './pages/NewRunPage';
 import { RunDetailPage } from './pages/RunDetailPage';
@@ -20,6 +21,7 @@ const ICONS = {
   dashboard: 'M4 13h6V4H4v9zm0 7h6v-5H4v5zm10 0h6v-9h-6v9zm0-16v5h6V4h-6z',
   runs: 'M4 6h16M4 12h16M4 18h10',
   newRun: 'M12 5v14M5 12h14',
+  auditLog: 'M7 3h7l4 4v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z M9 8h6 M9 12h6 M9 16h3',
   settings:
     'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm7.4-3a7.4 7.4 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.5 7.5 0 0 0-2-1.2L14.6 3h-4l-.4 2.7a7.5 7.5 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.4 7.4 0 0 0 0 2.4l-2 1.5 2 3.4 2.3-1a7.5 7.5 0 0 0 2 1.2l.4 2.7h4l.4-2.7a7.5 7.5 0 0 0 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2z',
 };
@@ -55,6 +57,10 @@ export default function App() {
             <NavIcon path={ICONS.newRun} />
             New run
           </NavLink>
+          <NavLink to="/audit">
+            <NavIcon path={ICONS.auditLog} />
+            Audit log
+          </NavLink>
           <NavLink to="/settings">
             <NavIcon path={ICONS.settings} />
             Settings
@@ -66,6 +72,7 @@ export default function App() {
             <Route path="/runs" element={<RunsPage />} />
             <Route path="/runs/:runId" element={<RunDetailPage />} />
             <Route path="/new" element={<NewRunPage />} />
+            <Route path="/audit" element={<AuditLogPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

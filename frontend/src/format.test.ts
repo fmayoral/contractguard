@@ -3,6 +3,7 @@ import {
   changeTarget,
   classificationTone,
   eventKind,
+  formatDateTime,
   formatDuration,
   formatTimestamp,
   isTerminal,
@@ -68,6 +69,11 @@ describe('formatting', () => {
   it('formats timestamps and tolerates junk', () => {
     expect(formatTimestamp('2026-07-18T10:00:00Z')).toMatch(/\d{2}:\d{2}/);
     expect(formatTimestamp('garbage')).toBe('garbage');
+  });
+
+  it('formats date-times for lists that can span more than one day, and tolerates junk', () => {
+    expect(formatDateTime('2026-07-18T10:00:00Z')).toMatch(/\d{1,2}:\d{2}/);
+    expect(formatDateTime('garbage')).toBe('garbage');
   });
 
   it('labels change targets', () => {

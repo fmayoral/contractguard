@@ -73,6 +73,9 @@ class DockerBuildValidationDockerTest {
     }
 
     /** Bounded poll: `docker kill` already blocked until it returned, so removal should be near-instant. */
+    // This is the bounded poll-with-timeout pattern S2925 wants in place of a blind sleep --
+    // the sleep below is just the polling interval inside it, not a fixed-delay wait.
+    @SuppressWarnings("java:S2925")
     private static List<String> runningValidationContainers() {
         ProcessRunner runner = new ProcessRunner();
         for (int attempt = 0; attempt < 5; attempt++) {

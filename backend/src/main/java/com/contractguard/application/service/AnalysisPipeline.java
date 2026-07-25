@@ -52,6 +52,9 @@ public class AnalysisPipeline {
     private final ObservabilityPort observability;
     private final Clock clock;
 
+    // Explicit one-dependency-per-parameter constructor, consistent with this project's
+    // hexagonal-architecture style throughout -- no bundling into a config/context object.
+    @SuppressWarnings("java:S107")
     public AnalysisPipeline(RunRepository runs, RunEventLog events, WorkspacePolicy workspacePolicy,
             OpenApiDiffPort diffPort, EvidenceCollector evidenceCollector, ChangeExplainer changeExplainer,
             ImpactInvestigator investigator, MigrationPlanner planner, JsonCodec codec,

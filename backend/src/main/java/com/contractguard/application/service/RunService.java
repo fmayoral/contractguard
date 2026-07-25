@@ -47,6 +47,9 @@ public class RunService {
     private final int maxActiveRuns;
     private final Clock clock;
 
+    // Explicit one-dependency-per-parameter constructor, consistent with this project's
+    // hexagonal-architecture style throughout -- no bundling into a config/context object.
+    @SuppressWarnings("java:S107")
     public RunService(RunRepository runs, RunEventLog events, WorkspacePolicy workspacePolicy,
             RemoteRepositoryService remoteRepositories, SpecSourceService specSources,
             SpecResolutionService specResolution, RepositoryLock repositoryLock, AnalysisPipeline pipeline,

@@ -24,6 +24,9 @@ public class CliBootstrap implements ApplicationRunner, ExitCodeGenerator {
         this.environment = environment;
     }
 
+    // System.err here IS the CLI's stderr/exit-code contract (FR-026) that shell scripts and
+    // CI gates parse directly -- routing it through a logger would change what those scripts see.
+    @SuppressWarnings("java:S106")
     @Override
     public void run(ApplicationArguments args) {
         String output = environment.getProperty("contractguard.cli.output");

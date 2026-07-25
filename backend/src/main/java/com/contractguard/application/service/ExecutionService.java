@@ -57,6 +57,9 @@ public class ExecutionService {
     private final ObservabilityPort observability;
     private final Clock clock;
 
+    // Explicit one-dependency-per-parameter constructor, consistent with this project's
+    // hexagonal-architecture style throughout -- no bundling into a config/context object.
+    @SuppressWarnings("java:S107")
     public ExecutionService(RunRepository runs, RunEventLog events, GitWorkspacePort git,
             PatchPort patches, BuildValidationPort builds, SourceReaderPort sourceReader,
             ImplementationAgent agent, ArtifactStore artifacts, String validationCommandKey,

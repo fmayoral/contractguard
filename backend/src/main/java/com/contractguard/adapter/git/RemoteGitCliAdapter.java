@@ -36,6 +36,10 @@ public class RemoteGitCliAdapter implements RemoteGitPort {
 
     private final Path cacheRoot;
     private final ProcessRunner processRunner;
+    // Path is immutable, so volatile alone is sufficient here -- the check-and-set in
+    // askpassScript() below is what actually needs synchronization (and has it), not this field's
+    // type. SonarQube's S3077 doesn't recognize Path as thread-safe; false positive, suppressed.
+    @SuppressWarnings("java:S3077")
     private volatile Path askpassScript;
 
     public RemoteGitCliAdapter(Path cacheRoot, ProcessRunner processRunner) {
@@ -110,6 +114,10 @@ public class RemoteGitCliAdapter implements RemoteGitPort {
         return HTTPS_PREFIX + USERNAME + "@" + cloneUrl.substring(HTTPS_PREFIX.length());
     }
 
+    // The eagerly-evaluated log.warn arguments below only run on the already-exceptional
+    // "git command failed" path, never in steady state -- an isWarnEnabled() guard would be
+    // pure boilerplate for a rare, cheap computation.
+    @SuppressWarnings("java:S2629")
     private void run(Path workingDirectory, String credential, String... command) {
         Map<String, String> env = credential == null || credential.isBlank()
                 ? Map.of("GIT_TERMINAL_PROMPT", "0")

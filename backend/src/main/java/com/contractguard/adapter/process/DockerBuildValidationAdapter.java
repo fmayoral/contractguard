@@ -38,6 +38,9 @@ public class DockerBuildValidationAdapter implements BuildValidationPort {
     private final boolean networkEnabled;
     private final Path mavenLocalRepo;
 
+    // Explicit one-dependency-per-parameter constructor, consistent with this project's
+    // hexagonal-architecture style throughout -- no bundling into a config/context object.
+    @SuppressWarnings("java:S107")
     public DockerBuildValidationAdapter(WorkspacePolicy policy, ProcessRunner processRunner,
             Duration timeout, int maxOutputBytes, String image, String memory, String cpus,
             boolean networkEnabled, Path mavenLocalRepo) {

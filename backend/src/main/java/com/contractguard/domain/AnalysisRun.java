@@ -67,6 +67,10 @@ public final class AnalysisRun {
     }
 
     /** Rehydration constructor for persistence; performs no transition checks. */
+    // Reconstructs the full aggregate from its persisted row -- one parameter per field is
+    // exactly the shape of what's being rebuilt; a wrapper type would only add indirection
+    // for this single caller (the JDBC repository).
+    @SuppressWarnings("java:S107")
     public static AnalysisRun rehydrate(String id, String name, String repositoryId, String traceId,
             Instant createdAt, Instant updatedAt, RunState state, String oldSpecFile, String newSpecFile,
             String oldSpecName, String newSpecName, String oldSpecHash, String newSpecHash,

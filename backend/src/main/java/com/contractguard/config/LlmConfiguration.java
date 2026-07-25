@@ -34,6 +34,9 @@ public class LlmConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(LlmConfiguration.class);
 
+    // The log.info call below runs exactly once, at startup -- lazy-evaluation guards would be
+    // pure boilerplate for a one-shot bean factory method, not a hot path.
+    @SuppressWarnings("java:S2629")
     @Bean
     public LlmGateway llmGateway(ContractGuardProperties properties) {
         ContractGuardProperties.Llm llm = properties.llm();

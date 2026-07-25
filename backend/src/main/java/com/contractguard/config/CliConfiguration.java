@@ -30,6 +30,9 @@ import java.time.Clock;
 @Profile("cli")
 public class CliConfiguration {
 
+    // System.out is injected into CliRunner as a PrintStream collaborator (constructor
+    // dependency, swappable in tests), not a direct print call.
+    @SuppressWarnings("java:S106")
     @Bean
     public CliRunner cliRunner(RunRepository runs, RunEventLog events, WorkspacePolicy policy,
             RemoteRepositoryService remoteRepositories, SpecSourceService specSources,

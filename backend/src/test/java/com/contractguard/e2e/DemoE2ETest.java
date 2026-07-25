@@ -239,6 +239,9 @@ class DemoE2ETest {
                 assertThat(id.asText()).isEqualTo(runId));
     }
 
+    // This is the bounded poll-with-timeout pattern S2925 wants in place of a blind sleep --
+    // the sleep below is just the polling interval inside it, not a fixed-delay wait.
+    @SuppressWarnings("java:S2925")
     private JsonNode awaitState(String expected, Duration timeout) throws Exception {
         Instant deadline = Instant.now().plus(timeout);
         JsonNode last = null;

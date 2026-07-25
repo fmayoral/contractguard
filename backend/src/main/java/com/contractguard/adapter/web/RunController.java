@@ -51,6 +51,9 @@ public class RunController {
     private final ReportService reports;
     private final ExecutorService executor;
 
+    // Explicit one-dependency-per-parameter constructor, consistent with this project's
+    // hexagonal-architecture style throughout -- no bundling into a config/context object.
+    @SuppressWarnings("java:S107")
     public RunController(RunService runService, RunQueryService queries, ApprovalService approvals,
             ExecutionService executions, PublishService publishing,
             RemoteRepositoryService remoteRepositories, SpecSourceService specSources,

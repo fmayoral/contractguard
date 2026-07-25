@@ -51,6 +51,9 @@ class WebhookNotificationAdapterTest {
 
     /** notify() sends asynchronously by design (ADR-0016); poll briefly for the request to land
      * rather than assuming it already has. */
+    // This is the bounded poll-with-timeout pattern S2925 wants in place of a blind sleep --
+    // the sleep below is just the polling interval inside it, not a fixed-delay wait.
+    @SuppressWarnings("java:S2925")
     private void waitForRequest() {
         long deadline = System.nanoTime() + java.time.Duration.ofSeconds(2).toNanos();
         while (requestCount.get() == 0 && System.nanoTime() < deadline) {

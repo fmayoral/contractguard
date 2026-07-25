@@ -434,6 +434,9 @@ public class SpecDiffEngine {
      * {@code detail} carries the parameter name or status code -- null for request-body changes,
      * which are endpoint-scoped rather than named.
      */
+    // One parameter per independently-meaningful ApiChange fact; a wrapper type would just
+    // relocate these, not reduce them, since callers already have each fact separately in hand.
+    @SuppressWarnings("java:S107")
     private ApiChange endpointDetailChange(ChangeType type, String method, String path, String detail,
             String oldValue, String newValue, boolean affectsRequired, String rawEvidence) {
         ClassificationPolicy.Result result = ClassificationPolicy.classify(type, affectsRequired);

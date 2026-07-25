@@ -48,6 +48,9 @@ public class ExecutionConfiguration {
                 Path.of(properties.storage().directory()).resolve("scratch"));
     }
 
+    // The log.info call below runs exactly once, at startup -- lazy-evaluation guards would be
+    // pure boilerplate for a one-shot bean factory method, not a hot path.
+    @SuppressWarnings("java:S2629")
     @Bean
     public BuildValidationPort buildValidationPort(WorkspacePolicy policy, ProcessRunner processRunner,
             ContractGuardProperties properties) {

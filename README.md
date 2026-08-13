@@ -17,7 +17,7 @@ The web app is organised into five pages — a statistics **Dashboard**, **Runs*
 (history and per-run detail), **New run**, an org-wide **Audit log**, and
 **Settings** — with dark and light themes:
 
-![Dashboard: activity, outcomes, contract changes and remediation stats](docs/screenshots/0-dashboard.png)
+![End-to-end run: dashboard, new run, live analysis, approval, remediation and report](docs/screenshots/demo-workflow.gif)
 
 ## Prerequisites
 
